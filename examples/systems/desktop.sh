@@ -16,6 +16,7 @@ packages+=(
         git-core
         kbd
         man-{db,pages}
+        strace
         tar
         unzip
         vim-minimal
@@ -78,7 +79,7 @@ packages+=(
 
         # Browser
         firefox
-        mozilla-{adblockplus,https-everywhere,noscript}
+        mozilla-{https-everywhere,noscript,ublock-origin}
 
         # VLC
         lib{aacs,bdplus,bluray-bdj}

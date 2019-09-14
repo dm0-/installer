@@ -50,8 +50,7 @@ function unmount_root() {
 }
 
 function squash() {
-        local -r IFS=$'\n'
-        local -r xattrs=-$(opt selinux || echo no-)xattrs
+        local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
         mksquashfs root "$disk" -noappend "$xattrs" \
             -comp zstd -Xcompression-level 22 \
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
@@ -68,7 +67,7 @@ function verity() {
         done < <(veritysetup format "$disk" signatures.img)
 
         echo > kernel_args.txt \
-            ro root=/dev/mapper/root \
+            ro root=/dev/dm-0 \
             dm-mod.create='"'root,,,ro,0 $(( size / 512 )) \
                 verity ${verity[Hash type]} $device $device \
                 ${verity[Data block size]} ${verity[Hash block size]} \
@@ -310,7 +309,8 @@ gtk-menu-images = true
 EOF
 
         test -x root/usr/bin/emacs -o -h root/usr/bin/emacs &&
-        cat << 'EOF' > root/etc/skel/.emacs
+        (cd root/etc/skel
+                cat << 'EOF' > .emacs
 ; Enable the Emacs package manager.
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
@@ -332,6 +332,8 @@ EOF
 (setq line-number-mode t)
 (setq column-number-mode t)
 EOF
+                echo export EDITOR=emacs >> .bash_profile
+        )
 
         test -d root/usr/lib*/firefox/browser/defaults/preferences &&
         (cd root/usr/lib*/firefox/browser/defaults/preferences
@@ -371,12 +373,17 @@ pref("browser.tabs.drawInTitlebar", true);
 pref("browser.uidensity", 1);
 /* Stop hiding protocols.  */
 pref("browser.urlbar.trimURLs", false);
-/* Make the theme darker.  */
+/* Enable some mildly useful developer tools.  */
+pref("devtools.command-button-rulers.enabled", true);
+pref("devtools.command-button-scratchpad.enabled", true);
+pref("devtools.command-button-screenshot.enabled", true);
+/* Make the developer tools frame match the browser theme.  */
 pref("devtools.theme", "dark");
-pref("extensions.activeThemeID", "firefox-compact-dark@mozilla.org");
+/* Display when messages are logged.  */
+pref("devtools.webconsole.timestampMessages", true);
 /* Shut up.  */
 pref("general.warnOnAboutConfig", false);
-/* Does this have an effect?  */
+/* Make widgets on web pages match the rest of the desktop.  */
 pref("widget.content.allow-gtk-dark-theme", true);
 EOF
         )
@@ -413,14 +420,15 @@ EOF
 }
 
 function produce_uefi_exe() {
-        local -r initrd=$(opt ramdisk && echo ramdisk || echo initrd).img
+        local initrd=$(opt ramdisk && echo ramdisk || echo initrd).img
+        test -e "$initrd" || initrd=
 
         objcopy \
             --add-section .osrel=root/etc/os-release --change-section-vma .osrel=0x20000 \
             --add-section .cmdline=kernel_args.txt --change-section-vma .cmdline=0x30000 \
             --add-section .splash=logo.bmp --change-section-vma .splash=0x40000 \
             --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
-            --add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000 \
+            ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
             /usr/lib/systemd/boot/efi/linuxx64.efi.stub BOOTX64.EFI
 }
 

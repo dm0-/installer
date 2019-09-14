@@ -44,7 +44,7 @@ Three distros are supported to varying degrees at the moment: Fedora, CentOS, an
 
 ### Fedora
 
-**Switch the build root to a container image.**  I initially started this with `dnf --installroot` since I was only running it on a Fedora host, but it needs to use a container image like the other distros so the host OS is not assumed.
+**Support different Fedora releases.**  The Fedora container is signed with a different key for each release, so in order to use anything other than the latest version, a list of keys for supported releases needs to be maintained.
 
 **Report when the image should be updated.**  When a system saves the RPM database and has network access, it should automatically check Fedora updates for enhancements, bug fixes, and security issues so it can create a report advising when an updated immutable image should be created and applied.  I will probably implement this in a custom package in my local repo and integrate it with a real monitoring server, but I am noting it here in case I decide to add it to the base system and put a report in root's MOTD (to provide the information without assumptions about network monitoring).  The equivalent can be done for CentOS or via GLSAs, but Fedora is my priority here.
 
@@ -57,8 +57,6 @@ Three distros are supported to varying degrees at the moment: Fedora, CentOS, an
 **Fix failing units.**  The `hostnamed` service is failing with a resource error.  Look into that so systems boot cleanly.
 
 ### Gentoo
-
-**Build a kernel.**  The Gentoo option currently doesn't create bootable images.  It will probably have to require a manually-written kernel config for each system and combine it with the defaults or `allnoconfig`.  I don't particularly like the idea of having a default kernel config for this when you're already going to the effort of building a tailored OS from source.
 
 **Support real cross-compiling.**  I'm eventually going to use this to produce images for slow embedded chips from an amd64 workstation, so `crossdev` needs to be configured properly.
 

@@ -10,6 +10,7 @@ mktemp=${MKTEMP:-mktemp}
 nspawn=${NSPAWN:-systemd-nspawn}
 rm=${RM:-rm}
 sed=${SED:-sed}
+sha256sum=${SHA256SUM:-sha256sum}
 sha512sum=${SHA512SUM:-sha512sum}
 tar=${TAR:-tar}
 uname=${UNAME:-uname}
@@ -37,10 +38,10 @@ opt read_only && tmpfs_var
 opt read_only && tmpfs_home
 opt read_only && overlay_etc
 local_login
-opt bootable && save_boot_files
 configure_system
 distro_tweaks
 customize
+opt bootable && save_boot_files
 opt selinux && relabel
 opt squash && squash || unmount_root
 opt verity && verity || ln -f "$disk" final.img

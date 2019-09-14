@@ -3,24 +3,23 @@ packages_buildroot=()
 
 DEFAULT_ARCH=$($uname -m)
 DEFAULT_PROFILE=17.1
-DEFAULT_RELEASE=20190908T214502Z
+DEFAULT_RELEASE=20190911T214502Z
 options[arch]=$DEFAULT_ARCH
 options[profile]=$DEFAULT_PROFILE
 options[release]=$DEFAULT_RELEASE
 
 function create_buildroot() {
         local -A archmap=([x86_64]=amd64)
-        local -a packages=()
         local -r arch="${archmap[$DEFAULT_ARCH]:-amd64}"
         local profile="default/linux/$arch/${options[profile]:=$DEFAULT_PROFILE}/no-multilib/hardened"
         local stage3="https://gentoo.osuosl.org/releases/$arch/autobuilds/${options[release]:=$DEFAULT_RELEASE}/hardened/stage3-$arch-hardened+nomultilib-${options[release]}.tar.xz"
 
-        opt bootable && packages+=(sys-kernel/gentoo-sources virtual/udev)
-        opt selinux && packages+=(sec-policy/selinux-base-policy) && profile+=/selinux && stage3=${stage3/+/-selinux+}
-        opt squash && packages+=(sys-fs/squashfs-tools)
-        opt verity && packages+=(sys-fs/cryptsetup)
-        opt uefi && packages+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
-        test "x${options[arch]:=$DEFAULT_ARCH}" = "x$DEFAULT_ARCH" || packages+=(sys-devel/crossdev)
+        opt bootable && packages_buildroot+=(sys-kernel/gentoo-sources virtual/udev)
+        opt selinux && packages_buildroot+=(sec-policy/selinux-base-policy) && profile+=/selinux && stage3=${stage3/+/-selinux+}
+        opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
+        opt verity && packages_buildroot+=(sys-fs/cryptsetup)
+        opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
+        test "x${options[arch]:=$DEFAULT_ARCH}" = "x$DEFAULT_ARCH" || packages_buildroot+=(sys-devel/crossdev)
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -39,6 +38,9 @@ EOG
 echo systemd >> /etc/portage/profile/use.force
 echo -e 'sslv2\nsslv3\nstatic-libs\n-systemd' >> /etc/portage/profile/use.mask
 
+# Accept the newest kernels.
+echo 'sys-kernel/gentoo-sources ~amd64' >> /etc/portage/package.accept_keywords/gentoo-sources.conf
+
 # Support SELinux with systemd.
 echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/package.unmask/systemd.conf
 
@@ -47,7 +49,8 @@ echo '~sys-fs/squashfs-tools-4.4 ~amd64' >> /etc/portage/package.accept_keywords
 echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
 
 emerge-webrsync
-emerge --jobs=4 -1v ${packages[*]} ${packages_buildroot[*]} $*
+#emerge --deep --jobs=4 --newuse --update --verbose @world
+emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
 
 if test -x /usr/bin/crossdev
 then
@@ -63,11 +66,23 @@ cp -at "/build/${options[arch]}/etc" /etc/portage
 cd "/build/${options[arch]}/etc/portage"
 echo split-usr >> profile/use.mask
 EOF
+
+        if opt bootable
+        then
+                write_base_kernel_config > "$output/config.base"
+                enter /usr/bin/make -C /usr/src/linux mrproper V=1
+        fi
 }
 
 function install_packages() {
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/build/${options[arch]}"
         local -rx PKGDIR="$ROOT/var/cache/binpkgs"
+
+        if test -s /usr/src/linux/.config
+        then
+                make -C /usr/src/linux -j$(nproc) V=1
+                make -C /usr/src/linux install V=1
+        fi
 
         opt bootable && packages+=(sys-apps/systemd)
         opt iptables && packages+=(net-firewall/iptables)
@@ -76,7 +91,7 @@ function install_packages() {
         # Cheat bootstrapping
         mv "$ROOT"/etc/portage/profile/use.force{,.save}
         echo -e '-selinux\n-systemd' > "$ROOT"/etc/portage/profile/use.force
-        USE='-* kill' emerge --jobs=4 -1v sys-apps/util-linux
+        USE='-* kill' emerge --jobs=4 --oneshot --verbose sys-apps/util-linux
         mv "$ROOT"/etc/portage/profile/use.force{.save,}
         packages+=(sys-apps/util-linux)
 
@@ -91,12 +106,83 @@ function install_packages() {
 
 function save_boot_files() {
         opt uefi && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black logo.bmp
-        :
+        cp -p /boot/vmlinuz-* vmlinuz
 }
 
 function distro_tweaks() { : ; }
 
 function relabel() { : ; }
+
+function write_base_kernel_config() {
+        echo '# Basic settings
+CONFIG_ACPI=y
+CONFIG_BLOCK=y
+CONFIG_MULTIUSER=y
+CONFIG_SHMEM=y
+CONFIG_UNIX=y
+# File system settings
+CONFIG_DEVTMPFS=y
+CONFIG_OVERLAY_FS=y
+CONFIG_PROC_FS=y
+CONFIG_SYSFS=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_POSIX_ACL=y
+# Executable settings
+CONFIG_BINFMT_ELF=y
+CONFIG_BINFMT_SCRIPT=y
+# Security settings
+CONFIG_FORTIFY_SOURCE=y
+CONFIG_RETPOLINE=y'
+        test "x${options[arch]}" = xx86_64 && echo '# Architecture settings
+CONFIG_64BIT=y
+CONFIG_SMP=y
+CONFIG_X86_LOCAL_APIC=y'
+        opt iptables || opt networkd && echo '# Network settings
+CONFIG_NET=y
+CONFIG_INET=y
+CONFIG_IPV6=y
+CONFIG_PACKET=y'
+        opt iptables && echo '# Firewall settings
+CONFIG_NETFILTER=y
+CONFIG_NF_CONNTRACK=y
+CONFIG_NETFILTER_XT_MATCH_STATE=y
+CONFIG_IP_NF_IPTABLES=y
+CONFIG_IP_NF_FILTER=y
+CONFIG_IP6_NF_IPTABLES=y
+CONFIG_IP6_NF_FILTER=y'
+        opt selinux && echo '# SELinux settings
+CONFIG_AUDIT=y
+CONFIG_SECURITY=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_SECURITY_SELINUX=y'
+        opt squash && echo '# Squashfs settings
+CONFIG_MISC_FILESYSTEMS=y
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_FILE_DIRECT=y
+CONFIG_SQUASHFS_DECOMP_MULTI=y
+CONFIG_SQUASHFS_XATTR=y
+CONFIG_SQUASHFS_ZSTD=y'
+        opt uefi && echo '# UEFI settings
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y'
+        opt verity && echo '# Verity settings
+CONFIG_MD=y
+CONFIG_BLK_DEV_DM=y
+CONFIG_DM_INIT=y
+CONFIG_DM_VERITY=y
+CONFIG_CRYPTO_SHA256=y'
+        echo '# Settings for systemd as decided by Gentoo, plus some missing
+CONFIG_DMI=y
+CONFIG_NAMESPACES=y
+CONFIG_GENTOO_LINUX=y
+CONFIG_GENTOO_LINUX_UDEV=y
+CONFIG_GENTOO_LINUX_INIT_SYSTEMD=y
+CONFIG_FILE_LOCKING=y
+CONFIG_FUTEX=y
+CONFIG_POSIX_TIMERS=y
+CONFIG_PROC_SYSCTL=y
+CONFIG_UNIX98_PTYS=y'
+}
 
 function verify_gentoo() {
         local -rx GNUPGHOME="$output/gnupg"

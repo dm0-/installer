@@ -6,14 +6,13 @@ options[networkd]=
 options[release]=$DEFAULT_RELEASE
 
 function create_buildroot() {
-        local -a packages=()
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}/docker/centos-${options[release]%%.*}-docker.tar.xz"
 
-        opt bootable || opt ramdisk && packages+=(kernel)
-        opt selinux && packages+=(policycoreutils)
-        opt squash && packages+=(squashfs-tools) || packages+=(e2fsprogs)
-        opt verity && packages+=(veritysetup)
-        opt uefi && packages+=(centos-logos ImageMagick)
+        opt bootable || opt ramdisk && packages_buildroot+=(kernel)
+        opt selinux && packages_buildroot+=(policycoreutils)
+        opt squash && packages_buildroot+=(squashfs-tools) || packages_buildroot+=(e2fsprogs)
+        opt verity && packages_buildroot+=(veritysetup)
+        opt uefi && packages_buildroot+=(centos-logos ImageMagick)
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tar.xz"
@@ -21,9 +20,9 @@ function create_buildroot() {
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
         $rm -f "$output/image.tar.xz"
 
-        test -z "${packages[*]:-${packages_buildroot[*]:-$*}}" ||
-        enter /usr/bin/yum --assumeyes \
-            install "${packages[@]}" "${packages_buildroot[@]}" "$@"
+        enter /usr/bin/yum --assumeyes upgrade
+        test -z "${packages_buildroot[*]:-$*}" ||
+        enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
 }
 
 function install_packages() {
