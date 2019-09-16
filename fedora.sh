@@ -24,9 +24,16 @@ function create_buildroot() {
         $tar -xJOf "$output/image.tar.xz" '*/layer.tar' | $tar -C "$buildroot" -x
         $rm -f "$output/checksum" "$output/image.tar.xz"
 
-        $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
+        # Disable bad packaging options.
+        $sed -i -e '/^tsflags=/d;/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
         $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
+
+        # Don't expect that the build system is the target system.
+        $mkdir -p "$buildroot/etc/dracut.conf.d"
+        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+
         enter /usr/bin/dnf --assumeyes upgrade
+        test -z "${packages_buildroot[*]:-$*}" ||
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
 }
 
@@ -81,7 +88,9 @@ function distro_tweaks() {
         chroot root /usr/bin/update-crypto-policies --set FUTURE
 
         test -s root/etc/dnf/dnf.conf &&
-        sed -i -e '/^\[main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf &&
+        sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
+
+        compgen -G 'root/etc/yum.repos.d/*modular*.repo' &&
         sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*modular*.repo
 
         test -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml &&
@@ -197,19 +206,20 @@ function build_ramdisk() {
         done
 
         find /lib/modules/*/kernel '(' \
-            -name dm-verity.ko.xz -o \
+            $(opt verity && echo -name dm-verity.ko.xz -o) \
             -name loop.ko.xz -o \
-            -name reed_solomon.ko.xz -o \
-            -name squashfs.ko.xz -o \
-            -name zstd_decompress.ko.xz -o \
+            $(opt read_only && echo -name overlay.ko.xz -o) \
+            $(opt verity && echo -name reed_solomon.ko.xz -o) \
+            $(opt squash && echo -name squashfs.ko.xz -o) \
+            $(opt squash && echo -name zstd_decompress.ko.xz -o) \
             -false ')' -exec cp -at "$root/lib" '{}' +
         unxz "$root"/lib/*.xz
 
-        cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
+        cat << EOF > "$root/init" && chmod 0755 "$root/init"
 #!/bin/ash -euvx
 
 # Handle boot failures.
-abort() { echo "Boot failed with $?; dropping to shell" 1>&2 ; exec ash -i ; }
+abort() { echo "Boot failed with \$?; dropping to shell" 1>&2 ; exec ash -i ; }
 trap abort EXIT
 
 # Set up kernel interfaces.
@@ -217,21 +227,31 @@ mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 
-# Create a block device for verity to use.
+# Create a block device for the root image.
 insmod /lib/loop.ko
 mknod -m 0600 /dev/loop0 b 7 0
 losetup /dev/loop0 /sysroot/root.img
 
+$(opt read_only && cat << 'EOG'
+# Load overlay support for /etc.
+insmod /lib/overlay.ko
+EOG
+)
+$(opt verity && cat << 'EOG'
 # Load verity support.  XXX: Not used yet.
 insmod /lib/reed_solomon.ko
 insmod /lib/dm-verity.ko
-
-# Load support for the root file system.
+EOG
+)
+$(opt squash && cat << 'EOG'
+# Load support for root on squashfs.
 insmod /lib/zstd_decompress.ko
 insmod /lib/squashfs.ko
+EOG
+)
 
 # Mount the root file system.
-mount -o ro /dev/loop0 /sysroot
+mount $(opt read_only && echo -o ro) /dev/loop0 /sysroot
 
 # Switch to the root file system.
 exec switch_root /sysroot /sbin/init

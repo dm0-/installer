@@ -30,7 +30,7 @@ function create_buildroot() {
 
         enter /bin/bash -euxo pipefail << EOF
 ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
-mkdir -p /etc/portage/{package.{accept_keywords,unmask,use},profile,repos.conf}
+mkdir -p /etc/portage/{package.{accept_keywords,license,unmask,use},profile,repos.conf}
 cat <(echo) - << 'EOG' >> /etc/portage/make.conf
 FEATURES="\$FEATURES -selinux"
 PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"
@@ -41,6 +41,10 @@ echo -e 'sslv2\nsslv3\nstatic-libs\n-systemd' >> /etc/portage/profile/use.mask
 # Accept the newest kernels.
 echo 'sys-kernel/gentoo-sources ~amd64' >> /etc/portage/package.accept_keywords/gentoo-sources.conf
 
+# Accept CPU microcode licenses.
+echo sys-firmware/intel-microcode intel-ucode >> /etc/portage/package.license/ucode.conf
+echo sys-kernel/linux-firmware linux-fw-redistributable no-source-code >> /etc/portage/package.license/ucode.conf
+
 # Support SELinux with systemd.
 echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/package.unmask/systemd.conf
 
@@ -49,7 +53,6 @@ echo '~sys-fs/squashfs-tools-4.4 ~amd64' >> /etc/portage/package.accept_keywords
 echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
 
 emerge-webrsync
-#emerge --deep --jobs=4 --newuse --update --verbose @world
 emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
 
 if test -x /usr/bin/crossdev

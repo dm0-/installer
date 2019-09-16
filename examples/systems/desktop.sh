@@ -2,11 +2,17 @@
 # DVDs and Blu-ray discs), the GNOME desktop, some common basic utilities, and
 # enough tools to build and run anything else in VMs or containers.
 
-options[networkd]=  # Disable networkd so the desktop can use NetworkManager.
-options[uefi]=1     # Create a UEFI executable that boots into this image.
+options+=(
+        [iptables]=1  # Enable a firewall to block all inbound connections.
+        [networkd]=   # Disable networkd so the desktop can use NetworkManager.
+        [selinux]=1   # Enforce a targeted SELinux policy.
+        [squash]=1    # Use a highly compressed file system to save space.
+        [uefi]=1      # Create a UEFI executable that boots into this image.
+        [verity]=1    # Prevent the file system from being modified.
+)
 
 packages+=(
-        kernel-modules{,-extra} microcode_ctl plymouth-system-theme
+        glibc-langpack-en kernel-modules{,-extra}
 
         # Utilities
         binutils

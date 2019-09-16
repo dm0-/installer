@@ -4,7 +4,7 @@ This is a collection of shell functions to build secure Linux-based operating sy
 
 ## About
 
-The primary goal here is swappable immutable disk images that are verified by verity, which is itself verified by the kernel's Secure Boot signature.  Parts of the file system such as `/home` and `/var` are mounted as tmpfs by default to support regular usage, but their mount units can be overridden to use persistent storage or a network file system.  This build system outputs components of a bootable system (such as the root file system image, kernel, initrd, etc.) that can be assembled as desired, but my testing focuses on three main use cases:
+The primary goal here is swappable immutable disk images that are verified by verity, which is itself verified by the kernel's Secure Boot signature.  Parts of the file system such as `/home` and `/var` are mounted as tmpfs to support regular usage, but their mount units can be overridden to use persistent storage or a network file system.  This build system outputs components of a bootable system (such as the root file system image, kernel, initrd, etc.) that can be assembled as desired, but my testing focuses on three main use cases:
 
  1. A system's primary hard drive is GPT-partitioned with an ESP, several (maybe three to five) partitions of five or ten gigabytes reserved to store root file system images, and the rest of the disk used as an encrypted `/var` partition for persistent storage.  When this installer produces an OS image, it can also produce a UEFI executable containing the kernel, initrd, and arguments specifying the root partition's UUID and root verity hash.  A UEFI executable corresponding to each active root file system partition is written to the ESP (potentially after Secure Boot signing) so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
 
@@ -12,9 +12,23 @@ The primary goal here is swappable immutable disk images that are verified by ve
 
  3. All boot-related functionality is omitted, so a file system image is produced that can be used as an immutable container.  There is an option to build a launcher script into the disk image so that it is executable like a statically linked program.
 
-The `install.sh` file is the entry point.  It expects one argument: a shell file defining settings for the installation.  There are a few such example files under the `examples` directory; e.g. to create an executable file to play *Fallout*, run `sudo bash install.sh examples/containers/Fallout.sh` with the *Fallout* binary installer placed in the current directory.  The resulting installation artifacts are written to a unique output directory in the current path.  For example, `vmlinuz` is the kernel, `initrd.img` is the initrd, and `final.img` is the root file system image (containing verity signatures unless disabled) that should be written directly to a partition.  If the `uefi` option was enabled, `BOOTX64.EFI` is the UEFI executable that should be signed for Secure Boot.  If the `nspawn` option was enabled, `nspawn.img` is a disk image that can be executed as a program to launch the container with `systemd-nspawn`.
+## Usage
 
-When `install.sh` runs, it reads `base.sh` which is a library of distro-agnostic shell functions that configure a GNU/Linux system.  It then reads one of the distro-specific library files (`centos.sh`, `gentoo.sh`, or the default `fedora.sh`) as selected in the specified settings file, which can override functions from `base.sh` if needed.  Finally, it reads and applies definitions from the specified system settings file, which can override or augment anything previously defined.  A series of these functions is then executed based on the system options to generate the installation artifacts.
+The `install.sh` file is the entry point.  Run it with `bash install.sh -h` to see its full help text.
+
+It should be given at least one argument: a shell file defining settings for the installation.  There are a few such example files under the `examples` directory.  The resulting installation artifacts are written to a unique output directory in the current path.  For example, `vmlinuz` is the kernel, `initrd.img` is the initrd, and `final.img` is the root file system image (containing verity signatures if enabled) that should be written directly to a partition.  If the `uefi` option was enabled, `BOOTX64.EFI` is the UEFI executable that should be signed for Secure Boot.  If the `nspawn` option was enabled, `nspawn.img` is a disk image that can be executed as a program to launch the container with `systemd-nspawn`.
+
+When `install.sh` runs, it reads `base.sh` which is a library of distro-agnostic shell functions that configure a GNU/Linux system.  It then reads one of the distro-specific library files (`centos.sh`, `gentoo.sh`, or the default `fedora.sh`) as selected in the specified settings file, which can override functions from `base.sh` if needed.  Finally, it reads and applies definitions from the specified system settings file, which can override or augment anything previously defined.  A series of these functions is then executed based on the given options to generate the installation artifacts.
+
+For a quick demonstration, it can technically be run with no options since Fedora is the default distro.  In this case, it will produce an image containing `bash` that can be run in a container.  For example, run the installer with `-S` to produce a compressed image that can be used with the following commands as root.
+
+    bash -x install.sh -S
+    cd output.*
+    systemd-nspawn --image=final.img
+
+For a bootable system example with no configuration file, use `-S` to compress the root file system, `-K` to bundle it in the initrd, `-Z` to protect it with SELinux, and `-E` to save it to your EFI system partition.  It can then be booted with the UEFI shell or by running `chainloader` in GRUB.
+
+    bash -x install.sh -KSZE /boot/efi/EFI/BOOT/DEMO.EFI
 
 ## License
 
@@ -22,13 +36,13 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Status / Notes / To Do
 
-The project is currently at the stage where I've just dumped some useful things into shell functions that are randomly scattered around the directory.  It will be completely revised at some point to have a usable interface.  Don't expect anything in here to be stable.  Don't use this in general.
+The project is currently at the stage where I've just dumped some useful things into shell functions that are randomly scattered around the directory.  It will be completely revised at some point.  Don't expect anything in here to be stable.  Don't use this in general.
 
-Three distros are supported to varying degrees at the moment: Fedora, CentOS, and Gentoo.  For the best support currently, build Fedora images while running on the same Fedora version as the host OS.
+Three distros are supported to varying degrees at the moment: Fedora, CentOS, and Gentoo.  For the best support currently, build Fedora 30 images while running on a Fedora 30 host system.
 
 ### General
 
-**Implement a real command-line interface.**  There needs to be an option to specify the target partition instead of the `INSTALL_DISK` environment variable.  Automatic Secure Boot signing should be offered as an option here, which would need to specify which key to use.  There should also be an option to take a public keyring file that is used to verify the signature of the etc Git overlay commit on checkout, and maybe an SSH key to support securely cloning the repo as a means of automated provisioning.  Positional arguments should be handed to the end user's scripts, e.g. to provide the path to a game's binary installer.  Maybe add an option to lock the root account and create an unprivileged user, so I don't need to hard-code an account in the example files.
+**Improve the command-line interface.**  Automatic Secure Boot signing should be offered as an option here, which would need to specify which key to use.  There should also be an option to take a public keyring file that is used to verify the signature of the etc Git overlay commit on checkout, and maybe an SSH key to support securely cloning the repo as a means of automated provisioning.  Maybe add an option to lock the root account and create an unprivileged user, so I don't need to hard-code an account in the example files.  Add validation error messages.
 
 **Implement content whitelisting.**  The images currently include all installed files with an option to blacklist paths using an exclude list.  The opposite should be supported for minimal systems, where individual files, directories, entire packages, and ELF binaries (as a shortcut for all linked libraries) can be listed for inclusion and everything else is dropped.
 
@@ -44,7 +58,7 @@ Three distros are supported to varying degrees at the moment: Fedora, CentOS, an
 
 ### Fedora
 
-**Support different Fedora releases.**  The Fedora container is signed with a different key for each release, so in order to use anything other than the latest version, a list of keys for supported releases needs to be maintained.
+**Support different Fedora releases.**  The Fedora container is signed with a different key for each release, so in order to use anything other than the latest version, a keyring for supported releases needs to be maintained.
 
 **Report when the image should be updated.**  When a system saves the RPM database and has network access, it should automatically check Fedora updates for enhancements, bug fixes, and security issues so it can create a report advising when an updated immutable image should be created and applied.  I will probably implement this in a custom package in my local repo and integrate it with a real monitoring server, but I am noting it here in case I decide to add it to the base system and put a report in root's MOTD (to provide the information without assumptions about network monitoring).  The equivalent can be done for CentOS or via GLSAs, but Fedora is my priority here.
 

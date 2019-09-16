@@ -1,9 +1,11 @@
-#!/bin/bash
-set -euxo pipefail
+#!/bin/bash -e
+set -euo pipefail
 
-# Configure host commands
+# Configure required host commands via environment variables.
+blkid=${BLKID:-blkid}
+cp=${CP:-cp}
 curl=${CURL:-curl}
-dnf=${DNF:-dnf}
+dd=${DD:-dd}
 gpg=${GPG:-gpg2}
 mkdir=${MKDIR:-mkdir}
 mktemp=${MKTEMP:-mktemp}
@@ -15,19 +17,51 @@ sha512sum=${SHA512SUM:-sha512sum}
 tar=${TAR:-tar}
 uname=${UNAME:-uname}
 
+# Load basic functions.
+. base.sh
+
+# Parse command-line options.
+while getopts :BE:IKP:RSUVZhu opt
+do
+        case "$opt" in
+            B) options[bootable]=1 ;;
+            E) options[uefi_path]=$OPTARG ;;
+            I) options[install_to_disk]=1 ;;
+            K) options[ramdisk]=1 ;;
+            P) options[partuuid]=${OPTARG,,} ;;
+            R) options[read_only]=1 ;;
+            S) options[squash]=1 ;;
+            U) options[uefi]=1 ;;
+            V) options[verity]=1 ;;
+            Z) options[selinux]=1 ;;
+            h) usage ; exit 0 ;;
+            u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
+            *) usage 1>&2 ; exit 1 ;;
+        esac
+done
+shift $(( OPTIND - 1 ))
+
+# Load all library files now to combine CLI options with coded settings.
+${*:+. "$1"}
+imply_options
+. "${options[distro]}".sh
+test -n "$*" && { . "$1" ; shift ; }
+
+# Validate form, but don't look for a device yet (because hot-plugging exists).
+opt partuuid &&
+[[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
+# A partition is required when writing to disk.
+opt install_to_disk && opt partuuid
+# A UEFI executable is required in order to save it.
+opt uefi_path && opt uefi
+
 # Define output directories
 output=$($mktemp --directory --tmpdir="$PWD" output.XXXXXXXXXX)
 buildroot="$output/buildroot"
 
-. base.sh
-${*:+. "$1"}
-. "${options[distro]}".sh
-${*:+. "$1"}
-
 create_buildroot
-customize_buildroot
+customize_buildroot "$@"
 enter /bin/bash -euxo pipefail << EOF
-INSTALL_DISK=${INSTALL_DISK-}  # Let verity know the target disk name.
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
 opt squash || mount_root
@@ -51,9 +85,16 @@ opt nspawn && produce_nspawn_exe
 :
 EOF
 
-# Write the file system to disk if the PARTUUID was specified.
-if test -n "${INSTALL_DISK-}"
+# Save the UEFI binary.
+if opt uefi_path
 then
-        test -b "$INSTALL_DISK" || INSTALL_DISK=$(blkid -lo device -t "$INSTALL_DISK")
-        dd if="$output/final.img" of="${INSTALL_DISK}" status=progress
+        $mkdir -p "${options[uefi_path]%/*}"
+        $cp -p "$output/BOOTX64.EFI" "${options[uefi_path]}"
+fi
+
+# Write the file system to disk at the given partition.
+if opt install_to_disk
+then
+        disk=$($blkid -lo device -t "PARTUUID=${options[partuuid]}")
+        $dd if="$output/final.img" of="$disk" status=progress
 fi

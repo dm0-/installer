@@ -1,4 +1,4 @@
-options=([arch]=i686 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
 
 packages+=(
         mesa-dri-drivers
@@ -8,8 +8,9 @@ packages+=(
 
 packages_buildroot+=(dnf-plugins-core git-core jq make)
 function customize_buildroot() {
-        ln 'setup_the_longest_journey_142_lang_update_(24607).exe' "$output/install.exe"
-        ln 'setup_the_longest_journey_142_lang_update_(24607)-1.bin' "$output/install-1.bin"
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
+        $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
         enter /bin/bash -euxo pipefail << 'EOF'
 dnf --assumeyes builddep innoextract
 git clone https://github.com/dscharrer/innoextract.git
@@ -24,11 +25,11 @@ EOF
 function customize() {
         exclude_paths+=(
                 root
+                usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/systemd
+                usr/lib/{systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
-                var/'*'
         )
 
         (mkdir -p root/TLJ/Save ; cd root/TLJ ; exec innoextract ../../install.exe)

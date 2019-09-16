@@ -1,4 +1,4 @@
-options=([arch]=x86_64 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
@@ -10,17 +10,18 @@ packages+=(
 
 packages_buildroot+=(tar)
 function customize_buildroot() {
-        ln FTL.1.5.4.tar.gz "$output/FTL.tgz"
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $cp "${1:-FTL.1.5.4.tar.gz}" "$output/FTL.tgz"
 }
 
 function customize() {
         exclude_paths+=(
                 root
+                usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/systemd
+                usr/lib/{systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
-                var/'*'
         )
 
         tar --exclude=x86 -xf FTL.tgz -C root

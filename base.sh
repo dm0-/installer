@@ -3,21 +3,66 @@ exclude_paths=({boot,dev,home,media,proc,run,srv,sys,tmp}/'*')
 
 declare -A options
 options[distro]=fedora
-options[bootable]=1   # Include a kernel (for more than running as a container)
-options[iptables]=1   # Configure a strict firewall by default
-options[networkd]=1   # Enable minimal DHCP networking without NetworkManager
-options[nspawn]=      # Create an executable file that runs in nspawn
-options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
-options[read_only]=1  # Use tmpfs in places to make a read-only system usable
-options[selinux]=1    # Enforce SELinux policy
-options[squash]=1     # Produce a compressed squashfs image
-options[uefi]=        # Generate a single UEFI executable for the kernel+initrd
-options[verity]=1     # Prevent file system modification with dm-verity
+options[bootable]=   # Include a kernel (for more than running as a container)
+options[iptables]=   # Configure a strict firewall by default
+options[networkd]=   # Enable minimal DHCP networking without NetworkManager
+options[nspawn]=     # Create an executable file that runs in nspawn
+options[partuuid]=   # The partition UUID for verity to map into the root FS
+options[ramdisk]=    # Produce an initrd that sets up the root FS in memory
+options[read_only]=  # Use tmpfs in places to make a read-only system usable
+options[selinux]=    # Enforce SELinux policy
+options[squash]=     # Produce a compressed squashfs image
+options[uefi]=       # Generate a single UEFI executable for the kernel+initrd
+options[verity]=     # Prevent file system modification with dm-verity
+
+function usage() {
+        echo "Usage: $0 [-BKRSUVZhu] \
+[-E <uefi-binary-path>] [[-I] -P <partuuid>] \
+<config.sh> [<parameter>]...
+
+This program will produce a root file system from a given system configuration
+file.  Parameters after the configuration file are passed to it, so their
+meanings are specific to each system (typically listing paths for host files to
+be copied into the target file system).
+
+The output options described below can change or ammend the produced files, but
+the configuration file can forcibly enable them to declare they are a required
+part of the system, or disable them to declare they are incompatible with it.
+
+Output format options:
+  -B    Include a kernel and init program to produce a bootable system.
+  -K    Bundle the root file system in the initrd to run in RAM (implying -B).
+  -R    Make the system run in read-only mode with tmpfs mounts where needed.
+  -S    Use squashfs as the root file system for compression (implying -R).
+  -U    Generate a UEFI executable that boots into the system (implying -B).
+  -V    Attach verity signatures to the root file system image (implying -R).
+  -Z    Install and enforce targeted SELinux policy, and label the file system.
+
+Install options:
+  -E <uefi-binary-path>
+        Save the UEFI executable to the given path, which should be on the
+        mounted target ESP file system (implying -U).
+        Example: -E /boot/EFI/BOOT/BOOTX64.EFI
+  -I    Install the file system to disk on the partition specified with -P.
+  -P <partuuid>
+        Configure the kernel arguments to use the given GPT partition UUID as
+        the root file system on boot.  If this option is not used, the kernel
+        will assume that the root file system is on /dev/sda.
+        Example: -P e08ede5f-56d4-4d6d-b8d9-abf7ef5be608
+
+Help options:
+  -h    Output this help text.
+  -u    Output a single line of brief usage syntax."
+}
+
+function imply_options() {
+        opt squash || opt verity && options[read_only]=1
+        opt uefi_path && options[uefi]=1
+        opt uefi || opt ramdisk && options[bootable]=1
+        opt distro || options[distro]=fedora  # This can't be unset.
+}
 
 function opt() { test -n "${options["${*?}"]-}" ; }
-
-function inherit() { eval "_inherit${SHLVL:-0}_$(declare -f "$1")" ; }
-function super() { "_inherit${SHLVL:-0}_${FUNCNAME[1]}" "$@" ; }
 
 function enter() {
         $nspawn \
@@ -25,6 +70,7 @@ function enter() {
             --chdir=/wd \
             --directory="$buildroot" \
             --machine="buildroot-${output##*.}" \
+            --quiet \
             "$@"
 }
 
@@ -57,7 +103,7 @@ function squash() {
 }
 
 function verity() {
-        local -r device=${INSTALL_DISK:-/dev/sda}
+        local -r dev=${options[partuuid]:+PARTUUID=${options[partuuid]}}
         local -ir size=$(stat --format=%s "$disk")
         local -A verity
         ! (( size % 4096 ))
@@ -69,7 +115,7 @@ function verity() {
         echo > kernel_args.txt \
             ro root=/dev/dm-0 \
             dm-mod.create='"'root,,,ro,0 $(( size / 512 )) \
-                verity ${verity[Hash type]} $device $device \
+                verity ${verity[Hash type]} ${dev:-/dev/sda} ${dev:-/dev/sda} \
                 ${verity[Data block size]} ${verity[Hash block size]} \
                 ${verity[Data blocks]} $(( ${verity[Data blocks]} + 1 )) \
                 ${verity[Hash algorithm]} ${verity[Root hash]} \
@@ -140,6 +186,7 @@ EOF
 function tmpfs_var() {
         exclude_paths+=(var/'*')
 
+        mkdir -p root/usr/lib/systemd/system
         cat << 'EOF' > root/usr/lib/systemd/system/var.mount
 [Unit]
 Description=Mount writeable tmpfs over /var
@@ -189,16 +236,18 @@ Options=rootcontext=system_u:object_r:admin_home_t:s0,mode=0700,strictatime,node
 WantedBy=local-fs.target
 EOF
 
+        mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants \
             ../home.mount ../root.mount
+
+        test -s root/etc/pam.d/system-auth &&
+        echo >> root/etc/pam.d/system-auth \
+            'session     required      pam_mkhomedir.so'
 
         cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
 C /root - - - - /etc/skel
 Z /root
 EOF
-
-        echo >> root/etc/pam.d/system-auth \
-            'session     required      pam_mkhomedir.so'
 }
 
 function overlay_etc() {
@@ -236,6 +285,7 @@ EOF
         # Probably should just delete this workaround until it's implemented for real in the initrd.
         if test -x root/usr/bin/git
         then
+                mkdir -p root/usr/lib/systemd/system-generators
                 cat << 'EOF' > root/usr/lib/systemd/system-generators/etcgo
 #!/bin/sh -e
 set -euxo pipefail
@@ -404,6 +454,9 @@ metadata-network-access=0
 EOF
         )
 
+        test -d root/usr/lib/locale/en_US.utf8 &&
+        echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
+
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime
 
         # WORKAROUNDS
@@ -420,13 +473,15 @@ EOF
 }
 
 function produce_uefi_exe() {
+        local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
+        local -r logo=$(test -s logo.bmp && echo logo.bmp)
         local initrd=$(opt ramdisk && echo ramdisk || echo initrd).img
         test -e "$initrd" || initrd=
 
         objcopy \
             --add-section .osrel=root/etc/os-release --change-section-vma .osrel=0x20000 \
-            --add-section .cmdline=kernel_args.txt --change-section-vma .cmdline=0x30000 \
-            --add-section .splash=logo.bmp --change-section-vma .splash=0x40000 \
+            ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=0x30000} \
+            ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
             --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
             /usr/lib/systemd/boot/efi/linuxx64.efi.stub BOOTX64.EFI

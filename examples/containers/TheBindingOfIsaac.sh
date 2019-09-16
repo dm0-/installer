@@ -1,29 +1,29 @@
-options=([arch]=x86_64 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
         gtk2
         libcurl
         libGL
-#       libvdpau mesa-vdpau-drivers # Unnecessary?
         nss
-#       procps-ng which # Unnecessary?
 )
 
 packages_buildroot+=(tar unzip)
 function customize_buildroot() {
-        curl -L https://fpdownload.macromedia.com/pub/flashplayer/updaters/32/flash_player_sa_linux.x86_64.tar.gz > "$output/flashplayer.tgz"
-        ln the_binding_of_isaac_wrath_of_the_lamb-linux-1.48-1355426233.swf.zip "$output/BOI.zip"
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $cp "${1:-the_binding_of_isaac_wrath_of_the_lamb-linux-1.48-1355426233.swf.zip}" "$output/BOI.zip"
+        test -n "${2-}" && $cp "$2" "$output/flashplayer.tgz" ||
+        $curl -L https://fpdownload.macromedia.com/pub/flashplayer/updaters/32/flash_player_sa_linux.x86_64.tar.gz > "$output/flashplayer.tgz"
 }
 
 function customize() {
         exclude_paths+=(
                 root
+                usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/systemd
+                usr/lib/{systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
-                var/'*'
         )
 
         tar -C root/usr/bin -xzf flashplayer.tgz flashplayer

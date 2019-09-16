@@ -1,4 +1,4 @@
-options=([arch]=i686 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
@@ -9,27 +9,30 @@ packages+=(
 
 packages_buildroot+=(expect)
 function customize_buildroot() {
-        ln psychonauts-linux-05062013-bin "$output/install"
-        chmod 0755 "$output/install"
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $cp "${1:-psychonauts-linux-05062013-bin}" "$output/install"
 }
 
 function customize() {
         exclude_paths+=(
                 root
+                usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/systemd
+                usr/lib/{systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
-                var/'*'
         )
 
-        ln -f install root/install ; expect << 'EOF' ; rm -f root/install
+        chmod 0755 install
+        ln -f install root/install
+        expect << 'EOF'
 set timeout -1
 spawn chroot root /install
 expect "> "
 send -- "/psychonauts\n"
 expect eof
 EOF
+        rm -f root/install
 
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu

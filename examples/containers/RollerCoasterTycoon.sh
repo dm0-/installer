@@ -1,4 +1,4 @@
-options=([arch]=i686 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=fedora [nspawn]=1 [release]=30 [squash]=1)
 
 packages+=(
         mesa-dri-drivers
@@ -8,17 +8,18 @@ packages+=(
 
 packages_buildroot+=(innoextract jq)
 function customize_buildroot() {
-        ln 'setup_rollercoaster_tycoon_deluxe_1.20.015_(17822).exe' "$output/install.exe"
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $cp "${1:-setup_rollercoaster_tycoon_deluxe_1.20.015_(17822).exe}" "$output/install.exe"
 }
 
 function customize() {
         exclude_paths+=(
                 root
+                usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/systemd
+                usr/lib/{systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
-                var/'*'
         )
 
         (cd root/root ; exec innoextract ../../install.exe)
