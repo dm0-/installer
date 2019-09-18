@@ -26,14 +26,15 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
+        unzip -p BOI.zip -x '__MACOSX/*' > root/boiwotl.swf
         tar -C root/usr/bin -xzf flashplayer.tgz flashplayer
+        rm -f BOI.zip flashplayer.tgz
         mkdir -p root/etc/adobe
         cat << 'EOF' > root/etc/adobe/mms.cfg
 AutoUpdateDisable = 1
 AVHardwareDisable = 1
 OverrideGPUValidation = 1
 EOF
-        unzip -p BOI.zip -x '__MACOSX/*' > root/boiwotl.swf
 
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu

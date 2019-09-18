@@ -20,21 +20,22 @@ function create_buildroot() {
         $mkdir -p "$buildroot"
         $curl -L "${image%-Base*}-${options[release]}-1.2-$arch-CHECKSUM" > "$output/checksum"
         $curl -L "$image" > "$output/image.tar.xz"
-        verify_fedora "$output/checksum" "$output/image.tar.xz"
+        verify_distro "$output/checksum" "$output/image.tar.xz"
         $tar -xJOf "$output/image.tar.xz" '*/layer.tar' | $tar -C "$buildroot" -x
         $rm -f "$output/checksum" "$output/image.tar.xz"
 
-        # Disable bad packaging options.
-        $sed -i -e '/^tsflags=/d;/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
-        $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
+        configure_initrd_generation
 
-        # Don't expect that the build system is the target system.
-        $mkdir -p "$buildroot/etc/dracut.conf.d"
-        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        # Disable bad packaging options.
+        $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
+        $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
 
         enter /usr/bin/dnf --assumeyes upgrade
         test -z "${packages_buildroot[*]:-$*}" ||
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
+
+        # Let the configuration decide if the system should have documentation.
+        $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
 }
 
 function install_packages() {
@@ -196,76 +197,25 @@ function defer() {
 EOF
 }
 
-function build_ramdisk() {
-        local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
-        mkdir -p "$root"/{bin,dev,lib,mnt,proc,sys,sysroot}
+function configure_initrd_generation() if opt bootable
+then
+        # Don't expect that the build system is the target system.
+        $mkdir -p "$buildroot/etc/dracut.conf.d"
+        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
 
-        cp -a /sbin/busybox "$root/bin/"
-        for x in ash insmod losetup mknod mount switch_root
-        do ln -fns busybox "$root/bin/$x"
-        done
+        # Load overlayfs in the initrd in case modules aren't installed.
+        if opt read_only
+        then
+                $mkdir -p "$buildroot/etc/modules-load.d"
+                echo overlay > "$buildroot/etc/modules-load.d/overlay.conf"
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    'install_optional_items+=" /etc/modules-load.d/overlay.conf "'
+        fi
+fi
 
-        find /lib/modules/*/kernel '(' \
-            $(opt verity && echo -name dm-verity.ko.xz -o) \
-            -name loop.ko.xz -o \
-            $(opt read_only && echo -name overlay.ko.xz -o) \
-            $(opt verity && echo -name reed_solomon.ko.xz -o) \
-            $(opt squash && echo -name squashfs.ko.xz -o) \
-            $(opt squash && echo -name zstd_decompress.ko.xz -o) \
-            -false ')' -exec cp -at "$root/lib" '{}' +
-        unxz "$root"/lib/*.xz
-
-        cat << EOF > "$root/init" && chmod 0755 "$root/init"
-#!/bin/ash -euvx
-
-# Handle boot failures.
-abort() { echo "Boot failed with \$?; dropping to shell" 1>&2 ; exec ash -i ; }
-trap abort EXIT
-
-# Set up kernel interfaces.
-mount -t devtmpfs devtmpfs /dev
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-
-# Create a block device for the root image.
-insmod /lib/loop.ko
-mknod -m 0600 /dev/loop0 b 7 0
-losetup /dev/loop0 /sysroot/root.img
-
-$(opt read_only && cat << 'EOG'
-# Load overlay support for /etc.
-insmod /lib/overlay.ko
-EOG
-)
-$(opt verity && cat << 'EOG'
-# Load verity support.  XXX: Not used yet.
-insmod /lib/reed_solomon.ko
-insmod /lib/dm-verity.ko
-EOG
-)
-$(opt squash && cat << 'EOG'
-# Load support for root on squashfs.
-insmod /lib/zstd_decompress.ko
-insmod /lib/squashfs.ko
-EOG
-)
-
-# Mount the root file system.
-mount $(opt read_only && echo -o ro) /dev/loop0 /sysroot
-
-# Switch to the root file system.
-exec switch_root /sysroot /sbin/init
-EOF
-
-        ln -fn final.img "$root/sysroot/root.img"
-        find "$root" -mindepth 1 -printf '%P\n' |
-        cpio -D "$root" -R 0:0 -co |
-        xz --check=crc32 -9e > ramdisk.img
-}
-
-function verify_fedora() {
+function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
-        trap "$rm -fr $GNUPGHOME" RETURN
+        trap -- "$rm -fr $GNUPGHOME" RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -304,6 +254,7 @@ EOF
 # OPTIONAL (BUILDROOT)
 
 function enable_rpmfusion() {
+        local -r url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/x86_64/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
         enter /bin/bash -euxo pipefail << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -336,12 +287,11 @@ fs3khghy5i2AU/bOChxRngX2QWR1A117IeADWtuspMFEOyeU5BlMcqjkFdOZI3jX
 =S0gf
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L \
-    -O "https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/x86_64/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm" \
-    -O "https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/x86_64/os/Packages/r/rpmfusion-free-release-tainted-${options[release]}-1.noarch.rpm"
-rpm --checksig rpmfusion-free-release-{,tainted-}"${options[release]}"-1.noarch.rpm
-rpm --install rpmfusion-free-release-{,tainted-}"${options[release]}"-1.noarch.rpm
-exec rm -f rpmfusion-free-release-{,tainted-}"${options[release]}"-1.noarch.rpm
+curl -L "$url" > rpmfusion-free.rpm
+curl -L "${url/-free-release-/-free-release-tainted-}" > rpmfusion-free-tainted.rpm
+rpm --checksig rpmfusion-free{,-tainted}.rpm
+rpm --install rpmfusion-free{,-tainted}.rpm
+exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
 }
 

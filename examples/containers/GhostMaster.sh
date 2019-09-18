@@ -23,6 +23,7 @@ function customize() {
         )
 
         (cd root/root ; exec innoextract ../../install.exe)
+        rm -f install.exe
         wine_gog_script /GM < root/root/app/goggame-1207658687.script > reg.sh
         mv root/root/app/GhostData root/GM
 

@@ -23,6 +23,7 @@ function customize() {
         )
 
         (cd root/root ; exec innoextract ../../install.exe)
+        rm -f install.exe
         mv root/root/app root/fallout
         sed '/^UAC_AWARE=/s/=1/=0/' root/fallout/f1_res.ini > root/fallout/f1_res.ini.orig
         cp root/fallout/fallout.cfg root/fallout/fallout.cfg.orig

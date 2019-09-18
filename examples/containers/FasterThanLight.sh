@@ -25,6 +25,7 @@ function customize() {
         )
 
         tar --exclude=x86 -xf FTL.tgz -C root
+        rm -f FTL.tgz
 
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu

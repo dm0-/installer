@@ -3,9 +3,10 @@ packages_buildroot=()
 
 DEFAULT_ARCH=$($uname -m)
 DEFAULT_PROFILE=17.1
-DEFAULT_RELEASE=20190911T214502Z
+DEFAULT_RELEASE=20190915T214502Z
 options[arch]=$DEFAULT_ARCH
 options[profile]=$DEFAULT_PROFILE
+options[ramdisk]=
 options[release]=$DEFAULT_RELEASE
 
 function create_buildroot() {
@@ -24,9 +25,11 @@ function create_buildroot() {
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
         $curl -L "$stage3" > "$output/stage3.tar.xz"
-        verify_gentoo "$output/digests" "$output/stage3.tar.xz"
+        verify_distro "$output/digests" "$output/stage3.tar.xz"
         $tar -C "$buildroot" -xJf "$output/stage3.tar.xz"
         $rm -f "$output/digests" "$output/stage3.tar.xz"
+
+        opt bootable && write_base_kernel_config > "$output/config.base"
 
         enter /bin/bash -euxo pipefail << EOF
 ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
@@ -55,6 +58,8 @@ echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.con
 emerge-webrsync
 emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
 
+test -d /usr/src/linux && make -C /usr/src/linux mrproper V=1
+
 if test -x /usr/bin/crossdev
 then
         cat << 'EOG' > /etc/portage/repos.conf/crossdev.conf
@@ -69,12 +74,6 @@ cp -at "/build/${options[arch]}/etc" /etc/portage
 cd "/build/${options[arch]}/etc/portage"
 echo split-usr >> profile/use.mask
 EOF
-
-        if opt bootable
-        then
-                write_base_kernel_config > "$output/config.base"
-                enter /usr/bin/make -C /usr/src/linux mrproper V=1
-        fi
 }
 
 function install_packages() {
@@ -187,9 +186,9 @@ CONFIG_PROC_SYSCTL=y
 CONFIG_UNIX98_PTYS=y'
 }
 
-function verify_gentoo() {
+function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
-        trap "$rm -fr $GNUPGHOME" RETURN
+        trap -- "$rm -fr $GNUPGHOME" RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

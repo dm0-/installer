@@ -48,7 +48,7 @@ Three distros are supported to varying degrees at the moment: Fedora, CentOS, an
 
 **Maybe support reusing a build root.**  Everything is being built from scratch every time the installer runs.  For faster testing, maybe add an option to run in an existing build root and start the installation process at a specified point.
 
-**Fix the relabel function for inactive SELinux policies.**  I need to look into whether anything supports labeling a file system with labels that aren't from the host system's active policy.  Assuming not, I'll just always install into an ext4 image first and generate an initrd containing the target policy and `policycoreutils`, then replace the `relabel` function with a `qemu -kernel vmlinuz -initrd relabel.img ext4.img` call.
+**Fix the relabel function for inactive SELinux policies.**  I need to look into whether anything supports labeling a file system with labels that aren't from the host system's active policy.  Assuming not, I'll just always install into an ext4 image first and generate an initrd containing the target policy and `policycoreutils`, then replace the `relabel` function with a `qemu -kernel vmlinuz -initrd relabel.img ext4.img` call.  (CentOS is testing this now when not using squashfs.)
 
 **Support an etc Git overlay for real.**  The `/etc` directory contains the read-only default configuration files with a writable overlay, and if Git is installed, the modified files in the overlay are tracked in a repository.  The repository database is saved in `/var` so the changes can be stored persistently.  At the moment, the Git overlay is mounted by a systemd generator when it's already running in the root file system.  This allows configuring services, but not things like `fstab` or other generators.  It needs to be set up by an initrd before pivoting to the real root file system (also so an encrypted `/var` can be mounted), and it should verify the commit's signature so that everything is cryptographically verified in the booted system.
 
@@ -62,13 +62,9 @@ Three distros are supported to varying degrees at the moment: Fedora, CentOS, an
 
 **Report when the image should be updated.**  When a system saves the RPM database and has network access, it should automatically check Fedora updates for enhancements, bug fixes, and security issues so it can create a report advising when an updated immutable image should be created and applied.  I will probably implement this in a custom package in my local repo and integrate it with a real monitoring server, but I am noting it here in case I decide to add it to the base system and put a report in root's MOTD (to provide the information without assumptions about network monitoring).  The equivalent can be done for CentOS or via GLSAs, but Fedora is my priority here.
 
-**Move the ramdisk option to dracut.**  I used to build a custom minimal `busybox` initrd that included only the Fedora kernel modules needed for a machine, so it could either download a root file system image with no kernel installation into its tmpfs or copy it off the USB boot disk.  The `ramdisk` option is currently using a stripped version of that idea, but it's going to be a bigger maintenance burden than just using dracut.  The squashfs compression is so good that bundling the entire image (with a full kernel installation) into the initrd is still well under the FAT32 ESP file size limit.  Maybe I can revisit ideas for the minimal version later.
-
 ### CentOS
 
 **Drop CentOS 7 support as soon as a CentOS 8 image is available.**  As usual, the software included with CentOS is wildly obsolete.  CentOS 7 doesn't even include networkd or a UEFI stub to create bootable files.  Some of its shortcomings can be addressed by stealing files from a Fedora package, but part of the reason for using the target distro as the build root is so that any distro-specific changes are reflected in the final output.  Supporting features by using another distro is counter to this goal, so it is better to just not support versions that don't implement required functionality.
-
-**Fix failing units.**  The `hostnamed` service is failing with a resource error.  Look into that so systems boot cleanly.
 
 ### Gentoo
 

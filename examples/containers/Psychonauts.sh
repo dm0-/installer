@@ -23,8 +23,8 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        chmod 0755 install
         ln -f install root/install
+        chmod 0755 root/install
         expect << 'EOF'
 set timeout -1
 spawn chroot root /install
@@ -32,7 +32,7 @@ expect "> "
 send -- "/psychonauts\n"
 expect eof
 EOF
-        rm -f root/install
+        rm -f root/install install
 
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu

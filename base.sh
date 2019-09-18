@@ -1,9 +1,9 @@
-disk=squash.img
+disk=ext4.img
 exclude_paths=({boot,dev,home,media,proc,run,srv,sys,tmp}/'*')
 
 declare -A options
 options[distro]=fedora
-options[bootable]=   # Include a kernel (for more than running as a container)
+options[bootable]=   # Include a kernel and init system to boot the image
 options[iptables]=   # Configure a strict firewall by default
 options[networkd]=   # Enable minimal DHCP networking without NetworkManager
 options[nspawn]=     # Create an executable file that runs in nspawn
@@ -12,7 +12,7 @@ options[ramdisk]=    # Produce an initrd that sets up the root FS in memory
 options[read_only]=  # Use tmpfs in places to make a read-only system usable
 options[selinux]=    # Enforce SELinux policy
 options[squash]=     # Produce a compressed squashfs image
-options[uefi]=       # Generate a single UEFI executable for the kernel+initrd
+options[uefi]=       # Generate a single UEFI executable containing boot files
 options[verity]=     # Prevent file system modification with dm-verity
 
 function usage() {
@@ -62,11 +62,23 @@ function imply_options() {
         opt distro || options[distro]=fedora  # This can't be unset.
 }
 
+function validate_options() {
+        # Validate form, but don't look for a device yet (because hot-plugging exists).
+        opt partuuid &&
+        [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
+        # A partition is required when writing to disk.
+        opt install_to_disk && opt partuuid
+        # A UEFI executable is required in order to save it.
+        opt uefi_path && opt uefi
+        return 0
+}
+
 function opt() { test -n "${options["${*?}"]-}" ; }
 
 function enter() {
         $nspawn \
             --bind="$output:/wd" \
+            ${loop:+--bind="$loop:/dev/loop-root"} \
             --chdir=/wd \
             --directory="$buildroot" \
             --machine="buildroot-${output##*.}" \
@@ -77,11 +89,16 @@ function enter() {
 function customize_buildroot() { : ; }
 function customize() { : ; }
 
+function create_root_image() {
+        $truncate --size="${1:-1G}" "$output/$disk"
+        declare -g loop=$($losetup --show --find "$output/$disk")
+        trap -- "$losetup --detach $loop" EXIT
+}
+
 function mount_root() {
-        disk=ext4.img
-        truncate --size=4G "$disk"
-        mkfs.ext4 -m 0 "$disk"
-        mount -o loop,X-mount.mkdir "$disk" root
+        mkfs.ext4 -m 0 /dev/loop-root
+        mkdir -p root  # CentOS 7
+        mount /dev/loop-root root ; trap -- 'umount root' EXIT
 }
 
 function relabel() {
@@ -91,12 +108,14 @@ function relabel() {
 
 function unmount_root() {
         e4defrag root
-        umount -d root
-        e2fsck -Dfy "$disk"
+        umount root ; trap - EXIT
+        opt read_only && tune2fs -O read-only /dev/loop-root || :  # CentOS 7
+        e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
 }
 
 function squash() {
         local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
+        disk=squash.img
         mksquashfs root "$disk" -noappend "$xattrs" \
             -comp zstd -Xcompression-level 22 \
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
@@ -121,6 +140,25 @@ function verity() {
                 ${verity[Hash algorithm]} ${verity[Root hash]} \
                 ${verity[Salt]} 0'"'
         cat "$disk" signatures.img > final.img
+}
+
+function build_ramdisk() {
+        local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
+        mkdir -p "$root"/{usr/lib/systemd/system/initrd-root-fs.target.requires,sysroot}
+        cat << EOF > "$root/usr/lib/systemd/system/sysroot.mount"
+[Unit]
+Before=initrd-root-fs.target
+[Mount]
+What=/sysroot/root.img
+Where=/sysroot
+Type=$(opt squash && echo squashfs || echo ext4)
+Options=loop$(opt read_only && echo ,ro)
+EOF
+        ln -fst "$root/usr/lib/systemd/system/initrd-root-fs.target.requires" ../sysroot.mount
+        ln -fn final.img "$root/sysroot/root.img"
+        find "$root" -mindepth 1 -printf '%P\n' |
+        { cd "$root" ; cpio -R 0:0 -co ; } |  # CentOS 7
+        xz --check=crc32 -9e | cat initrd.img - > ramdisk.img
 }
 
 function configure_dhcp() if opt networkd
@@ -344,7 +382,7 @@ function configure_system() {
         sed -i -e 's/^[# ]*\(PermitEmptyPasswords\|PermitRootLogin\) .*/\1 no/' root/etc/ssh/sshd_config
 
         test -s root/etc/sudoers &&
-        sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[^ ]*//;}' root/etc/sudoers
+        sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[# ]*//;}' root/etc/sudoers
 
         test -x root/usr/libexec/upowerd &&
         echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
@@ -388,52 +426,58 @@ EOF
         test -d root/usr/lib*/firefox/browser/defaults/preferences &&
         (cd root/usr/lib*/firefox/browser/defaults/preferences
                 cat << 'EOF' > privacy.js
-/* Opt out of allowing Mozilla to install random studies.  */
+// Opt out of allowing Mozilla to install random studies.
 pref("app.shield.optoutstudies.enabled", false);
-/* Disable the beacon API for analytical trash.  */
+// Disable the beacon API for analytical trash.
 pref("beacon.enabled", false);
-/* Don't recommend things.  */
+// Don't recommend things.
 pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
 pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
-/* Disable spam-tier nonsense on new tabs.  */
+// Disable spam-tier nonsense on new tabs.
 pref("browser.newtabpage.enabled", false);
-/* Don't send information to Mozilla.  */
+// Don't send information to Mozilla.
 pref("datareporting.healthreport.uploadEnabled", false);
-/* Remove useless Pocket stuff.  */
+// Never give up laptop battery information.
+pref("dom.battery.enabled", false);
+// Remove useless Pocket stuff.
 pref("extensions.pocket.enabled", false);
-/* Send DNT all the time.  */
+// Never send location data.
+pref("geo.enabled", false);
+// Send DNT all the time.
 pref("privacy.donottrackheader.enabled", true);
-/* Never try to save credentials.  */
+// Prevent various cross-domain tracking methods.
+pref("privacy.firstparty.isolate", true);
+// Never try to save credentials.
 pref("signon.rememberSignons", false);
 EOF
                 cat << 'EOF' > usability.js
-/* Fix the Ctrl+Tab behavior.  */
+// Fix the Ctrl+Tab behavior.
 pref("browser.ctrlTab.recentlyUsedOrder", false);
-/* Never open more browser windows.  */
+// Never open more browser windows.
 pref("browser.link.open_newwindow.restriction", 0);
-/* Include a sensible search bar.  */
+// Include a sensible search bar.
 pref("browser.search.openintab", true);
 pref("browser.search.suggest.enabled", false);
 pref("browser.search.widget.inNavBar", true);
-/* Restore the session instead of starting at home, and make the home page blank.  */
+// Restore sessions instead of starting at home, and make the home page blank.
 pref("browser.startup.homepage", "about:blank");
 pref("browser.startup.page", 3);
-/* Fit more stuff on the screen.  */
+// Fit more stuff on the screen.
 pref("browser.tabs.drawInTitlebar", true);
 pref("browser.uidensity", 1);
-/* Stop hiding protocols.  */
+// Stop hiding protocols.
 pref("browser.urlbar.trimURLs", false);
-/* Enable some mildly useful developer tools.  */
+// Enable some mildly useful developer tools.
 pref("devtools.command-button-rulers.enabled", true);
 pref("devtools.command-button-scratchpad.enabled", true);
 pref("devtools.command-button-screenshot.enabled", true);
-/* Make the developer tools frame match the browser theme.  */
+// Make the developer tools frame match the browser theme.
 pref("devtools.theme", "dark");
-/* Display when messages are logged.  */
+// Display when messages are logged.
 pref("devtools.webconsole.timestampMessages", true);
-/* Shut up.  */
+// Shut up.
 pref("general.warnOnAboutConfig", false);
-/* Make widgets on web pages match the rest of the desktop.  */
+// Make widgets on web pages match the rest of the desktop.
 pref("widget.content.allow-gtk-dark-theme", true);
 EOF
         )
@@ -516,6 +560,7 @@ EOF
 function store_home_on_var() {
         opt selinux && echo /var/home /home >> root/etc/selinux/targeted/contexts/files/file_contexts.subs
         mv root/home root/var/home ; ln -fns var/home root/home
+        test "x${options[distro]}" = xcentos && echo 'd /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf ||  # CentOS 7
         echo 'Q /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf
         if test "x$*" = x+root
         then
@@ -541,7 +586,7 @@ function wine_gog_script() {
                 while read -r
                 do
                         REPLY=${REPLY:1:-1}
-                        k=${REPLY%%:*} ; k=${k//\"/} 
+                        k=${REPLY%%:*} ; k=${k//\"/}
                         v=${REPLY#*:} ; v=${v#\"} ; v=${v%\"}
                         r[${k:-_}]=$v
                 done <<< "${REPLY//,/$'\n'}"

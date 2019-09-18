@@ -33,7 +33,7 @@ function customize() {
         )
 
         (mkdir -p root/TLJ/Save ; cd root/TLJ ; exec innoextract ../../install.exe)
-        rm -fr root/TLJ/{app,commonappdata,tmp}
+        rm -fr install.exe install-1.bin root/TLJ/{app,commonappdata,tmp}
         cp root/TLJ/preferences.ini root/TLJ/preferences.ini.orig
         wine_gog_script /TLJ < root/TLJ/goggame-1207658794.script > reg.sh
         sed -i -e 's/Z:/C:/g' reg.sh

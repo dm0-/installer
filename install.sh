@@ -7,6 +7,7 @@ cp=${CP:-cp}
 curl=${CURL:-curl}
 dd=${DD:-dd}
 gpg=${GPG:-gpg2}
+losetup=${LOSETUP:-losetup}
 mkdir=${MKDIR:-mkdir}
 mktemp=${MKTEMP:-mktemp}
 nspawn=${NSPAWN:-systemd-nspawn}
@@ -15,6 +16,7 @@ sed=${SED:-sed}
 sha256sum=${SHA256SUM:-sha256sum}
 sha512sum=${SHA512SUM:-sha512sum}
 tar=${TAR:-tar}
+truncate=${TRUNCATE:-truncate}
 uname=${UNAME:-uname}
 
 # Load basic functions.
@@ -46,14 +48,7 @@ ${*:+. "$1"}
 imply_options
 . "${options[distro]}".sh
 test -n "$*" && { . "$1" ; shift ; }
-
-# Validate form, but don't look for a device yet (because hot-plugging exists).
-opt partuuid &&
-[[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
-# A partition is required when writing to disk.
-opt install_to_disk && opt partuuid
-# A UEFI executable is required in order to save it.
-opt uefi_path && opt uefi
+validate_options
 
 # Define output directories
 output=$($mktemp --directory --tmpdir="$PWD" output.XXXXXXXXXX)
@@ -61,6 +56,7 @@ buildroot="$output/buildroot"
 
 create_buildroot
 customize_buildroot "$@"
+opt squash || create_root_image
 enter /bin/bash -euxo pipefail << EOF
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
