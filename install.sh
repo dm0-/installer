@@ -56,29 +56,29 @@ buildroot="$output/buildroot"
 
 create_buildroot
 customize_buildroot "$@"
-opt squash || create_root_image
+create_root_image
 enter /bin/bash -euxo pipefail << EOF
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
-opt squash || mount_root
+mount_root
 install_packages
 configure_dhcp
-opt iptables && configure_iptables
-opt read_only && tmpfs_var
-opt read_only && tmpfs_home
-opt read_only && overlay_etc
-local_login
+configure_iptables
+tmpfs_var
+tmpfs_home
+overlay_etc
 configure_system
 distro_tweaks
 customize
-opt bootable && save_boot_files
-opt selinux && relabel
-opt squash && squash || unmount_root
-opt verity && verity || ln -f "$disk" final.img
-opt ramdisk && build_ramdisk
-opt uefi && produce_uefi_exe
-opt nspawn && produce_nspawn_exe
-:
+save_boot_files
+relabel
+squash
+unmount_root
+verity
+build_ramdisk
+kernel_cmdline
+produce_uefi_exe
+produce_nspawn_exe
 EOF
 
 # Save the UEFI binary.

@@ -15,12 +15,13 @@ function create_buildroot() {
         local profile="default/linux/$arch/${options[profile]:=$DEFAULT_PROFILE}/no-multilib/hardened"
         local stage3="https://gentoo.osuosl.org/releases/$arch/autobuilds/${options[release]:=$DEFAULT_RELEASE}/hardened/stage3-$arch-hardened+nomultilib-${options[release]}.tar.xz"
 
-        opt bootable && packages_buildroot+=(sys-kernel/gentoo-sources virtual/udev)
-        opt selinux && packages_buildroot+=(sec-policy/selinux-base-policy) && profile+=/selinux && stage3=${stage3/+/-selinux+}
+        opt bootable && packages_buildroot+=(sys-kernel/gentoo-sources)
+        opt selinux && packages_buildroot+=(app-emulation/qemu sys-kernel/gentoo-sources) && profile+=/selinux && stage3=${stage3/+/-selinux+}
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
         test "x${options[arch]:=$DEFAULT_ARCH}" = "x$DEFAULT_ARCH" || packages_buildroot+=(sys-devel/crossdev)
+        packages_buildroot+=(virtual/udev)  # Transform into a systemd+SELinux stage3.
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -28,8 +29,6 @@ function create_buildroot() {
         verify_distro "$output/digests" "$output/stage3.tar.xz"
         $tar -C "$buildroot" -xJf "$output/stage3.tar.xz"
         $rm -f "$output/digests" "$output/stage3.tar.xz"
-
-        opt bootable && write_base_kernel_config > "$output/config.base"
 
         enter /bin/bash -euxo pipefail << EOF
 ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
@@ -58,7 +57,7 @@ echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.con
 emerge-webrsync
 emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
 
-test -d /usr/src/linux && make -C /usr/src/linux mrproper V=1
+test -d /usr/src/linux && make -C /usr/src/linux -j$(nproc) mrproper V=1
 
 if test -x /usr/bin/crossdev
 then
@@ -74,6 +73,9 @@ cp -at "/build/${options[arch]}/etc" /etc/portage
 cd "/build/${options[arch]}/etc/portage"
 echo split-usr >> profile/use.mask
 EOF
+
+        build_relabel_kernel
+        write_base_kernel_config
 }
 
 function install_packages() {
@@ -86,7 +88,7 @@ function install_packages() {
                 make -C /usr/src/linux install V=1
         fi
 
-        opt bootable && packages+=(sys-apps/systemd)
+        opt bootable || opt networkd && packages+=(sys-apps/systemd)
         opt iptables && packages+=(net-firewall/iptables)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
 
@@ -106,16 +108,15 @@ function install_packages() {
         qlist --root=root -CIRSSUv > packages.txt
 }
 
-function save_boot_files() {
+function save_boot_files() if opt bootable
+then
         opt uefi && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black logo.bmp
         cp -p /boot/vmlinuz-* vmlinuz
-}
+        cp -pt . root/etc/os-release
+fi
 
-function distro_tweaks() { : ; }
-
-function relabel() { : ; }
-
-function write_base_kernel_config() {
+function write_base_kernel_config() if opt bootable
+then
         echo '# Basic settings
 CONFIG_ACPI=y
 CONFIG_BLOCK=y
@@ -165,8 +166,7 @@ CONFIG_SQUASHFS_DECOMP_MULTI=y
 CONFIG_SQUASHFS_XATTR=y
 CONFIG_SQUASHFS_ZSTD=y'
         opt uefi && echo '# UEFI settings
-CONFIG_EFI=y
-CONFIG_EFI_STUB=y'
+CONFIG_EFI=y'
         opt verity && echo '# Verity settings
 CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
@@ -184,7 +184,60 @@ CONFIG_FUTEX=y
 CONFIG_POSIX_TIMERS=y
 CONFIG_PROC_SYSCTL=y
 CONFIG_UNIX98_PTYS=y'
-}
+else $rm -f "$output/config.base"
+fi > "$output/config.base"
+
+function build_relabel_kernel() if opt selinux
+then
+        echo > "$output/config.relabel" '# Assume x86_64 for now.
+CONFIG_64BIT=y
+CONFIG_SMP=y
+# Support executing programs and scripts.
+CONFIG_BINFMT_ELF=y
+CONFIG_BINFMT_SCRIPT=y
+# Support kernel file systems.
+CONFIG_DEVTMPFS=y
+CONFIG_PROC_FS=y
+CONFIG_SYSFS=y
+# Support labeling the root file system.
+CONFIG_BLOCK=y
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_FS_SECURITY=y
+# Support using an initrd.
+CONFIG_BLK_DEV_RAM=y
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_RD_XZ=y
+# Support SELinux.
+CONFIG_NET=y
+CONFIG_AUDIT=y
+CONFIG_MULTIUSER=y
+CONFIG_SECURITY=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_INET=y
+CONFIG_SECURITY_SELINUX=y
+# Support the default hard drive in QEMU.
+CONFIG_PCI=y
+CONFIG_ATA=y
+CONFIG_ATA_BMDMA=y
+CONFIG_ATA_SFF=y
+CONFIG_BLK_DEV_SD=y
+CONFIG_ATA_PIIX=y
+# Support a console on the default serial port in QEMU.
+CONFIG_TTY=y
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+# Print initialization messages for debugging.
+CONFIG_PRINTK=y'
+
+        enter /bin/bash -euxo pipefail << 'EOF'
+make -C /usr/src/linux -j$(nproc) allnoconfig KCONFIG_ALLCONFIG="$PWD/config.relabel" V=1
+make -C /usr/src/linux -j$(nproc) V=1
+make -C /usr/src/linux install V=1
+mv /boot/vmlinuz-* vmlinuz.relabel
+rm -f /boot/*
+exec make -C /usr/src/linux -j$(nproc) mrproper V=1
+EOF
+fi
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"

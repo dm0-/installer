@@ -11,10 +11,11 @@ function create_buildroot() {
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}/docker/centos-${options[release]%%.*}-docker.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel microcode_ctl)
-        opt selinux && packages_buildroot+=(policycoreutils qemu-kvm)
-        opt squash && packages_buildroot+=(squashfs-tools) || packages_buildroot+=(e2fsprogs)
+        opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
+        opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
         opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tar.xz"
@@ -23,9 +24,9 @@ function create_buildroot() {
         $rm -f "$output/image.tar.xz"
 
         configure_initrd_generation
+        handle_dmsetup_manually
 
         enter /usr/bin/yum --assumeyes upgrade
-        test -z "${packages_buildroot[*]:-$*}" ||
         enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
 
         # Let the configuration decide if the system should have documentation.
@@ -45,12 +46,6 @@ function install_packages() {
         rpm --root="$PWD/root" -qa | sort > packages.txt
 }
 
-function save_boot_files() {
-        opt uefi && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg logo.bmp
-        cp -p /boot/vmlinuz-* vmlinuz
-        cp -p /boot/initramfs-* initrd.img
-}
-
 function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
@@ -59,8 +54,19 @@ function distro_tweaks() {
         touch root/etc/sysconfig/network
 }
 
-function relabel() if ! opt squash  # This still expects an ext4 image.
+function save_boot_files() if opt bootable
 then
+        opt uefi && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg logo.bmp
+        cp -p /boot/vmlinuz-* vmlinuz
+        cp -p /boot/initramfs-* initrd.img
+        cp -pt . root/etc/os-release
+elif opt selinux
+then cp -p /boot/vmlinuz-* vmlinuz.relabel
+fi
+
+function relabel() if opt selinux
+then
+        local -r kernel=vmlinuz$(test -s vmlinuz.relabel && echo .relabel)
         local -r root=$(mktemp --directory --tmpdir="$PWD" relabel.XXXXXXXXXX)
         mkdir -p "$root"/{bin,dev,etc,lib,lib64,proc,sys,sysroot}
         ln -fst "$root/etc" ../sysroot/etc/selinux
@@ -76,8 +82,7 @@ do insmod "/lib/$mod.ko"
 done
 mount /dev/sda /sysroot
 load_policy -i
-setfiles -vFr /sysroot \
-    /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
+setfiles -vFr /sysroot{,/etc/selinux/targeted/contexts/files/file_contexts,}
 umount /sysroot
 echo o > /proc/sysrq-trigger
 exec sleep 60
@@ -89,8 +94,8 @@ EOF
         find /usr/lib/modules/*/kernel '(' \
             -name crct10dif_common.ko.xz -o -name crc-t10dif.ko.xz -o -name sd_mod.ko.xz -o \
             -name libata.ko.xz -o -name ata_piix.ko.xz -o \
-            -name ext4.ko.xz -o -name jbd2.ko.xz -o -name mbcache.ko.xz \
-            ')' -exec cp -at "$root/lib" '{}' +
+            -name ext4.ko.xz -o -name jbd2.ko.xz -o -name mbcache.ko.xz -o \
+            -false ')' -exec cp -at "$root/lib" '{}' +
         unxz "$root"/lib/*.xz
 
         ldd "$root"/bin/* | sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
@@ -104,17 +109,56 @@ EOF
 
         umount root ; trap - EXIT
         /usr/libexec/qemu-kvm -nodefaults -serial stdio < /dev/null \
-            -kernel vmlinuz -append console=ttyS0 \
+            -kernel "$kernel" -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
 fi
 
-function squash() {  # There is no zstd support on CentOS 7.
-        local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
-        disk=squash.img
-        mksquashfs root "$disk" -noappend "$xattrs" -comp xz \
-            -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
-}
+function handle_dmsetup_manually() if opt bootable && opt verity && ! opt ramdisk
+then
+        local -r gendir=/etc/systemd/system-generators sysdir=/etc/systemd/system
+        mkdir -p "$buildroot$gendir"
+        echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
+read -rs cmdline < /proc/cmdline
+concise=${cmdline##*VR=\"} concise=${concise%%\"*}
+device=${concise#* * * * } device=${device%% *}
+if [[ $device =~ ^[A-Z]+= ]]
+then
+        tag=${device%%=*} tag=${tag,,}
+        device=${device#*=}
+        [ $tag = partuuid ] && device=${device,,}
+        device="/dev/disk/by-$tag/$device"
+fi
+device=$(systemd-escape --path "$device").device
+exec echo > /run/systemd/system/dmsetup-verity-root.service "[Unit]
+DefaultDependencies=no
+After=$device
+Requires=$device
+[Service]
+ExecStart=/usr/sbin/dmsetup create --concise \"$concise\"
+RemainAfterExit=yes
+Type=oneshot"'
+        chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
+        mkdir -p "$buildroot$sysdir/initrd-root-fs.target.requires"
+        echo > "$buildroot$sysdir/sysroot.mount" "[Unit]
+After=dmsetup-verity-root.service
+Before=initrd-root-fs.target
+Requires=dmsetup-verity-root.service
+[Mount]
+What=/dev/mapper/root
+Where=/sysroot
+Type=$(opt squash && echo squashfs || echo ext4)
+Options=ro"
+        ln -fst "$buildroot$sysdir/initrd-root-fs.target.requires" ../sysroot.mount
+        echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+            'add_dracutmodules+=" dm "'
+        echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+            'install_optional_items+="' \
+            "$gendir/dmsetup-verity-root" \
+            "$sysdir/sysroot.mount" \
+            "$sysdir/initrd-root-fs.target.requires/sysroot.mount" \
+            '"'
+fi
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"

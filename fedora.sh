@@ -10,12 +10,12 @@ function create_buildroot() {
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$arch/images/Fedora-Container-Base-${options[release]}-1.2.$arch.tar.xz"
 
         opt bootable && packages_buildroot+=(cpio findutils kernel-core microcode_ctl)
-        opt bootable && opt squash || opt ramdisk && packages_buildroot+=(kernel-modules)
-        opt ramdisk && packages_buildroot+=(busybox)
-        opt selinux && packages_buildroot+=(policycoreutils)
-        opt squash && packages_buildroot+=(squashfs-tools) || packages_buildroot+=(e2fsprogs)
+        opt bootable && opt squash && packages_buildroot+=(kernel-modules)
+        opt selinux && packages_buildroot+=(busybox cpio findutils kernel-core policycoreutils qemu-system-x86-core)
+        opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
         opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
+        packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
         $curl -L "${image%-Base*}-${options[release]}-1.2-$arch-CHECKSUM" > "$output/checksum"
@@ -31,7 +31,6 @@ function create_buildroot() {
         $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
 
         enter /usr/bin/dnf --assumeyes upgrade
-        test -z "${packages_buildroot[*]:-$*}" ||
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
 
         # Let the configuration decide if the system should have documentation.
@@ -39,7 +38,7 @@ function create_buildroot() {
 }
 
 function install_packages() {
-        opt bootable && packages+=(systemd)
+        opt bootable || opt networkd && packages+=(systemd)
         opt iptables && packages+=(iptables-services)
         opt selinux && packages+=(selinux-policy-targeted)
 
@@ -50,36 +49,6 @@ function install_packages() {
 
         rpm -qa | sort > packages-buildroot.txt
         rpm --root="$PWD/root" -qa | sort > packages.txt
-}
-
-function save_boot_files() {
-        local -r dropin=/usr/lib/systemd/system/systemd-fsck-root.service.wants
-        local -r append=$(mktemp --directory --tmpdir="$PWD" initrd.XXXXXXXXXX)
-
-        mkdir -p "$append$dropin"
-        ln -fst "$append$dropin" ../udev-workaround.service
-        cat << 'EOF' > "$append${dropin%/*}"/udev-workaround.service
-# Work around the initrd not creating /dev/mapper entries.
-
-[Unit]
-DefaultDependencies=no
-After=systemd-udev-trigger.service
-Before=systemd-fsck-root.service
-
-[Service]
-ExecStart=/usr/bin/udevadm trigger
-RemainAfterExit=yes
-Type=oneshot
-EOF
-
-        find "$append" -mindepth 1 -printf '%P\n' |
-        cpio -D "$append" -R 0:0 -co |
-        xz --check=crc32 -9e |
-        cat /boot/initramfs-*.img - > initrd.img
-
-        opt uefi && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
-
-        cp -pt . /lib/modules/*/vmlinuz
 }
 
 function distro_tweaks() {
@@ -196,6 +165,40 @@ function defer() {
 }
 EOF
 }
+
+function save_boot_files() if opt bootable
+then
+        local -r dropin=/usr/lib/systemd/system/systemd-fsck-root.service.wants
+        local -r append=$(mktemp --directory --tmpdir="$PWD" initrd.XXXXXXXXXX)
+
+        mkdir -p "$append$dropin"
+        ln -fst "$append$dropin" ../udev-workaround.service
+        cat << 'EOF' > "$append${dropin%/*}"/udev-workaround.service
+# Work around the initrd not creating /dev/mapper entries.
+
+[Unit]
+DefaultDependencies=no
+After=systemd-udev-trigger.service
+Before=systemd-fsck-root.service
+
+[Service]
+ExecStart=/usr/bin/udevadm trigger
+RemainAfterExit=yes
+Type=oneshot
+EOF
+
+        find "$append" -mindepth 1 -printf '%P\n' |
+        cpio -D "$append" -R 0:0 -co |
+        xz --check=crc32 -9e |
+        cat /boot/initramfs-*.img - > initrd.img
+
+        opt uefi && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
+
+        cp -pt . /lib/modules/*/vmlinuz
+        cp -pt . root/etc/os-release
+elif opt selinux
+then cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
+fi
 
 function configure_initrd_generation() if opt bootable
 then

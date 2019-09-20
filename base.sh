@@ -86,11 +86,18 @@ function enter() {
             "$@"
 }
 
+# Distros should override these functions.
+function create_buildroot() { : ; }
+function install_packages() { : ; }
+function distro_tweaks() { : ; }
+function save_boot_files() { : ; }
+
+# Systems should override these functions.
 function customize_buildroot() { : ; }
 function customize() { : ; }
 
 function create_root_image() {
-        $truncate --size="${1:-1G}" "$output/$disk"
+        $truncate --size="${1:-4G}" "$output/$disk"
         declare -g loop=$($losetup --show --find "$output/$disk")
         trap -- "$losetup --detach $loop" EXIT
 }
@@ -101,11 +108,6 @@ function mount_root() {
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
 }
 
-function relabel() {
-        setfiles -vFr root \
-            root/etc/selinux/targeted/contexts/files/file_contexts root
-}
-
 function unmount_root() {
         e4defrag root
         umount root ; trap - EXIT
@@ -113,15 +115,63 @@ function unmount_root() {
         e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
 }
 
-function squash() {
+function relabel() if opt selinux
+then
+        local -r kernel=vmlinuz$(test -s vmlinuz.relabel && echo .relabel)
+        local -r root=$(mktemp --directory --tmpdir="$PWD" relabel.XXXXXXXXXX)
+        mkdir -p "$root"/{bin,dev,etc,lib,lib64,proc,sys,sysroot}
+        ln -fst "$root/etc" ../sysroot/etc/selinux
+
+        cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
+#!/bin/ash -eux
+export PATH=/bin
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount /dev/sda /sysroot
+load_policy -i
+setfiles -vFr /sysroot \
+    /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
+umount /sysroot
+poweroff -f
+exec sleep 60
+EOF
+
+        cp -t "$root/bin" /usr/*bin/{busybox,load_policy,setfiles}
+        for cmd in ash mount poweroff sleep umount
+        do ln -fns busybox "$root/bin/$cmd"
+        done
+
+        ldd "$root"/bin/* | sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
+        while read -rs
+        do cp "$REPLY" "$root$REPLY"
+        done || echo "WHY IS FEDORA RETURNING AN ERROR AFTER SUCCEEDING $? XXX"
+
+        find "$root" -mindepth 1 -printf '%P\n' |
+        cpio -D "$root" -R 0:0 -co |
+        xz --check=crc32 -9e > relabel.img
+
+        umount root ; trap - EXIT
+        qemu-system-x86_64 -nodefaults -m 1G -serial stdio < /dev/null \
+            -kernel "$kernel" -append console=ttyS0 \
+            -initrd relabel.img /dev/loop-root
+        mount /dev/loop-root root ; trap -- 'umount root' EXIT
+fi
+
+function squash() if opt squash
+then
         local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
         disk=squash.img
+        test "x${options[distro]}" = xcentos &&  # CentOS 7
+        mksquashfs root "$disk" -noappend "$xattrs" -comp xz \
+            -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}" ||
         mksquashfs root "$disk" -noappend "$xattrs" \
             -comp zstd -Xcompression-level 22 \
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
-}
+fi
 
-function verity() {
+function verity() if opt verity
+then
         local -r dev=${options[partuuid]:+PARTUUID=${options[partuuid]}}
         local -ir size=$(stat --format=%s "$disk")
         local -A verity
@@ -131,18 +181,20 @@ function verity() {
         do verity[${REPLY%%:*}]=${REPLY#*:}
         done < <(veritysetup format "$disk" signatures.img)
 
-        echo > kernel_args.txt \
-            ro root=/dev/dm-0 \
-            dm-mod.create='"'root,,,ro,0 $(( size / 512 )) \
-                verity ${verity[Hash type]} ${dev:-/dev/sda} ${dev:-/dev/sda} \
-                ${verity[Data block size]} ${verity[Hash block size]} \
-                ${verity[Data blocks]} $(( ${verity[Data blocks]} + 1 )) \
-                ${verity[Hash algorithm]} ${verity[Root hash]} \
-                ${verity[Salt]} 0'"'
-        cat "$disk" signatures.img > final.img
-}
+        echo > dmsetup.txt \
+            root,,,ro,0 $(( size / 512 )) \
+            verity ${verity[Hash type]} ${dev:-/dev/sda} ${dev:-/dev/sda} \
+            ${verity[Data block size]} ${verity[Hash block size]} \
+            ${verity[Data blocks]} $(( ${verity[Data blocks]} + 1 )) \
+            ${verity[Hash algorithm]} ${verity[Root hash]} \
+            ${verity[Salt]} 0
 
-function build_ramdisk() {
+        cat "$disk" signatures.img > final.img
+else ln -fn "$disk" final.img
+fi
+
+function build_ramdisk() if opt ramdisk
+then
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
         mkdir -p "$root"/{usr/lib/systemd/system/initrd-root-fs.target.requires,sysroot}
         cat << EOF > "$root/usr/lib/systemd/system/sysroot.mount"
@@ -159,7 +211,18 @@ EOF
         find "$root" -mindepth 1 -printf '%P\n' |
         { cd "$root" ; cpio -R 0:0 -co ; } |  # CentOS 7
         xz --check=crc32 -9e | cat initrd.img - > ramdisk.img
-}
+fi
+
+function kernel_cmdline() if opt bootable && ! opt ramdisk
+then
+        local -r dev=${options[partuuid]:+PARTUUID=${options[partuuid]}}
+        echo > kernel_args.txt \
+            $(opt read_only && echo ro || echo rw) \
+            $(opt verity &&
+                    echo "dm-mod.create=\"$(<dmsetup.txt)\" root=/dev/dm-0" ||
+                    echo "root=${dev:-/dev/sda}")
+        test "x${options[distro]}" = xcentos && sed -i -e 's/.*\(=".*"\).*/VR\1/' kernel_args.txt || :  # CentOS 7
+fi
 
 function configure_dhcp() if opt networkd
 then
@@ -186,7 +249,8 @@ then
             ../NetworkManager-wait-online.service
 fi
 
-function configure_iptables() {
+function configure_iptables() if opt iptables
+then
         mkdir -p root/usr/lib/systemd/system/basic.target.wants
         ln -fst root/usr/lib/systemd/system/basic.target.wants \
             ../iptables.service ../ip6tables.service
@@ -206,22 +270,10 @@ EOF
 :OUTPUT DROP [0:0]
 COMMIT
 EOF
-}
+fi
 
-function local_login() {
-        sed -i -e 's/^root:[^:]*/root:/' root/etc/shadow
-
-        cat << 'EOF' > root/etc/vconsole.conf
-FONT="eurlatgr"
-KEYMAP="emacs2"
-EOF
-
-        mkdir -p root/usr/lib/systemd/system/getty.target.wants
-        ln -fns ../getty@.service \
-            root/usr/lib/systemd/system/getty.target.wants/getty@tty1.service
-}
-
-function tmpfs_var() {
+function tmpfs_var() if opt read_only
+then
         exclude_paths+=(var/'*')
 
         mkdir -p root/usr/lib/systemd/system
@@ -239,9 +291,10 @@ Options=rootcontext=system_u:object_r:var_t:s0,mode=0755,strictatime,nodev,nosui
 [Install]
 WantedBy=local-fs.target
 EOF
-}
+fi
 
-function tmpfs_home() {
+function tmpfs_home() if opt read_only
+then
         cat << 'EOF' > root/usr/lib/systemd/system/home.mount
 [Unit]
 Description=Mount tmpfs over /home to create new users
@@ -286,9 +339,10 @@ EOF
 C /root - - - - /etc/skel
 Z /root
 EOF
-}
+fi
 
-function overlay_etc() {
+function overlay_etc() if opt read_only
+then
         cat << 'EOF' > root/usr/lib/systemd/system/etc-overlay-setup.service
 [Unit]
 Description=Set up overlay working directories for /etc in /run
@@ -354,10 +408,16 @@ restorecon -vFR /etc /var/lib/etcgo || :
 EOF
                 chmod 0755 root/usr/lib/systemd/system-generators/etcgo
         fi
-}
+fi
 
 function configure_system() {
         exclude_paths+=(etc/systemd/system/'*')
+
+        sed -i -e 's/^root:[^:]*/root:/' root/etc/shadow
+
+        mkdir -p root/usr/lib/systemd/system/getty.target.wants
+        ln -fns ../getty@.service \
+            root/usr/lib/systemd/system/getty.target.wants/getty@tty1.service
 
         test -s root/usr/lib/systemd/system/gdm.service &&
         ln -fns gdm.service root/usr/lib/systemd/system/display-manager.service
@@ -383,6 +443,9 @@ function configure_system() {
 
         test -s root/etc/sudoers &&
         sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[# ]*//;}' root/etc/sudoers
+
+        test -s root/etc/profile &&
+        sed -i -e 's/ umask 0[0-7]*/ umask 022/' root/etc/profile
 
         test -x root/usr/libexec/upowerd &&
         echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
@@ -501,6 +564,11 @@ EOF
         test -d root/usr/lib/locale/en_US.utf8 &&
         echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
+        cat << 'EOF' > root/etc/vconsole.conf
+FONT="eurlatgr"
+KEYMAP="emacs2"
+EOF
+
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime
 
         # WORKAROUNDS
@@ -516,22 +584,25 @@ ExecStartPre=-/usr/sbin/restorecon -vFR /var
 EOF
 }
 
-function produce_uefi_exe() {
+function produce_uefi_exe() if opt uefi
+then
         local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
         local -r logo=$(test -s logo.bmp && echo logo.bmp)
+        local -r osrelease=$(test -s os-release && echo os-release)
         local initrd=$(opt ramdisk && echo ramdisk || echo initrd).img
-        test -e "$initrd" || initrd=
+        test -s "$initrd" || initrd=
 
         objcopy \
-            --add-section .osrel=root/etc/os-release --change-section-vma .osrel=0x20000 \
+            ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=0x20000} \
             ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=0x30000} \
             ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
             --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
             /usr/lib/systemd/boot/efi/linuxx64.efi.stub BOOTX64.EFI
-}
+fi
 
-function produce_nspawn_exe() {
+function produce_nspawn_exe() if opt nspawn
+then
         local -ir bs=512 start=2048
         local -i size=$(stat --format=%s final.img)
         (( size % bs )) && size+=$(( bs - size % bs ))
@@ -553,7 +624,7 @@ IMAGE=$(readlink /proc/$$/fd/255)
 : << 'THE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT_TO_RUN'
 EOF
         chmod 0755 nspawn.img
-}
+fi
 
 # OPTIONAL (IMAGE)
 
