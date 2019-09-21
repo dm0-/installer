@@ -46,7 +46,7 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
   - CentOS is too old to support the UEFI and networkd functionality until CentOS 8 is released.
-  - Gentoo is currently untested due to hardware constraints, but it should support all features.
+  - Gentoo is currently untested due to hardware constraints, but it should support all features (except `ramdisk` since Gentoo currently expects no initrd).
 
 ### General
 
@@ -73,6 +73,8 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 **Drop CentOS 7 support as soon as a CentOS 8 image is available.**  As usual, the software included with CentOS is wildly obsolete.  CentOS 7 doesn't even include networkd or a UEFI stub to create bootable files.  Some of its shortcomings can be addressed by stealing files from a Fedora package, but part of the reason for using the target distro as the build root is so that any distro-specific changes are reflected in the final output.  Supporting features by using another distro is counter to this goal, so it is better to just not support versions that don't implement required functionality.
 
 ### Gentoo
+
+**Implement the ramdisk option.**  The base kernel config can add support for an initrd, then it can just create one from busybox with the file system image included.
 
 **Support real cross-compiling.**  I'm eventually going to use this to produce images for slow embedded chips from an amd64 workstation, so `crossdev` needs to be configured properly.
 

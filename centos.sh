@@ -24,7 +24,8 @@ function create_buildroot() {
         $rm -f "$output/image.tar.xz"
 
         configure_initrd_generation
-        handle_dmsetup_manually
+        opt bootable && opt verity && echo 'add_dracutmodules+=" dm "' \
+            >> "$buildroot/etc/dracut.conf.d/99-settings.conf"
 
         enter /usr/bin/yum --assumeyes upgrade
         enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
@@ -112,52 +113,6 @@ EOF
             -kernel "$kernel" -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
-fi
-
-function handle_dmsetup_manually() if opt bootable && opt verity && ! opt ramdisk
-then
-        local -r gendir=/etc/systemd/system-generators sysdir=/etc/systemd/system
-        mkdir -p "$buildroot$gendir"
-        echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
-read -rs cmdline < /proc/cmdline
-concise=${cmdline##*VR=\"} concise=${concise%%\"*}
-device=${concise#* * * * } device=${device%% *}
-if [[ $device =~ ^[A-Z]+= ]]
-then
-        tag=${device%%=*} tag=${tag,,}
-        device=${device#*=}
-        [ $tag = partuuid ] && device=${device,,}
-        device="/dev/disk/by-$tag/$device"
-fi
-device=$(systemd-escape --path "$device").device
-exec echo > /run/systemd/system/dmsetup-verity-root.service "[Unit]
-DefaultDependencies=no
-After=$device
-Requires=$device
-[Service]
-ExecStart=/usr/sbin/dmsetup create --concise \"$concise\"
-RemainAfterExit=yes
-Type=oneshot"'
-        chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
-        mkdir -p "$buildroot$sysdir/initrd-root-fs.target.requires"
-        echo > "$buildroot$sysdir/sysroot.mount" "[Unit]
-After=dmsetup-verity-root.service
-Before=initrd-root-fs.target
-Requires=dmsetup-verity-root.service
-[Mount]
-What=/dev/mapper/root
-Where=/sysroot
-Type=$(opt squash && echo squashfs || echo ext4)
-Options=ro"
-        ln -fst "$buildroot$sysdir/initrd-root-fs.target.requires" ../sysroot.mount
-        echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
-            'add_dracutmodules+=" dm "'
-        echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
-            'install_optional_items+="' \
-            "$gendir/dmsetup-verity-root" \
-            "$sysdir/sysroot.mount" \
-            "$sysdir/initrd-root-fs.target.requires/sysroot.mount" \
-            '"'
 fi
 
 function verify_distro() {

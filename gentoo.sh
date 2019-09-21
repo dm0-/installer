@@ -38,7 +38,7 @@ FEATURES="\$FEATURES -selinux"
 PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"
 EOG
 echo systemd >> /etc/portage/profile/use.force
-echo -e 'sslv2\nsslv3\nstatic-libs\n-systemd' >> /etc/portage/profile/use.mask
+echo -e 'sslv2\nsslv3\n-systemd' >> /etc/portage/profile/use.mask
 
 # Accept the newest kernels.
 echo 'sys-kernel/gentoo-sources ~amd64' >> /etc/portage/package.accept_keywords/gentoo-sources.conf
@@ -71,7 +71,7 @@ fi
 mkdir -p "/build/${options[arch]}/etc"
 cp -at "/build/${options[arch]}/etc" /etc/portage
 cd "/build/${options[arch]}/etc/portage"
-echo split-usr >> profile/use.mask
+echo -e 'static\nstatic-libs\nsplit-usr' >> profile/use.mask
 EOF
 
         build_relabel_kernel

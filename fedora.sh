@@ -9,9 +9,9 @@ function create_buildroot() {
         local -r arch=$($uname -m)
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$arch/images/Fedora-Container-Base-${options[release]}-1.2.$arch.tar.xz"
 
-        opt bootable && packages_buildroot+=(cpio findutils kernel-core microcode_ctl)
+        opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
-        opt selinux && packages_buildroot+=(busybox cpio findutils kernel-core policycoreutils qemu-system-x86-core)
+        opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
         opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
@@ -168,33 +168,9 @@ EOF
 
 function save_boot_files() if opt bootable
 then
-        local -r dropin=/usr/lib/systemd/system/systemd-fsck-root.service.wants
-        local -r append=$(mktemp --directory --tmpdir="$PWD" initrd.XXXXXXXXXX)
-
-        mkdir -p "$append$dropin"
-        ln -fst "$append$dropin" ../udev-workaround.service
-        cat << 'EOF' > "$append${dropin%/*}"/udev-workaround.service
-# Work around the initrd not creating /dev/mapper entries.
-
-[Unit]
-DefaultDependencies=no
-After=systemd-udev-trigger.service
-Before=systemd-fsck-root.service
-
-[Service]
-ExecStart=/usr/bin/udevadm trigger
-RemainAfterExit=yes
-Type=oneshot
-EOF
-
-        find "$append" -mindepth 1 -printf '%P\n' |
-        cpio -D "$append" -R 0:0 -co |
-        xz --check=crc32 -9e |
-        cat /boot/initramfs-*.img - > initrd.img
-
         opt uefi && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
-
         cp -pt . /lib/modules/*/vmlinuz
+        cp -p /boot/initramfs-* initrd.img
         cp -pt . root/etc/os-release
 elif opt selinux
 then cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
@@ -205,6 +181,71 @@ then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+
+        # Since systemd can't skip canonicalization, wait for a udev hack.
+        if opt verity
+        then
+                local dropin=/usr/lib/systemd/system/sysroot.mount.d
+                $mkdir -p "$buildroot$dropin"
+                echo > "$buildroot$dropin/verity-root.conf" '[Unit]
+After=dev-mapper-root.device
+Requires=dev-mapper-root.device'
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    "install_optional_items+=\" $dropin/verity-root.conf \""
+        fi
+
+        # Create a generator to handle verity ramdisks since dm-init can't.
+        opt verity &&
+        if test "x${options[distro]}" = xcentos || opt ramdisk
+        then
+                local -r gendir=/usr/lib/systemd/system-generators
+                $mkdir -p "$buildroot$gendir"
+                echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
+read -rs cmdline < /proc/cmdline
+test "x${cmdline}" != "x${cmdline%%DVR=\"*\"*}" || exit 0
+concise=${cmdline##*DVR=\"} concise=${concise%%\"*}
+device=${concise#* * * * } device=${device%% *}
+if [[ $device =~ ^[A-Z]+= ]]
+then
+        tag=${device%%=*} tag=${tag,,}
+        device=${device#*=}
+        [ $tag = partuuid ] && device=${device,,}
+        device="/dev/disk/by-$tag/$device"
+fi
+device=$(systemd-escape --path "$device").device
+rundir=/run/systemd/system
+mkdir -p "$rundir/dev-dm\x2d0.device.requires"
+ln -fst "$rundir/dev-dm\x2d0.device.requires" ../dmsetup-verity-root.service
+exec echo > "$rundir/dmsetup-verity-root.service" "[Unit]
+DefaultDependencies=no
+After=$device
+Before=dev-dm\x2d0.device
+Requires=$device
+[Service]
+ExecStart=/usr/sbin/dmsetup create --concise \"$concise\"
+RemainAfterExit=yes
+Type=oneshot"'
+                $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    "install_optional_items+=\" $gendir/dmsetup-verity-root \""
+        else
+                local dropin=/usr/lib/systemd/system/dev-dm\\x2d0.device.requires
+                $mkdir -p "$buildroot$dropin"
+                $ln -fst "$buildroot$dropin" ../udev-workaround.service
+                echo > "$buildroot${dropin%/*}/udev-workaround.service" '[Unit]
+DefaultDependencies=no
+After=systemd-udev-trigger.service
+Before=dev-mapper-root.device
+[Service]
+ExecStart=/usr/bin/udevadm trigger
+RemainAfterExit=yes
+Type=oneshot'
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    'install_optional_items+="' \
+                    "$dropin/udev-workaround.service" \
+                    "${dropin%/*}/udev-workaround.service" \
+                    '"'
+        fi
 
         # Load overlayfs in the initrd in case modules aren't installed.
         if opt read_only

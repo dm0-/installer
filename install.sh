@@ -3,10 +3,12 @@ set -euo pipefail
 
 # Configure required host commands via environment variables.
 blkid=${BLKID:-blkid}
+chmod=${CHMOD:-chmod}
 cp=${CP:-cp}
 curl=${CURL:-curl}
 dd=${DD:-dd}
 gpg=${GPG:-gpg2}
+ln=${LN:-ln}
 losetup=${LOSETUP:-losetup}
 mkdir=${MKDIR:-mkdir}
 mktemp=${MKTEMP:-mktemp}

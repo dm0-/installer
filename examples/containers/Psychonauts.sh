@@ -11,6 +11,7 @@ packages_buildroot+=(expect)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
         $cp "${1:-psychonauts-linux-05062013-bin}" "$output/install"
+        $chmod 0755 "$output/install"
 }
 
 function customize() {
@@ -23,8 +24,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        ln -f install root/install
-        chmod 0755 root/install
+        cp install root/install
         expect << 'EOF'
 set timeout -1
 spawn chroot root /install

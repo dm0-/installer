@@ -96,24 +96,28 @@ function save_boot_files() { : ; }
 function customize_buildroot() { : ; }
 function customize() { : ; }
 
-function create_root_image() {
-        $truncate --size="${1:-4G}" "$output/$disk"
+function create_root_image() if opt selinux || ! opt squash
+then
+        local -r size=$(opt ramdisk && ! opt squash && echo 1 || echo 4)G
+        $truncate --size="${1:-$size}" "$output/$disk"
         declare -g loop=$($losetup --show --find "$output/$disk")
         trap -- "$losetup --detach $loop" EXIT
-}
+fi
 
-function mount_root() {
+function mount_root() if opt selinux || ! opt squash
+then
         mkfs.ext4 -m 0 /dev/loop-root
         mkdir -p root  # CentOS 7
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
-}
+fi
 
-function unmount_root() {
+function unmount_root() if opt selinux || ! opt squash
+then
         e4defrag root
         umount root ; trap - EXIT
         opt read_only && tune2fs -O read-only /dev/loop-root || :  # CentOS 7
         e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
-}
+fi
 
 function relabel() if opt selinux
 then
@@ -172,10 +176,13 @@ fi
 
 function verity() if opt verity
 then
-        local -r dev=${options[partuuid]:+PARTUUID=${options[partuuid]}}
         local -ir size=$(stat --format=%s "$disk")
         local -A verity
+        local root=/dev/sda
         ! (( size % 4096 ))
+
+        opt partuuid && root=PARTUUID=${options[partuuid]}
+        opt ramdisk && root=/dev/loop0
 
         while read
         do verity[${REPLY%%:*}]=${REPLY#*:}
@@ -183,7 +190,7 @@ then
 
         echo > dmsetup.txt \
             root,,,ro,0 $(( size / 512 )) \
-            verity ${verity[Hash type]} ${dev:-/dev/sda} ${dev:-/dev/sda} \
+            verity ${verity[Hash type]} $root $root \
             ${verity[Data block size]} ${verity[Hash block size]} \
             ${verity[Data blocks]} $(( ${verity[Data blocks]} + 1 )) \
             ${verity[Hash algorithm]} ${verity[Root hash]} \
@@ -196,32 +203,43 @@ fi
 function build_ramdisk() if opt ramdisk
 then
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
-        mkdir -p "$root"/{usr/lib/systemd/system/initrd-root-fs.target.requires,sysroot}
-        cat << EOF > "$root/usr/lib/systemd/system/sysroot.mount"
+        mkdir -p "$root/usr/lib/systemd/system/dev-loop0.device.requires"
+        cat << EOF > "$root/usr/lib/systemd/system/losetup-root.service"
 [Unit]
-Before=initrd-root-fs.target
-[Mount]
-What=/sysroot/root.img
-Where=/sysroot
-Type=$(opt squash && echo squashfs || echo ext4)
-Options=loop$(opt read_only && echo ,ro)
+DefaultDependencies=no
+After=systemd-tmpfiles-setup-dev.service
+Before=dev-loop0.device
+Requires=systemd-tmpfiles-setup-dev.service
+[Service]
+ExecStart=/usr/sbin/losetup --find $(opt read_only && echo --read-only) /sysroot/root.img
+RemainAfterExit=yes
+Type=oneshot
 EOF
-        ln -fst "$root/usr/lib/systemd/system/initrd-root-fs.target.requires" ../sysroot.mount
+        ln -fst "$root/usr/lib/systemd/system/dev-loop0.device.requires" ../losetup-root.service
+        mkdir -p "$root/sysroot"
         ln -fn final.img "$root/sysroot/root.img"
         find "$root" -mindepth 1 -printf '%P\n' |
         { cd "$root" ; cpio -R 0:0 -co ; } |  # CentOS 7
         xz --check=crc32 -9e | cat initrd.img - > ramdisk.img
 fi
 
-function kernel_cmdline() if opt bootable && ! opt ramdisk
+function kernel_cmdline() if opt bootable
 then
-        local -r dev=${options[partuuid]:+PARTUUID=${options[partuuid]}}
+        local dmsetup=dm-mod.create
+        local root=/dev/sda
+
+        test "x${options[distro]}" = xcentos ||  # CentOS 7
+        opt ramdisk && dmsetup=DVR
+
+        opt partuuid && root=PARTUUID=${options[partuuid]}
+        opt ramdisk && root=/dev/loop0
+        opt verity && root=/dev/dm-0
+
         echo > kernel_args.txt \
             $(opt read_only && echo ro || echo rw) \
-            $(opt verity &&
-                    echo "dm-mod.create=\"$(<dmsetup.txt)\" root=/dev/dm-0" ||
-                    echo "root=${dev:-/dev/sda}")
-        test "x${options[distro]}" = xcentos && sed -i -e 's/.*\(=".*"\).*/VR\1/' kernel_args.txt || :  # CentOS 7
+            "root=$root" \
+            rootfstype=$(opt squash && echo squashfs || echo ext4) \
+            $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"")
 fi
 
 function configure_dhcp() if opt networkd
@@ -540,6 +558,12 @@ pref("devtools.theme", "dark");
 pref("devtools.webconsole.timestampMessages", true);
 // Shut up.
 pref("general.warnOnAboutConfig", false);
+// Stop stretching PDFs off the screen for no reason.
+pref("pdfjs.defaultZoomValue", "page-fit");
+// Prefer the PDF outline display.
+pref("pdfjs.sidebarViewOnLoad", 2);
+// Guess that odd-spread is going to be the most common case.
+pref("pdfjs.spreadModeOnLoad", 1);
 // Make widgets on web pages match the rest of the desktop.
 pref("widget.content.allow-gtk-dark-theme", true);
 EOF
