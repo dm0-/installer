@@ -34,7 +34,7 @@ expect eof
 EOF
         rm -f root/install install
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/Psychonauts" ] ||
@@ -61,12 +61,12 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'END'
+    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 mkdir -p "$HOME/.local/share"
 ln -fns /tmp/save "$HOME/.local/share/Psychonauts"
 test -e /tmp/save/DisplaySettings.ini ||
 cp -t /tmp/save /psychonauts/DisplaySettings.ini
 exec /psychonauts/Psychonauts "$@"
-END
 EOF
+EOG
 }

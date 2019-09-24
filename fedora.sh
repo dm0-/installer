@@ -299,7 +299,7 @@ EOF
 
 function enable_rpmfusion() {
         local -r url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/x86_64/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
-        enter /bin/bash -euxo pipefail << EOF
+        script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 

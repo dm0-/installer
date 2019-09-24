@@ -99,10 +99,9 @@ EOF
             -false ')' -exec cp -at "$root/lib" '{}' +
         unxz "$root"/lib/*.xz
 
-        ldd "$root"/bin/* | sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
-        while read -rs
-        do cp "$REPLY" "$root$REPLY"
-        done
+        { ldd "$root"/bin/* || : ; } |
+        sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
+        while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
         { cd "$root" ; cpio -R 0:0 -co ; } |
@@ -157,7 +156,7 @@ EOF
 
 function enable_epel() {
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]%%.*}.noarch.rpm"
-        enter /bin/bash -euxo pipefail << EOF
+        script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -198,7 +197,7 @@ EOF
 function enable_rpmfusion() {
         local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]%%.*}/x86_64/r/rpmfusion-free-release-${options[release]%%.*}-4.noarch.rpm"
         enable_epel
-        enter /bin/bash -euxo pipefail << EOF
+        script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 

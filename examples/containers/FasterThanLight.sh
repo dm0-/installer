@@ -27,7 +27,7 @@ function customize() {
         tar --exclude=x86 -xf FTL.tgz -C root
         rm -f FTL.tgz
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||
@@ -54,10 +54,10 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'END'
+    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 mkdir -p "$HOME/.local/share"
 ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
 exec ./FTL "$@"
-END
 EOF
+EOG
 }

@@ -28,7 +28,7 @@ function customize() {
         sed '/^UAC_AWARE=/s/=1/=0/' root/fallout/f1_res.ini > root/fallout/f1_res.ini.orig
         cp root/fallout/fallout.cfg root/fallout/fallout.cfg.orig
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/Fallout/SAVEGAME" ] ||
@@ -64,12 +64,12 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'END'
+    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 for file in f1_res.ini fallout.cfg
 do test -s "$file" || cat "$file.orig" > "$file"
 done
 DISPLAY= wine hostname
 exec wine explorer /desktop=virtual,1900x1200 /fallout/falloutwHR.exe "$@"
-END
 EOF
+EOG
 }

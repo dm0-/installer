@@ -17,15 +17,6 @@ function customize_buildroot() {
 }
 
 function customize() {
-        exclude_paths+=(
-                root
-                usr/{include,lib/debug,local,src}
-                usr/{lib,share}/locale
-                usr/lib/{systemd,tmpfiles.d}
-                usr/lib'*'/gconv
-                usr/share/{doc,help,hwdata,info,licenses,man,sounds}
-        )
-
         unzip -p BOI.zip -x '__MACOSX/*' > root/boiwotl.swf
         tar -C root/usr/bin -xzf flashplayer.tgz flashplayer
         rm -f BOI.zip flashplayer.tgz
@@ -36,7 +27,21 @@ AVHardwareDisable = 1
 OverrideGPUValidation = 1
 EOF
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        files=(
+                /boiwotl.swf /usr/bin/flashplayer /etc/adobe/mms.cfg
+                /usr/lib64/libcurl.so.4
+
+                # PulseAudio support
+                /etc/alsa /usr/share/alsa/alsa.conf
+                /usr/lib64/alsa-lib/libasound_module_{conf,ctl,pcm}_pulse.so
+                /usr/share/alsa/alsa.conf.d/50-pulseaudio.conf
+
+                # Container setup
+                /usr/bin/{ln,mkdir,sh}
+        )
+        minimize "${files[@]}"
+
+        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheBindingOfIsaac" ] ||
@@ -63,10 +68,57 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'END'
+    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 mkdir -p "$HOME/.macromedia"
 ln -fns /tmp/save "$HOME/.macromedia/Flash_Player"
 exec flashplayer /boiwotl.swf "$@"
-END
 EOF
+EOG
+}
+
+function minimize() {
+        local -a requirements
+
+        # Set up required mount points etc. that must exist when read-only.
+        mkdir -p root/.SAVE/{bin,etc,dev,home,lib,proc,run,sys,tmp,var}
+        ln -fns bin root/.SAVE/sbin
+        ln -fns lib root/.SAVE/lib64
+        ln -fns . root/.SAVE/usr
+        touch root/.SAVE/etc/localtime
+        touch root/.SAVE/etc/passwd
+
+        # Assume passwd file user definitions so nspawn can drop privileges.
+        echo 'passwd: files' > root/.SAVE/etc/nsswitch.conf
+        requirements+=(
+                /usr/bin/getent
+                /$(cd root ; echo usr/lib*/libnss_files.so.2)
+        )
+
+        for path in "$@" "${requirements[@]}"
+        do
+                mkdir -p "root/.SAVE${path%/*}"
+
+                test -d "root$path" &&
+                { cp -at "root/.SAVE${path%/*}" "root$path" ; continue ; }
+
+                { chroot root /usr/bin/ldd "$path" 2>/dev/null || : ; } |
+                sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
+                while read -rs elf
+                do
+                        mkdir -p "root/.SAVE${elf%/*}"
+                        cp -t "root/.SAVE${elf%/*}" "root$elf"
+                done
+
+                cp -t "root/.SAVE${path%/*}" "root$path"
+        done
+
+        if mountpoint --quiet root
+        then
+                rm -fr root/*
+                mv -t root root/.SAVE/*
+                rmdir root/.SAVE
+        else
+                mv root root-all
+                mv root-all/.SAVE root
+        fi
 }

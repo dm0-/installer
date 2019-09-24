@@ -86,6 +86,11 @@ function enter() {
             "$@"
 }
 
+function script() {
+        $cat <([[ $- =~ x ]] && echo "PS4='+\e[31m+\e[0m '"$'\nset -x') - |
+        enter /bin/bash -euo pipefail -O nullglob
+}
+
 # Distros should override these functions.
 function create_buildroot() { : ; }
 function install_packages() { : ; }
@@ -146,10 +151,9 @@ EOF
         do ln -fns busybox "$root/bin/$cmd"
         done
 
-        ldd "$root"/bin/* | sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
-        while read -rs
-        do cp "$REPLY" "$root$REPLY"
-        done || echo "WHY IS FEDORA RETURNING AN ERROR AFTER SUCCEEDING $? XXX"
+        { ldd "$root"/bin/* || : ; } |
+        sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
+        while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -R 0:0 -co |

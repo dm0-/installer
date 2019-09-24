@@ -62,6 +62,8 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 **Instrument returning an error state from the SELinux labeling virtual machine.**  If labeling fails right now, the build system won't know about it.
 
+**Use the list of excluded paths in ext4.**  Only squashfs is dropping the files.
+
 ### Fedora
 
 **Support different Fedora releases.**  The Fedora container is signed with a different key for each release, so in order to use anything other than the latest version, a keyring for supported releases needs to be maintained.  A workaround is to set e.g. `options[release]=31` in `customize_buildroot` to install packages from that release into the image after the buildroot has been created with a supported release.

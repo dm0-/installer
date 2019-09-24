@@ -1,8 +1,10 @@
 #!/bin/bash -e
 set -euo pipefail
+shopt -s nullglob
 
 # Configure required host commands via environment variables.
 blkid=${BLKID:-blkid}
+cat=${CAT:-cat}
 chmod=${CHMOD:-chmod}
 cp=${CP:-cp}
 curl=${CURL:-curl}
@@ -59,7 +61,7 @@ buildroot="$output/buildroot"
 create_buildroot
 customize_buildroot "$@"
 create_root_image
-enter /bin/bash -euxo pipefail << EOF
+script << EOF
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
 mount_root

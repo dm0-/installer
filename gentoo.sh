@@ -3,7 +3,7 @@ packages_buildroot=()
 
 DEFAULT_ARCH=$($uname -m)
 DEFAULT_PROFILE=17.1
-DEFAULT_RELEASE=20190915T214502Z
+DEFAULT_RELEASE=20190922T214501Z
 options[arch]=$DEFAULT_ARCH
 options[profile]=$DEFAULT_PROFILE
 options[ramdisk]=
@@ -30,7 +30,7 @@ function create_buildroot() {
         $tar -C "$buildroot" -xJf "$output/stage3.tar.xz"
         $rm -f "$output/digests" "$output/stage3.tar.xz"
 
-        enter /bin/bash -euxo pipefail << EOF
+        script << EOF
 ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
 mkdir -p /etc/portage/{package.{accept_keywords,license,unmask,use},profile,repos.conf}
 cat <(echo) - << 'EOG' >> /etc/portage/make.conf
@@ -229,7 +229,7 @@ CONFIG_SERIAL_8250_CONSOLE=y
 # Print initialization messages for debugging.
 CONFIG_PRINTK=y'
 
-        enter /bin/bash -euxo pipefail << 'EOF'
+        script << 'EOF'
 make -C /usr/src/linux -j$(nproc) allnoconfig KCONFIG_ALLCONFIG="$PWD/config.relabel" V=1
 make -C /usr/src/linux -j$(nproc) V=1
 make -C /usr/src/linux install V=1

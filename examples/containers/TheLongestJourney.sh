@@ -11,11 +11,11 @@ function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
-        enter /bin/bash -euxo pipefail << 'EOF'
+        script << 'EOF'
 dnf --assumeyes builddep innoextract
 git clone https://github.com/dscharrer/innoextract.git
 cd innoextract
-git reset --hard ce1c97441118fd1cc443847349a002c96b7640b7
+git reset --hard 1c7fe5d9b488a0b8fecefc139745ce978366b103
 cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr .
 make -j$(nproc) all
 exec make install
@@ -38,7 +38,7 @@ function customize() {
         wine_gog_script /TLJ < root/TLJ/goggame-1207658794.script > reg.sh
         sed -i -e 's/Z:/C:/g' reg.sh
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheLongestJourney/Save" ] ||
@@ -69,13 +69,13 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'END'
+    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 test -s preferences.ini || cat preferences.ini.orig > preferences.ini
 (unset DISPLAY
 REG_SCRIPT
 )
 ln -fst "$HOME/.wine/dosdevices/c:" /TLJ
 exec wine explorer /desktop=virtual,640x480 /TLJ/game.exe "$@"
-END
 EOF
+EOG
 }

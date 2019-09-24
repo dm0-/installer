@@ -6,10 +6,10 @@ packages+=(
         wine-pulseaudio
 )
 
-packages_buildroot+=(innoextract jq)
+packages_buildroot+=(innoextract)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
-        $cp "${1:-setup_rollercoaster_tycoon_deluxe_1.20.015_(17822).exe}" "$output/install.exe"
+        $cp "${1:-setup_beyond_good_and_evil_2.1.0.9.exe}" "$output/install.exe"
 }
 
 function customize() {
@@ -23,18 +23,14 @@ function customize() {
         )
 
         (cd root/root ; exec innoextract ../../install.exe)
-        rm -f install.exe
-        wine_gog_script /RCT < root/root/app/goggame-1207658945.script > reg.sh
-        mv root/root/app root/RCT
+        rm -fr install.exe root/root/app/{gog*,__support,webcache.zip}
+        mv root/root/app root/BGE
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
-for dir in Data 'Saved Games' Scenarios Tracks
-do
-        [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/RollerCoasterTycoon/$dir" ] ||
-        mkdir -p "$XDG_DATA_HOME/RollerCoasterTycoon/$dir"
-done
+[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/BeyondGoodAndEvil" ] ||
+mkdir -p "$XDG_DATA_HOME/BeyondGoodAndEvil"
 
 exec sudo systemd-nspawn \
     --bind=/dev/dri \
@@ -42,12 +38,12 @@ exec sudo systemd-nspawn \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
-    --chdir=/RCT \
-    --hostname=RollerCoasterTycoon \
-    --image="${IMAGE:-RollerCoasterTycoon.img}" \
+    --chdir=/BGE \
+    --hostname=BeyondGoodAndEvil \
+    --image="${IMAGE:-BeyondGoodAndEvil.img}" \
     --link-journal=no \
-    --machine="RollerCoasterTycoon-$USER" \
-    --overlay="+/RCT:$XDG_DATA_HOME/RollerCoasterTycoon:/RCT" \
+    --machine="BeyondGoodAndEvil-$USER" \
+    --overlay="+/BGE:$XDG_DATA_HOME/BeyondGoodAndEvil:/BGE" \
     --personality=x86 \
     --private-network \
     --read-only \
@@ -59,9 +55,10 @@ exec sudo systemd-nspawn \
     --user="$USER" \
     /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 (unset DISPLAY
-REG_SCRIPT
-)
-exec wine explorer /desktop=virtual,1024x768 /RCT/RCT.EXE "$@"
+wine reg add 'HKEY_CURRENT_USER\Software\Ubisoft\Beyond Good & Evil\SettingsApplication.INI\Basic video' /v 'NoBands' /t REG_DWORD /d 1 /f
+wine /BGE/SettingsApplication.exe
+exec sleep 1)
+exec wine /BGE/BGE.exe "$@"
 EOF
 EOG
 }

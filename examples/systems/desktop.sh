@@ -99,7 +99,7 @@ function customize_buildroot() {
         enable_rpmfusion
 
         # Build a USB WiFi device's out-of-tree driver.
-        enter /bin/sh -euxo pipefail << 'EOF'
+        script << 'EOF'
 git clone --branch=v5.3.4 https://github.com/aircrack-ng/rtl8812au.git
 git -C rtl8812au reset --hard 2c3ce7095f446c412ac8146b88b854b6c684a03e
 exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; echo *)" V=1

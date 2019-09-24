@@ -27,7 +27,7 @@ function customize() {
         wine_gog_script /GM < root/root/app/goggame-1207658687.script > reg.sh
         mv root/root/app/GhostData root/GM
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOG' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 for dir in SaveGames ScreenShots
@@ -57,12 +57,12 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'END'
+    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
 (unset DISPLAY
 REG_SCRIPT
 ln -fns /GM "$HOME/.wine/dosdevices/c:/users/Public/Documents/Ghost Master"
 )
 exec wine explorer /desktop=virtual,1600x1200 /GM/ghost.exe "$@"
-END
 EOF
+EOG
 }
