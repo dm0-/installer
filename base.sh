@@ -601,7 +601,11 @@ EOF
 
         # WORKAROUNDS
 
-        echo d /var/spool/mail 0775 root mail > root/usr/lib/tmpfiles.d/mail.conf
+        cat << 'EOF' > root/usr/lib/tmpfiles.d/var-mail.conf
+# User modification commands expect a mail spool directory to exist.
+d /var/mail 0775 root mail
+L /var/spool/mail - - - - ../mail
+EOF
 
         mkdir -p root/usr/lib/systemd/system/systemd-random-seed.service.d
         cat << 'EOF' > root/usr/lib/systemd/system/systemd-random-seed.service.d/mkdir.conf
