@@ -138,15 +138,16 @@ mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount /dev/sda /sysroot
-load_policy -i
-setfiles -vFr /sysroot \
+/bin/load_policy -i
+/bin/setfiles -vFr /sysroot \
     /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
 umount /sysroot
 poweroff -f
 exec sleep 60
 EOF
 
-        cp -t "$root/bin" /usr/*bin/{busybox,load_policy,setfiles}
+        local cmd
+        cp -t "$root/bin" /*bin/busybox /usr/sbin/{load_policy,setfiles}
         for cmd in ash mount poweroff sleep umount
         do ln -fns busybox "$root/bin/$cmd"
         done
@@ -156,7 +157,7 @@ EOF
         while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
-        cpio -D "$root" -R 0:0 -co |
+        cpio -D "$root" -H newc -R 0:0 -o |
         xz --check=crc32 -9e > relabel.img
 
         umount root ; trap - EXIT
@@ -164,6 +165,8 @@ EOF
             -kernel "$kernel" -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
+
+        sed -i -e '/^SELINUX=/s/=.*/=enforcing/' root/etc/selinux/config
 fi
 
 function squash() if opt squash
@@ -273,10 +276,17 @@ fi
 
 function configure_iptables() if opt iptables
 then
-        mkdir -p root/usr/lib/systemd/system/basic.target.wants
-        ln -fst root/usr/lib/systemd/system/basic.target.wants \
-            ../iptables.service ../ip6tables.service
-        cat << 'EOF' > root/etc/sysconfig/iptables
+        local -r restore=$(test -s root/usr/lib/systemd/system/iptables-restore.service && echo -restore)
+
+        test -n "$restore" && cat << 'EOF' > root/usr/lib/tmpfiles.d/iptables.conf
+d /var/lib/iptables
+L /var/lib/iptables/rules-save - - - - ../../../etc/iptables
+d /var/lib/ip6tables
+L /var/lib/ip6tables/rules-save - - - - ../../../etc/ip6tables
+EOF
+
+        (test -d root/etc/sysconfig && cd root/etc/sysconfig || cd root/etc
+                cat << 'EOF' > iptables ; chmod 0600 iptables
 *filter
 :INPUT DROP [0:0]
 :FORWARD DROP [0:0]
@@ -285,13 +295,18 @@ then
 -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 COMMIT
 EOF
-        cat << 'EOF' > root/etc/sysconfig/ip6tables
+                cat << 'EOF' > ip6tables ; chmod 0600 ip6tables
 *filter
 :INPUT DROP [0:0]
 :FORWARD DROP [0:0]
 :OUTPUT DROP [0:0]
 COMMIT
 EOF
+        )
+
+        mkdir -p root/usr/lib/systemd/system/basic.target.wants
+        ln -fst root/usr/lib/systemd/system/basic.target.wants \
+            ../ip{,6}tables"$restore".service
 fi
 
 function tmpfs_var() if opt read_only

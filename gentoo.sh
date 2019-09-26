@@ -3,7 +3,7 @@ packages_buildroot=()
 
 DEFAULT_ARCH=$($uname -m)
 DEFAULT_PROFILE=17.1
-DEFAULT_RELEASE=20190922T214501Z
+DEFAULT_RELEASE=20190925T214502Z
 options[arch]=$DEFAULT_ARCH
 options[profile]=$DEFAULT_PROFILE
 options[ramdisk]=
@@ -16,7 +16,7 @@ function create_buildroot() {
         local stage3="https://gentoo.osuosl.org/releases/$arch/autobuilds/${options[release]:=$DEFAULT_RELEASE}/hardened/stage3-$arch-hardened+nomultilib-${options[release]}.tar.xz"
 
         opt bootable && packages_buildroot+=(sys-kernel/gentoo-sources)
-        opt selinux && packages_buildroot+=(app-emulation/qemu sys-kernel/gentoo-sources) && profile+=/selinux && stage3=${stage3/+/-selinux+}
+        opt selinux && packages_buildroot+=(app-arch/cpio app-emulation/qemu sys-kernel/gentoo-sources) && profile+=/selinux && stage3=${stage3/+/-selinux+}
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
@@ -53,6 +53,12 @@ echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/
 # Support zstd squashfs compression.
 echo '~sys-fs/squashfs-tools-4.4 ~amd64' >> /etc/portage/package.accept_keywords/squashfs-tools.conf
 echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
+
+# Support PNG editing to produce the UEFI boot logo.
+echo 'media-gfx/imagemagick png' >> /etc/portage/package.use/imagemagick.conf
+
+# Support building the UEFI boot stub.
+echo 'sys-apps/systemd gnuefi' >> /etc/portage/package.use/systemd.conf
 
 emerge-webrsync
 emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
@@ -100,12 +106,21 @@ function install_packages() {
         packages+=(sys-apps/util-linux)
 
         emerge --jobs=4 -1bv "${packages[@]}" "$@"
+
+        mkdir -p root/{dev,home,proc,run,sys,usr/{bin,lib}}
+        mkdir -pm 0700 root/root
+        ln -fns lib root/usr/lib64
+        ln -fns bin root/usr/sbin
+        ln -fst root usr/bin usr/lib usr/lib64 usr/sbin
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
-        mkdir -p root/{dev,proc,sys}
 
         qlist -CIRSSUv > packages-buildroot.txt
         qlist --root=/ -CIRSSUv > packages-host.txt
         qlist --root=root -CIRSSUv > packages.txt
+}
+
+function distro_tweaks() {
+        ln -fns ../lib/systemd/systemd root/usr/sbin/init
 }
 
 function save_boot_files() if opt bootable
@@ -215,6 +230,9 @@ CONFIG_SECURITY=y
 CONFIG_SECURITY_NETWORK=y
 CONFIG_INET=y
 CONFIG_SECURITY_SELINUX=y
+# Support initial SELinux labeling.
+CONFIG_FUTEX=y
+CONFIG_SECURITY_SELINUX_DEVELOP=y
 # Support the default hard drive in QEMU.
 CONFIG_PCI=y
 CONFIG_ATA=y
@@ -226,6 +244,8 @@ CONFIG_ATA_PIIX=y
 CONFIG_TTY=y
 CONFIG_SERIAL_8250=y
 CONFIG_SERIAL_8250_CONSOLE=y
+# Support powering off QEMU.
+CONFIG_ACPI=y
 # Print initialization messages for debugging.
 CONFIG_PRINTK=y'
 
