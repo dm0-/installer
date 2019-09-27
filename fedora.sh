@@ -45,7 +45,7 @@ function install_packages() {
         dnf --assumeyes --installroot="$PWD/root" \
             ${options[arch]:+--forcearch="${options[arch]}"} \
             --releasever="${options[release]}" \
-            install "${packages[@]}" "$@"
+            install "${packages[@]:-filesystem}" "$@"
 
         rpm -qa | sort > packages-buildroot.txt
         rpm --root="$PWD/root" -qa | sort > packages.txt

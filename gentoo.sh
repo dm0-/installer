@@ -55,10 +55,11 @@ echo '~sys-fs/squashfs-tools-4.4 ~amd64' >> /etc/portage/package.accept_keywords
 echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
 
 # Support PNG editing to produce the UEFI boot logo.
-echo 'media-gfx/imagemagick png' >> /etc/portage/package.use/imagemagick.conf
+echo 'media-gfx/imagemagick png' >> /etc/portage/package.use/host.conf
 
 # Support building the UEFI boot stub.
-echo 'sys-apps/systemd gnuefi' >> /etc/portage/package.use/systemd.conf
+echo 'sys-apps/systemd gnuefi' >> /etc/portage/package.use/host.conf
+echo 'sys-apps/pciutils -udev' >> /etc/portage/package.use/host.conf
 
 emerge-webrsync
 emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
@@ -78,6 +79,7 @@ mkdir -p "/build/${options[arch]}/etc"
 cp -at "/build/${options[arch]}/etc" /etc/portage
 cd "/build/${options[arch]}/etc/portage"
 echo -e 'static\nstatic-libs\nsplit-usr' >> profile/use.mask
+rm -f package.use/host.conf
 EOF
 
         build_relabel_kernel

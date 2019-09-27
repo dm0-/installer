@@ -16,7 +16,7 @@ options[uefi]=       # Generate a single UEFI executable containing boot files
 options[verity]=     # Prevent file system modification with dm-verity
 
 function usage() {
-        echo "Usage: $0 [-BKRSUVZhu] \
+        echo "Usage: $0 [-BKRSUVZadhpu] \
 [-E <uefi-binary-path>] [[-I] -P <partuuid>] \
 <config.sh> [<parameter>]...
 
@@ -49,6 +49,25 @@ Install options:
         the root file system on boot.  If this option is not used, the kernel
         will assume that the root file system is on /dev/sda.
         Example: -P e08ede5f-56d4-4d6d-b8d9-abf7ef5be608
+
+Customization options:
+  -a <username>:[<uid>]:[<group-list>]:[<comment>]
+        Add a passwordless user to the image.  If the UID is omitted, the next
+        available number will be used.  The group list contains comma-separated
+        names of supplementary groups for the user in addition to its primary
+        group.  The comment (GECOS) field is usually used for a readable name.
+        This option can be used multiple times to create more accounts.  The
+        useradd program must be installed and properly configured in the image
+        for this option to function correctly.
+        Example: -a 'user::wheel:Sysadmin Account'
+  -d <distro>
+        Select the distro to install (default: fedora).  This is only used when
+        a system definition file does not specify the distro.
+        Example: -d centos
+  -p <package-list>
+        Install the given space-separated list of packages into the image in
+        addition to the package set in the system definition file.
+        Example: -p 'man-db sudo wget'
 
 Help options:
   -h    Output this help text.
@@ -87,7 +106,7 @@ function enter() {
 }
 
 function script() {
-        $cat <([[ $- =~ x ]] && echo "PS4='+\e[31m+\e[0m '"$'\nset -x') - |
+        $cat <([[ $- =~ x ]] && echo "PS4='+\e[34m+\e[0m '"$'\nset -x') - |
         enter /bin/bash -euo pipefail -O nullglob
 }
 
@@ -450,7 +469,22 @@ fi
 function configure_system() {
         exclude_paths+=(etc/systemd/system/'*')
 
-        sed -i -e 's/^root:[^:]*/root:/' root/etc/shadow
+        sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
+        opt adduser && test -x root/usr/sbin/useradd && (IFS=$'\n'
+                for as in ${options[adduser]}
+                do
+                        as+=::::
+                        name=${as%%:*}
+                        uid=${as#*:} uid=${uid%%:*}
+                        groups=${as#*:*:} groups=${groups%%:*}
+                        gecos=${as#*:*:*:} gecos=${gecos%%:*}
+                        chroot root /usr/sbin/useradd \
+                            ${gecos:+--comment="$gecos"} \
+                            ${groups:+--groups="$groups"} \
+                            ${uid:+--uid="$uid"} \
+                            --password= "$name"
+                done
+        )
 
         mkdir -p root/usr/lib/systemd/system/getty.target.wants
         ln -fns ../getty@.service \
@@ -688,6 +722,10 @@ C /var/roothome 0700 root root - /etc/skel
 Z /var/roothome
 EOF
         fi
+}
+
+function unlock_root() {
+        sed -i -e 's/^root:[^:]*/root:/' root/etc/shadow
 }
 
 function wine_gog_script() {

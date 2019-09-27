@@ -119,10 +119,6 @@ function customize() {
                 usr/share/xsessions/gnome.desktop
         )
 
-        # Lock root, and use an unprivileged user with sudo access instead.
-        sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
-        chroot root /usr/sbin/useradd -c 'Unprivileged User' -G wheel -p '' user
-
         # Downgrade from super-strict crypto policies for regular Internet use.
         chroot root /usr/bin/update-crypto-policies --set NEXT
 

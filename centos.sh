@@ -41,7 +41,7 @@ function install_packages() {
 
         yum --assumeyes --installroot="$PWD/root" \
             --releasever="${options[release]%%.*}" \
-            install "${packages[@]}" "$@"
+            install "${packages[@]:-filesystem}" "$@"
 
         rpm -qa | sort > packages-buildroot.txt
         rpm --root="$PWD/root" -qa | sort > packages.txt

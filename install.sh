@@ -27,7 +27,7 @@ uname=${UNAME:-uname}
 . base.sh
 
 # Parse command-line options.
-while getopts :BE:IKP:RSUVZhu opt
+while getopts :BE:IKP:RSUVZa:d:hp:u opt
 do
         case "$opt" in
             B) options[bootable]=1 ;;
@@ -40,7 +40,10 @@ do
             U) options[uefi]=1 ;;
             V) options[verity]=1 ;;
             Z) options[selinux]=1 ;;
+            a) options[adduser]+="${OPTARG//$'\n'/ }"$'\n' ;;
+            d) options[distro]=$OPTARG ;;
             h) usage ; exit 0 ;;
+            p) options[packages]=$OPTARG ;;
             u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
             *) usage 1>&2 ; exit 1 ;;
         esac
@@ -65,7 +68,7 @@ script << EOF
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
 mount_root
-install_packages
+install_packages \${options[packages]}
 configure_dhcp
 configure_iptables
 tmpfs_var
