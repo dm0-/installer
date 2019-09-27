@@ -42,6 +42,10 @@ function install_packages() {
         opt iptables && packages+=(iptables-services)
         opt selinux && packages+=(selinux-policy-targeted)
 
+        mkdir -p root/var/cache/dnf
+        mount --bind /var/cache/dnf root/var/cache/dnf
+        trap -- 'umount root/var/cache/dnf' RETURN
+
         dnf --assumeyes --installroot="$PWD/root" \
             ${options[arch]:+--forcearch="${options[arch]}"} \
             --releasever="${options[release]}" \

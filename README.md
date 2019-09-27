@@ -49,7 +49,7 @@ The project is currently at the stage where I've just dumped some useful things 
 A few bits currently expect to be running on x86_64.  Three distros are supported to varying degrees:
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
-  - CentOS is too old to support the UEFI and networkd functionality until CentOS 8 is released.
+  - CentOS is too old to support the UEFI and networkd functionality until a CentOS 8 container image is available.
   - Gentoo is currently untested due to hardware constraints, but it should support all features (except `ramdisk` since Gentoo currently expects no initrd).
 
 ### General
@@ -63,6 +63,8 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 **Maybe add a disk formatter or build a GRUB image.**  I have yet to decide if the pieces beneath the distro images should be outside the scope of this project, since they might not be worth automating.  There are two parts to consider.  First, whether to format a disk with an ESP, root partition slots, and an encrypted `/var` partition.  Second, whether to configure, build, and sign a GRUB UEFI executable to be written to an ESP as the default entry.  I also have two use cases to handle with GRUB.  In the case of a formatted disk with root partitions, it needs to have a menu allowing booting into any of the installed root partitions, but it should default to the most recently updated partition unless overridden.  In the case where I'd fill a USB drive with just an ESP and populate it with images containing bundled root file systems, GRUB needs to detect which machine booted it via SMBIOS and automatically chainload an appropriate OS for that system.
 
 **Fix the UEFI splash image colors.**  The distro logo colors are off when booting a UEFI executable, even though they are correct when viewing the source image.  Figure out how the colors need to be mapped.
+
+**Fix squashfs SELinux labels.**  The squashfs image appears to use the default context for a label that wasn't defined in the host policy (at least with CentOS 7).  This can result in errors in some cases.  If there is no easy way to fix this, the dumb solution of using the labeling VM to run `mksquashfs` should work.  (The uncompressed ext4 image is not affected.)
 
 **Instrument returning an error state from the SELinux labeling virtual machine.**  If labeling fails right now, the build system won't know about it.
 

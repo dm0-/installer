@@ -122,7 +122,7 @@ function customize() { : ; }
 
 function create_root_image() if opt selinux || ! opt squash
 then
-        local -r size=$(opt ramdisk && ! opt squash && echo 1 || echo 4)G
+        local -r size=$(opt ramdisk && ! opt squash && echo 1792M || echo 4G)
         $truncate --size="${1:-$size}" "$output/$disk"
         declare -g loop=$($losetup --show --find "$output/$disk")
         trap -- "$losetup --detach $loop" EXIT
@@ -139,7 +139,8 @@ function unmount_root() if opt selinux || ! opt squash
 then
         e4defrag root
         umount root ; trap - EXIT
-        opt read_only && tune2fs -O read-only /dev/loop-root || :  # CentOS 7
+        test "x${options[distro]}" != xcentos &&  # CentOS 7
+        opt read_only && tune2fs -O read-only /dev/loop-root
         e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
 fi
 
@@ -192,9 +193,6 @@ function squash() if opt squash
 then
         local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
         disk=squash.img
-        test "x${options[distro]}" = xcentos &&  # CentOS 7
-        mksquashfs root "$disk" -noappend "$xattrs" -comp xz \
-            -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}" ||
         mksquashfs root "$disk" -noappend "$xattrs" \
             -comp zstd -Xcompression-level 22 \
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
@@ -245,7 +243,7 @@ EOF
         mkdir -p "$root/sysroot"
         ln -fn final.img "$root/sysroot/root.img"
         find "$root" -mindepth 1 -printf '%P\n' |
-        { cd "$root" ; cpio -R 0:0 -co ; } |  # CentOS 7
+        { cd "$root" ; cpio -H newc -R 0:0 -o ; } |  # CentOS 7
         xz --check=crc32 -9e | cat initrd.img - > ramdisk.img
 fi
 
@@ -254,7 +252,7 @@ then
         local dmsetup=dm-mod.create
         local root=/dev/sda
 
-        test "x${options[distro]}" = xcentos ||  # CentOS 7
+        test "x${options[distro]}" = xcentos ||  # CentOS <= 8
         opt ramdisk && dmsetup=DVR
 
         opt partuuid && root=PARTUUID=${options[partuuid]}
@@ -712,7 +710,6 @@ fi
 function store_home_on_var() {
         opt selinux && echo /var/home /home >> root/etc/selinux/targeted/contexts/files/file_contexts.subs
         mv root/home root/var/home ; ln -fns var/home root/home
-        test "x${options[distro]}" = xcentos && echo 'd /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf ||  # CentOS 7
         echo 'Q /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf
         if test "x$*" = x+root
         then

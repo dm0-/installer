@@ -6,6 +6,7 @@ packages_buildroot=()
 DEFAULT_RELEASE=7.6.1810
 options[networkd]=
 options[release]=$DEFAULT_RELEASE
+options[uefi]=
 
 function create_buildroot() {
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}/docker/centos-${options[release]%%.*}-docker.tar.xz"
@@ -38,6 +39,10 @@ function install_packages() {
         opt bootable && packages+=(systemd)
         opt iptables && packages+=(iptables-services NetworkManager)  # No networkd on CentOS 7
         opt selinux && packages+=(selinux-policy-targeted)
+
+        mkdir -p root/var/cache/yum
+        mount --bind /var/cache/yum root/var/cache/yum
+        trap -- 'umount root/var/cache/yum' RETURN
 
         yum --assumeyes --installroot="$PWD/root" \
             --releasever="${options[release]%%.*}" \
@@ -104,7 +109,7 @@ EOF
         while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
-        { cd "$root" ; cpio -R 0:0 -co ; } |
+        { cd "$root" ; cpio -H newc -R 0:0 -o ; } |
         xz --check=crc32 -9e > relabel.img
 
         umount root ; trap - EXIT
@@ -112,6 +117,14 @@ EOF
             -kernel "$kernel" -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
+fi
+
+function squash() if opt squash
+then
+        local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
+        disk=squash.img
+        mksquashfs root "$disk" -noappend "$xattrs" -comp xz \
+            -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
 fi
 
 function verify_distro() {
@@ -235,4 +248,12 @@ rpm --checksig rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
+}
+
+# OPTIONAL (IMAGE)
+
+eval "_$(declare -f store_home_on_var)"
+function store_home_on_var() {
+        "_${FUNCNAME[0]}" "$@"
+        sed -i -e 's/^Q /d /' root/usr/lib/tmpfiles.d/home.conf
 }
