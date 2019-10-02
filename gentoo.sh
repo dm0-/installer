@@ -3,10 +3,9 @@ packages_buildroot=()
 
 DEFAULT_ARCH=$($uname -m)
 DEFAULT_PROFILE=17.1
-DEFAULT_RELEASE=20190925T214502Z
+DEFAULT_RELEASE=$($curl -L https://gentoo.osuosl.org/releases/amd64/autobuilds/latest-stage3-amd64-hardened-selinux+nomultilib.txt | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
 options[arch]=$DEFAULT_ARCH
 options[profile]=$DEFAULT_PROFILE
-options[ramdisk]=
 options[release]=$DEFAULT_RELEASE
 
 function create_buildroot() {
@@ -15,13 +14,13 @@ function create_buildroot() {
         local profile="default/linux/$arch/${options[profile]:=$DEFAULT_PROFILE}/no-multilib/hardened"
         local stage3="https://gentoo.osuosl.org/releases/$arch/autobuilds/${options[release]:=$DEFAULT_RELEASE}/hardened/stage3-$arch-hardened+nomultilib-${options[release]}.tar.xz"
 
-        opt bootable && packages_buildroot+=(sys-kernel/gentoo-sources)
-        opt selinux && packages_buildroot+=(app-arch/cpio app-emulation/qemu sys-kernel/gentoo-sources) && profile+=/selinux && stage3=${stage3/+/-selinux+}
+        opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
+        opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio sys-apps/busybox)
+        opt selinux && packages_buildroot+=(app-emulation/qemu) && profile+=/selinux && stage3=${stage3/+/-selinux+}
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
         test "x${options[arch]:=$DEFAULT_ARCH}" = "x$DEFAULT_ARCH" || packages_buildroot+=(sys-devel/crossdev)
-        packages_buildroot+=(virtual/udev)  # Transform into a systemd+SELinux stage3.
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -32,16 +31,17 @@ function create_buildroot() {
 
         script << EOF
 ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
-mkdir -p /etc/portage/{package.{accept_keywords,license,unmask,use},profile,repos.conf}
+mkdir -p /etc/portage/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
 cat <(echo) - << 'EOG' >> /etc/portage/make.conf
 FEATURES="\$FEATURES -selinux"
-PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"
+USE="\$USE ${options[selinux]:+selinux} systemd"
 EOG
-echo systemd >> /etc/portage/profile/use.force
+echo -selinux >> /etc/portage/profile/use.force
 echo -e 'sslv2\nsslv3\n-systemd' >> /etc/portage/profile/use.mask
 
-# Accept the newest kernels.
-echo 'sys-kernel/gentoo-sources ~amd64' >> /etc/portage/package.accept_keywords/gentoo-sources.conf
+# Accept the newest kernel and SELinux policy.
+echo sys-kernel/gentoo-sources >> /etc/portage/package.accept_keywords/gentoo-sources.conf
+echo 'sec-policy/*' >> /etc/portage/package.accept_keywords/selinux.conf
 
 # Accept CPU microcode licenses.
 echo sys-firmware/intel-microcode intel-ucode >> /etc/portage/package.license/ucode.conf
@@ -51,18 +51,36 @@ echo sys-kernel/linux-firmware linux-fw-redistributable no-source-code >> /etc/p
 echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/package.unmask/systemd.conf
 
 # Support zstd squashfs compression.
-echo '~sys-fs/squashfs-tools-4.4 ~amd64' >> /etc/portage/package.accept_keywords/squashfs-tools.conf
+echo '~sys-fs/squashfs-tools-4.4' >> /etc/portage/package.accept_keywords/squashfs-tools.conf
 echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
 
-# Support PNG editing to produce the UEFI boot logo.
-echo 'media-gfx/imagemagick png' >> /etc/portage/package.use/host.conf
+# Fix bad packaging not being compatible with UsrMerge.
+echo 'PKG_INSTALL_MASK="/lib*/libpam*.so"' >> /etc/portage/env/pam.conf
+echo 'PKG_INSTALL_MASK="/usr/sbin/setfiles"' >> /etc/portage/env/policycoreutils.conf
+echo 'sys-libs/pam pam.conf' >> /etc/portage/package.env/pam.conf
+echo 'sys-apps/policycoreutils policycoreutils.conf' >> /etc/portage/package.env/policycoreutils.conf
 
-# Support building the UEFI boot stub.
-echo 'sys-apps/systemd gnuefi' >> /etc/portage/package.use/host.conf
-echo 'sys-apps/pciutils -udev' >> /etc/portage/package.use/host.conf
+# Turn off extra busybox features to make initrds smaller.
+echo 'sys-apps/busybox -* static' >> /etc/portage/package.use/host.conf
+
+# Statically link dmsetup to only need to copy one file into the initrd.
+${options[ramdisk]:+:} false && cat << 'EOG' >> /etc/portage/package.use/host.conf
+dev-libs/libaio static-libs
+sys-apps/util-linux static-libs
+sys-fs/lvm2 -* device-mapper-only static
+EOG
+
+# Support building the UEFI boot stub and its logo image.
+${options[uefi]:+:} false && cat << 'EOG' >> /etc/portage/package.use/host.conf
+media-gfx/imagemagick png
+sys-apps/systemd gnuefi
+sys-apps/pciutils -udev
+EOG
 
 emerge-webrsync
-emerge --jobs=4 --oneshot --verbose ${packages_buildroot[*]} $*
+emerge \
+    --changed-use --deep --jobs=4 --oneshot --update --verbose --with-bdeps=y \
+    @world ${packages_buildroot[*]} $*
 
 test -d /usr/src/linux && make -C /usr/src/linux -j$(nproc) mrproper V=1
 
@@ -78,6 +96,8 @@ fi
 mkdir -p "/build/${options[arch]}/etc"
 cp -at "/build/${options[arch]}/etc" /etc/portage
 cd "/build/${options[arch]}/etc/portage"
+echo 'PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"' >> make.conf
+echo systemd > profile/use.force
 echo -e 'static\nstatic-libs\nsplit-usr' >> profile/use.mask
 rm -f package.use/host.conf
 EOF
@@ -90,30 +110,34 @@ function install_packages() {
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/build/${options[arch]}"
         local -rx PKGDIR="$ROOT/var/cache/binpkgs"
 
-        if test -s /usr/src/linux/.config
-        then
-                make -C /usr/src/linux -j$(nproc) V=1
-                make -C /usr/src/linux install V=1
-        fi
-
         opt bootable || opt networkd && packages+=(sys-apps/systemd)
         opt iptables && packages+=(net-firewall/iptables)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
 
-        # Cheat bootstrapping
+        mkdir -p "$ROOT"/{lib,lib64,usr/{lib,lib64,src}}
+
+        if test -s /usr/src/linux/.config
+        then
+                make -C /usr/src/linux -j$(nproc) V=1
+                make -C /usr/src/linux install V=1
+                ln -fst "$ROOT/usr/src" ../../../../usr/src/linux
+        fi
+
+        # Cheat bootstrapping.
         mv "$ROOT"/etc/portage/profile/use.force{,.save}
-        echo -e '-selinux\n-systemd' > "$ROOT"/etc/portage/profile/use.force
+        echo -selinux > "$ROOT"/etc/portage/profile/use.force
         USE='-* kill' emerge --jobs=4 --oneshot --verbose sys-apps/util-linux
         mv "$ROOT"/etc/portage/profile/use.force{.save,}
         packages+=(sys-apps/util-linux)
 
+        # Compile a build root for the target system, making binary packages.
         emerge --jobs=4 -1bv "${packages[@]}" "$@"
 
-        mkdir -p root/{dev,home,proc,run,sys,usr/{bin,lib}}
+        # Install the target root from binaries with no build dependencies.
+        mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib,sbin}}
         mkdir -pm 0700 root/root
-        ln -fns lib root/usr/lib64
-        ln -fns bin root/usr/sbin
-        ln -fst root usr/bin usr/lib usr/lib64 usr/sbin
+        [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
+        (cd root ; exec ln -fst . usr/*)
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
 
         qlist -CIRSSUv > packages-buildroot.txt
@@ -123,6 +147,16 @@ function install_packages() {
 
 function distro_tweaks() {
         ln -fns ../lib/systemd/systemd root/usr/sbin/init
+        ln -fns ../proc/self/mounts root/etc/mtab
+
+        sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
+        cat << 'EOF' >> root/etc/skel/.bashrc
+alias ll='ls -l'
+function defer() {
+        local -r cmd="$(trap -p EXIT)"
+        eval "trap -- '$*;'${cmd:8:-5} EXIT"
+}
+EOF
 }
 
 function save_boot_files() if opt bootable
@@ -130,6 +164,35 @@ then
         opt uefi && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black logo.bmp
         cp -p /boot/vmlinuz-* vmlinuz
         cp -pt . root/etc/os-release
+fi
+
+function build_ramdisk() if opt ramdisk
+then
+        local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
+        mkdir -p "$root"/{bin,dev,proc,sys,sysroot}
+        cp -pt "$root/bin" /bin/busybox
+        for cmd in ash mount losetup switch_root
+        do ln -fns busybox "$root/bin/$cmd"
+        done
+        opt verity && cp -p /sbin/dmsetup.static "$root/bin/dmsetup"
+        cat << EOF > "$root/init" && chmod 0755 "$root/init"
+#!/bin/ash -eux
+export PATH=/bin
+mount -nt devtmpfs devtmpfs /dev
+mount -nt proc proc /proc
+mount -nt sysfs sysfs /sys
+losetup $(opt read_only && echo -r) /dev/loop0 /sysroot/root.img
+$(opt verity && cat << EOG ||
+dmsetup create --concise '$(<dmsetup.txt)'
+mount -no ro /dev/mapper/root /sysroot
+EOG
+echo "mount -n$(opt read_only && echo o ro) /dev/loop0 /sysroot")
+exec switch_root /sysroot /sbin/init
+EOF
+        ln -fn final.img "$root/sysroot/root.img"
+        find "$root" -mindepth 1 -printf '%P\n' |
+        cpio -D "$root" -H newc -R 0:0 -o |
+        xz --check=crc32 -9e > ramdisk.img
 fi
 
 function write_base_kernel_config() if opt bootable
@@ -170,6 +233,13 @@ CONFIG_IP_NF_IPTABLES=y
 CONFIG_IP_NF_FILTER=y
 CONFIG_IP6_NF_IPTABLES=y
 CONFIG_IP6_NF_FILTER=y'
+        opt ramdisk && echo '# Initrd settings
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_RD_XZ=y
+# Loop settings
+CONFIG_BLK_DEV=y
+CONFIG_BLK_DEV_LOOP=y
+CONFIG_BLK_DEV_LOOP_MIN_COUNT=1'
         opt selinux && echo '# SELinux settings
 CONFIG_AUDIT=y
 CONFIG_SECURITY=y
@@ -181,7 +251,11 @@ CONFIG_SQUASHFS=y
 CONFIG_SQUASHFS_FILE_DIRECT=y
 CONFIG_SQUASHFS_DECOMP_MULTI=y
 CONFIG_SQUASHFS_XATTR=y
-CONFIG_SQUASHFS_ZSTD=y'
+CONFIG_SQUASHFS_ZSTD=y' || echo '# Ext[2-4] settings
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_FS_POSIX_ACL=y
+CONFIG_EXT4_FS_SECURITY=y
+CONFIG_EXT4_USE_FOR_EXT2=y'
         opt uefi && echo '# UEFI settings
 CONFIG_EFI=y'
         opt verity && echo '# Verity settings
@@ -221,7 +295,6 @@ CONFIG_BLOCK=y
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_SECURITY=y
 # Support using an initrd.
-CONFIG_BLK_DEV_RAM=y
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_RD_XZ=y
 # Support SELinux.

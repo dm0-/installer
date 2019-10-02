@@ -467,15 +467,17 @@ fi
 function configure_system() {
         exclude_paths+=(etc/systemd/system/'*')
 
+        test -x /bin/systemd-sysusers &&  # CentOS 7
+        systemd-sysusers --root=root
         sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
         opt adduser && test -x root/usr/sbin/useradd && (IFS=$'\n'
-                for as in ${options[adduser]}
+                for spec in ${options[adduser]}
                 do
-                        as+=::::
-                        name=${as%%:*}
-                        uid=${as#*:} uid=${uid%%:*}
-                        groups=${as#*:*:} groups=${groups%%:*}
-                        gecos=${as#*:*:*:} gecos=${gecos%%:*}
+                        spec+=::::
+                        name=${spec%%:*}
+                        uid=${spec#*:} uid=${uid%%:*}
+                        groups=${spec#*:*:} groups=${groups%%:*}
+                        gecos=${spec#*:*:*:} gecos=${gecos%%:*}
                         chroot root /usr/sbin/useradd \
                             ${gecos:+--comment="$gecos"} \
                             ${groups:+--groups="$groups"} \
@@ -487,6 +489,9 @@ function configure_system() {
         mkdir -p root/usr/lib/systemd/system/getty.target.wants
         ln -fns ../getty@.service \
             root/usr/lib/systemd/system/getty.target.wants/getty@tty1.service
+
+        rm -f root/etc/udev/hwdb.bin
+        test -x /bin/systemd-hwdb && systemd-hwdb --root=root --usr update
 
         test -s root/usr/lib/systemd/system/gdm.service &&
         ln -fns gdm.service root/usr/lib/systemd/system/display-manager.service
@@ -636,13 +641,13 @@ metadata-network-access=0
 EOF
         )
 
-        test -d root/usr/lib/locale/en_US.utf8 &&
-        echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
-
         cat << 'EOF' > root/etc/vconsole.conf
 FONT="eurlatgr"
 KEYMAP="emacs2"
 EOF
+
+        test -d root/usr/lib/locale/en_US.utf8 &&
+        echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime
 
@@ -725,34 +730,32 @@ function unlock_root() {
         sed -i -e 's/^root:[^:]*/root:/' root/etc/shadow
 }
 
-function wine_gog_script() {
-        local -r app="Z:${1//\//\\}"
-        local -A typemap=()
-        typemap[dword]=REG_DWORD
-        typemap[string]=REG_SZ
+function wine_gog_script() while read
+do
+        local -A r=()
 
-        jq -cr '.actions[].install|select(.action=="setRegistry").arguments' |
-        while read
+        while read -r
         do
-                local -A r=()
+                REPLY=${REPLY:1:-1}
+                k=${REPLY%%:*} ; k=${k//\"/}
+                v=${REPLY#*:} ; v=${v#\"} ; v=${v%\"}
+                r[${k:-_}]=$v
+        done <<< "${REPLY//,/$'\n'}"
 
-                while read -r
-                do
-                        REPLY=${REPLY:1:-1}
-                        k=${REPLY%%:*} ; k=${k//\"/}
-                        v=${REPLY#*:} ; v=${v#\"} ; v=${v%\"}
-                        r[${k:-_}]=$v
-                done <<< "${REPLY//,/$'\n'}"
+        case "${r[valueType]}" in
+            string)
+                r[valueData]=${r[valueData]//{app\}/Z:${1//\//\\}}
+                r[valueType]=REG_SZ
+                ;;
+            dword)
+                r[valueData]=${r[valueData]/#\$/0x}
+                r[valueType]=REG_DWORD
+                ;;
+        esac
 
-                case "${r[valueType]}" in
-                    string) r[valueData]=${r[valueData]//{app\}/$app} ;;
-                    dword) r[valueData]=${r[valueData]/#\$/0x} ;;
-                esac
-
-                echo wine reg add \
-                    "'${r[root]//\"/}\\${r[subkey]//\"/}'" \
-                    /v "${r[valueName]//\"/}" \
-                    /t "${typemap[${r[valueType]}]}" \
-                    /d "'${r[valueData]}'" /f
-        done
-}
+        echo wine reg add \
+            "'${r[root]//\"/}\\${r[subkey]//\"/}'" \
+            /v "${r[valueName]//\"/}" \
+            /t "${r[valueType]}" \
+            /d "'${r[valueData]}'" /f
+done < <(jq -cr '.actions[].install|select(.action=="setRegistry").arguments')

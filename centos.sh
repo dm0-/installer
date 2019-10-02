@@ -58,6 +58,14 @@ function distro_tweaks() {
 
         test -e root/etc/sysconfig/network ||
         touch root/etc/sysconfig/network
+
+        sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
+        cat << 'EOF' >> root/etc/skel/.bashrc
+function defer() {
+        local -r cmd="$(trap -p EXIT)"
+        eval "trap -- '$*;'${cmd:8:-5} EXIT"
+}
+EOF
 }
 
 function save_boot_files() if opt bootable

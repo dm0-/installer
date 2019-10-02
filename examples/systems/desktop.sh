@@ -12,7 +12,7 @@ options+=(
 )
 
 packages+=(
-        glibc-langpack-en kernel-modules{,-extra}
+        glibc-langpack-en kernel-modules-extra
 
         # Utilities
         binutils
@@ -36,6 +36,7 @@ packages+=(
         ## Network
         bind-utils
         iproute
+        iputils
         net-tools
         openssh-clients
         tcpdump

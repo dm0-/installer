@@ -8,11 +8,11 @@ The primary goal here is swappable immutable disk images that are verified by ve
 
  1. A system's primary hard drive is GPT-partitioned with an ESP, several (maybe three to five) partitions of five or ten gigabytes reserved to store root file system images, and the rest of the disk used as an encrypted `/var` partition for persistent storage.  When this installer produces an OS image, it can also produce a UEFI executable containing the kernel, initrd, and arguments specifying the root partition's UUID and root verity hash.  A UEFI executable corresponding to each active root file system partition is written to the ESP (potentially after Secure Boot signing) so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
 
-    Example installation: `bash -x install.sh -SVZE /boot/EFI/BOOT/BOOTX64.EFI -IP e08ede5f-56d4-4d6d-b8d9-abf7ef5be608 workstation.sh`
+    Example installation: `bash -x install.sh -VZE /boot/EFI/BOOT/BOOTX64.EFI -IP e08ede5f-56d4-4d6d-b8d9-abf7ef5be608 workstation.sh`
 
  2. The installer produces a single UEFI executable that also has the entire root file system image bundled into it.  This method will not use persistent storage by default, so it can be booted on any machine from a USB key, via PXE, or just from a regular hard drive's ESP as a rescue system.
 
-    Example installation: `bash -x install.sh -KSZE /boot/EFI/BOOT/BOOTX64.EFI rescue.sh`
+    Example installation: `bash -x install.sh -KSE /boot/EFI/BOOT/RESCUE.EFI -a admin::wheel -p 'cryptsetup dosfstools e2fsprogs kbd kernel-modules-extra lvm2 man-db man-pages sudo vim-minimal'`
 
  3. All boot-related functionality is omitted, so a file system image is produced that can be used as a container.  There is an option to build a launcher script into the disk image so that it is executable like a statically linked program.
 
@@ -50,7 +50,7 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
   - CentOS is too old to support the UEFI and networkd functionality until a CentOS 8 container image is available.
-  - Gentoo is currently untested due to hardware constraints, but it should support all features (except `ramdisk` since Gentoo currently expects no initrd).
+  - Gentoo is currently untested due to hardware constraints, but it should support all features.
 
 ### General
 
@@ -82,9 +82,9 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 ### Gentoo
 
-**Implement the ramdisk option.**  The base kernel config can add support for an initrd, then it can just create one from busybox with the file system image included.
-
 **Support real cross-compiling.**  I'm eventually going to use this to produce images for slow embedded chips from an amd64 workstation, so `crossdev` needs to be configured properly.
+
+**Figure out if the Gentoo SELinux policy is feasible to enforce with systemd.**  It's still unsupported by the distro, and forcibly enabling it results in boot failures because systemd can't even search the root directory.
 
 **Add some examples.**  All the example systems are currently Fedora-based, but Gentoo is definitely the most flexible option and needs a few practical examples so it is clear what it can do.
 
