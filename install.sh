@@ -69,14 +69,14 @@ $(declare -p disk exclude_paths options packages)
 $(declare -f)
 mount_root
 install_packages \${options[packages]-}
-configure_dhcp
-configure_iptables
 tmpfs_var
 tmpfs_home
 overlay_etc
+configure_packages
 configure_system
 distro_tweaks
 customize
+finalize_packages
 save_boot_files
 relabel
 squash

@@ -60,12 +60,6 @@ function distro_tweaks() {
         touch root/etc/sysconfig/network
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
-        cat << 'EOF' >> root/etc/skel/.bashrc
-function defer() {
-        local -r cmd="$(trap -p EXIT)"
-        eval "trap -- '$*;'${cmd:8:-5} EXIT"
-}
-EOF
 }
 
 function save_boot_files() if opt bootable
@@ -121,7 +115,7 @@ EOF
         xz --check=crc32 -9e > relabel.img
 
         umount root ; trap - EXIT
-        /usr/libexec/qemu-kvm -nodefaults -serial stdio < /dev/null \
+        /usr/libexec/qemu-kvm -nodefaults -m 1G -serial stdio < /dev/null \
             -kernel "$kernel" -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
@@ -265,3 +259,7 @@ function store_home_on_var() {
         "_${FUNCNAME[0]}" "$@"
         sed -i -e 's/^Q /d /' root/usr/lib/tmpfiles.d/home.conf
 }
+
+# WORKAROUNDS
+
+function systemd-sysusers() { : ; }

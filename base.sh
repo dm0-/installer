@@ -266,66 +266,6 @@ then
             $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"")
 fi
 
-function configure_dhcp() if opt networkd
-then
-        mkdir -p root/usr/lib/systemd/system/network-online.target.wants
-        ln -fst root/usr/lib/systemd/system/multi-user.target.wants \
-            ../systemd-networkd.service ../systemd-resolved.service
-        ln -fst root/usr/lib/systemd/system/network-online.target.wants \
-            ../systemd-networkd-wait-online.service
-        cat << 'EOF' > root/usr/lib/systemd/network/99-dhcp.network
-[Network]
-DHCP=yes
-
-[DHCP]
-UseDomains=yes
-UseMTU=yes
-EOF
-        ln -fst root/etc ../run/systemd/resolve/resolv.conf
-elif test -s root/usr/lib/systemd/system/NetworkManager.service
-then
-        mkdir -p root/usr/lib/systemd/system/network-online.target.wants
-        ln -fst root/usr/lib/systemd/system/multi-user.target.wants \
-            ../NetworkManager.service
-        ln -fst root/usr/lib/systemd/system/network-online.target.wants \
-            ../NetworkManager-wait-online.service
-fi
-
-function configure_iptables() if opt iptables
-then
-        local -r restore=$(test -s root/usr/lib/systemd/system/iptables-restore.service && echo -restore)
-
-        test -n "$restore" && cat << 'EOF' > root/usr/lib/tmpfiles.d/iptables.conf
-d /var/lib/iptables
-L /var/lib/iptables/rules-save - - - - ../../../etc/iptables
-d /var/lib/ip6tables
-L /var/lib/ip6tables/rules-save - - - - ../../../etc/ip6tables
-EOF
-
-        (test -d root/etc/sysconfig && cd root/etc/sysconfig || cd root/etc
-                cat << 'EOF' > iptables ; chmod 0600 iptables
-*filter
-:INPUT DROP [0:0]
-:FORWARD DROP [0:0]
-:OUTPUT ACCEPT [0:0]
--A INPUT -i lo -j ACCEPT
--A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-COMMIT
-EOF
-                cat << 'EOF' > ip6tables ; chmod 0600 ip6tables
-*filter
-:INPUT DROP [0:0]
-:FORWARD DROP [0:0]
-:OUTPUT DROP [0:0]
-COMMIT
-EOF
-        )
-
-        mkdir -p root/usr/lib/systemd/system/basic.target.wants
-        ln -fst root/usr/lib/systemd/system/basic.target.wants \
-            ../ip{,6}tables"$restore".service
-fi
-
 function tmpfs_var() if opt read_only
 then
         exclude_paths+=(var/'*')
@@ -464,11 +404,11 @@ EOF
         fi
 fi
 
-function configure_system() {
-        exclude_paths+=(etc/systemd/system/'*')
+eval "function configure_packages() {
+$($cat configure.pkg.d/[!.]*.sh 0<&-)
+}"
 
-        test -x /bin/systemd-sysusers &&  # CentOS 7
-        systemd-sysusers --root=root
+function configure_system() {
         sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
         opt adduser && test -x root/usr/sbin/useradd && (IFS=$'\n'
                 for spec in ${options[adduser]}
@@ -486,34 +426,8 @@ function configure_system() {
                 done
         )
 
-        mkdir -p root/usr/lib/systemd/system/getty.target.wants
-        ln -fns ../getty@.service \
-            root/usr/lib/systemd/system/getty.target.wants/getty@tty1.service
-
-        rm -f root/etc/udev/hwdb.bin
-        test -x /bin/systemd-hwdb && systemd-hwdb --root=root --usr update
-
-        test -s root/usr/lib/systemd/system/gdm.service &&
-        ln -fns gdm.service root/usr/lib/systemd/system/display-manager.service
-
-        test -s root/usr/lib/systemd/system/display-manager.service &&
-        ln -fns graphical.target root/usr/lib/systemd/system/default.target ||
-        ln -fns multi-user.target root/usr/lib/systemd/system/default.target
-
         test -s root/usr/lib/systemd/system/dbus.service ||
         ln -fns dbus-broker.service root/usr/lib/systemd/system/dbus.service
-
-        test -s root/etc/systemd/logind.conf &&
-        sed -i \
-            -e 's/^[# ]*\(HandleLidSwitch\)=.*/\1=ignore/' \
-            -e 's/^[# ]*\(KillUserProcesses\)=.*/\1=yes/' \
-            root/etc/systemd/logind.conf
-
-        test -s root/usr/lib/systemd/system/sshd.service &&
-        ln -fst root/usr/lib/systemd/system/multi-user.target.wants ../sshd.service
-
-        test -s root/etc/ssh/sshd_config &&
-        sed -i -e 's/^[# ]*\(PermitEmptyPasswords\|PermitRootLogin\) .*/\1 no/' root/etc/ssh/sshd_config
 
         test -s root/etc/sudoers &&
         sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[# ]*//;}' root/etc/sudoers
@@ -521,129 +435,11 @@ function configure_system() {
         test -s root/etc/profile &&
         sed -i -e 's/ umask 0[0-7]*/ umask 022/' root/etc/profile
 
-        test -x root/usr/libexec/upowerd &&
-        echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
-
-        test -d root/usr/share/themes/Emacs/gtk-3.0 &&
-        mkdir -p root/etc/gtk-3.0 && cat << 'EOF' > root/etc/gtk-3.0/settings.ini
-[Settings]
-gtk-application-prefer-dark-theme = true
-gtk-button-images = true
-gtk-key-theme-name = Emacs
-gtk-menu-images = true
-EOF
-
-        test -x root/usr/bin/emacs -o -h root/usr/bin/emacs &&
-        (cd root/etc/skel
-                cat << 'EOF' > .emacs
-; Enable the Emacs package manager.
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
-(package-initialize)
-; Efficiency
-(menu-bar-mode 0)
-(fset 'yes-or-no-p 'y-or-n-p)
-(setq gc-cons-threshold 10485760)
-(setq kill-read-only-ok t)
-; Cleanliness
-(setq-default indent-tabs-mode nil)
-(setq backup-inhibited t)
-(setq auto-save-default nil)
-; Time
-(setq display-time-day-and-date t)
-(setq display-time-24hr-format t)
-(display-time-mode 1)
-; Place
-(setq line-number-mode t)
-(setq column-number-mode t)
-EOF
-                echo export EDITOR=emacs >> .bash_profile
-        )
-
-        test -d root/usr/lib*/firefox/browser/defaults/preferences &&
-        (cd root/usr/lib*/firefox/browser/defaults/preferences
-                cat << 'EOF' > privacy.js
-// Opt out of allowing Mozilla to install random studies.
-pref("app.shield.optoutstudies.enabled", false);
-// Disable the beacon API for analytical trash.
-pref("beacon.enabled", false);
-// Don't recommend things.
-pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
-pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
-// Disable spam-tier nonsense on new tabs.
-pref("browser.newtabpage.enabled", false);
-// Don't send information to Mozilla.
-pref("datareporting.healthreport.uploadEnabled", false);
-// Never give up laptop battery information.
-pref("dom.battery.enabled", false);
-// Remove useless Pocket stuff.
-pref("extensions.pocket.enabled", false);
-// Never send location data.
-pref("geo.enabled", false);
-// Send DNT all the time.
-pref("privacy.donottrackheader.enabled", true);
-// Prevent various cross-domain tracking methods.
-pref("privacy.firstparty.isolate", true);
-// Never try to save credentials.
-pref("signon.rememberSignons", false);
-EOF
-                cat << 'EOF' > usability.js
-// Fix the Ctrl+Tab behavior.
-pref("browser.ctrlTab.recentlyUsedOrder", false);
-// Never open more browser windows.
-pref("browser.link.open_newwindow.restriction", 0);
-// Include a sensible search bar.
-pref("browser.search.openintab", true);
-pref("browser.search.suggest.enabled", false);
-pref("browser.search.widget.inNavBar", true);
-// Restore sessions instead of starting at home, and make the home page blank.
-pref("browser.startup.homepage", "about:blank");
-pref("browser.startup.page", 3);
-// Fit more stuff on the screen.
-pref("browser.tabs.drawInTitlebar", true);
-pref("browser.uidensity", 1);
-// Stop hiding protocols.
-pref("browser.urlbar.trimURLs", false);
-// Enable some mildly useful developer tools.
-pref("devtools.command-button-rulers.enabled", true);
-pref("devtools.command-button-scratchpad.enabled", true);
-pref("devtools.command-button-screenshot.enabled", true);
-// Make the developer tools frame match the browser theme.
-pref("devtools.theme", "dark");
-// Display when messages are logged.
-pref("devtools.webconsole.timestampMessages", true);
-// Shut up.
-pref("general.warnOnAboutConfig", false);
-// Stop stretching PDFs off the screen for no reason.
-pref("pdfjs.defaultZoomValue", "page-fit");
-// Prefer the PDF outline display.
-pref("pdfjs.sidebarViewOnLoad", 2);
-// Guess that odd-spread is going to be the most common case.
-pref("pdfjs.spreadModeOnLoad", 1);
-// Make widgets on web pages match the rest of the desktop.
-pref("widget.content.allow-gtk-dark-theme", true);
-EOF
-        )
-
-        test -x root/usr/bin/vlc && mkdir -p root/etc/skel/.config/vlc &&
-        (cd root/etc/skel/.config/vlc
-                cat << 'EOF' > vlc-qt-interface.conf
-[MainWindow]
-MainToolbar1="64;64;38;65"
-MainToolbar2="0-2;64;3;1;4;64;7;9;64;10;20;19;64-4;39;37;65;35-4;"
-adv-controls=4
-EOF
-                cat << 'EOF' > vlcrc
-[qt]
-qt-privacy-ask=0
-[core]
-metadata-network-access=0
-EOF
-        )
-
-        cat << 'EOF' > root/etc/vconsole.conf
-FONT="eurlatgr"
-KEYMAP="emacs2"
+        cat << 'EOF' >> root/etc/skel/.bashrc
+function defer() {
+        local -r cmd="$(trap -p EXIT)"
+        eval "trap -- '$*;'${cmd:8:-5} EXIT"
+}
 EOF
 
         test -d root/usr/lib/locale/en_US.utf8 &&
@@ -652,6 +448,9 @@ EOF
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime
 
         # WORKAROUNDS
+
+        test -x root/usr/libexec/upowerd &&
+        echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
         cat << 'EOF' > root/usr/lib/tmpfiles.d/var-mail.conf
 # User modification commands expect a mail spool directory to exist.
@@ -666,6 +465,28 @@ EOF
 ExecStartPre=-/usr/bin/mkdir -p /var/lib/systemd
 ExecStartPre=-/usr/sbin/restorecon -vFR /var
 EOF
+}
+
+function finalize_packages() {
+        local dir
+
+        # Regenerate gsettings defaults.
+        if test -x root/usr/bin/glib-compile-schemas
+        then
+                test -d root/usr/share/glib-2.0/schemas
+                chroot root /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas
+        fi
+
+        # Run depmod when kernel modules are installed.
+        dir=$(compgen -G 'root/lib/modules/*') &&
+        depmod --basedir=root "${dir##*/}"
+
+        # Move the giant hardware database to /usr when udev is installed.
+        rm -f root/etc/udev/hwdb.bin
+        test -x /bin/systemd-hwdb && systemd-hwdb --root=root --usr update
+
+        # Create users now so it doesn't need to happen during boot.
+        systemd-sysusers --root=root
 }
 
 function produce_uefi_exe() if opt uefi

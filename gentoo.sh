@@ -40,7 +40,8 @@ echo -selinux >> /etc/portage/profile/use.force
 echo -e 'sslv2\nsslv3\n-systemd' >> /etc/portage/profile/use.mask
 
 # Accept the newest kernel and SELinux policy.
-echo sys-kernel/gentoo-sources >> /etc/portage/package.accept_keywords/gentoo-sources.conf
+echo sys-kernel/gentoo-sources >> /etc/portage/package.accept_keywords/linux.conf
+echo sys-kernel/linux-headers >> /etc/portage/package.accept_keywords/linux.conf
 echo 'sec-policy/*' >> /etc/portage/package.accept_keywords/selinux.conf
 
 # Accept CPU microcode licenses.
@@ -116,6 +117,7 @@ function install_packages() {
 
         mkdir -p "$ROOT"/{lib,lib64,usr/{lib,lib64,src}}
 
+        opt bootable && test -s /usr/src/linux/.config
         if test -s /usr/src/linux/.config
         then
                 make -C /usr/src/linux -j$(nproc) V=1
@@ -150,13 +152,7 @@ function distro_tweaks() {
         ln -fns ../proc/self/mounts root/etc/mtab
 
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
-        cat << 'EOF' >> root/etc/skel/.bashrc
-alias ll='ls -l'
-function defer() {
-        local -r cmd="$(trap -p EXIT)"
-        eval "trap -- '$*;'${cmd:8:-5} EXIT"
-}
-EOF
+        echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
 }
 
 function save_boot_files() if opt bootable

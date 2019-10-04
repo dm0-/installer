@@ -125,5 +125,4 @@ function customize() {
 
         # Install the out-of-tree kernel driver.
         install -pm 0644 -t root/lib/modules/*/kernel/drivers/net/wireless rtl8812au/88XXau.ko
-        depmod --basedir=root "$(cd root/lib/modules ; echo *)"
 }

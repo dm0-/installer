@@ -158,16 +158,7 @@ use-transparent-background=true
 use-theme-colors=false
 EOF
 
-        compgen -G 'root/usr/share/glib-2.0/schemas/*.gschema.override' &&
-        chroot root /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas
-
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
-        cat << 'EOF' >> root/etc/skel/.bashrc
-function defer() {
-        local -r cmd="$(trap -p EXIT)"
-        eval "trap -- '$*;'${cmd:8:-5} EXIT"
-}
-EOF
 }
 
 function save_boot_files() if opt bootable
