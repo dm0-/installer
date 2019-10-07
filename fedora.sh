@@ -39,7 +39,6 @@ function create_buildroot() {
 
 function install_packages() {
         opt bootable || opt networkd && packages+=(systemd)
-        opt iptables && packages+=(iptables-services)
         opt selinux && packages+=(selinux-policy-targeted)
 
         mkdir -p root/var/cache/dnf
@@ -57,6 +56,8 @@ function install_packages() {
 
 function distro_tweaks() {
         exclude_paths+=('usr/lib/.build-id')
+
+        rm -fr root/etc/inittab root/etc/rc.d
 
         test -x root/usr/bin/update-crypto-policies &&
         chroot root /usr/bin/update-crypto-policies --set FUTURE
@@ -131,7 +132,6 @@ sleep-inactive-battery-type='nothing'
 [org.gnome.settings-daemon.plugins.xsettings]
 antialiasing='rgba'
 hinting='full'
-overrides={'Gtk/ButtonImages':<1>,'Gtk/MenuImages':<1>}
 [org.gnome.shell]
 always-show-log-out=true
 favorite-apps=['firefox.desktop','vlc.desktop','gnome-terminal.desktop']
@@ -190,8 +190,7 @@ Requires=dev-mapper-root.device'
         fi
 
         # Create a generator to handle verity ramdisks since dm-init can't.
-        opt verity &&
-        if test "x${options[distro]}" = xcentos || opt ramdisk
+        opt verity && if opt ramdisk
         then
                 local -r gendir=/usr/lib/systemd/system-generators
                 $mkdir -p "$buildroot$gendir"

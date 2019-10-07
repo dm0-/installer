@@ -3,7 +3,6 @@
 # enough tools to build and run anything else in VMs or containers.
 
 options+=(
-        [iptables]=1  # Enable a firewall to block all inbound connections.
         [networkd]=   # Disable networkd so the desktop can use NetworkManager.
         [selinux]=1   # Enforce a targeted SELinux policy.
         [squash]=1    # Use a highly compressed file system to save space.
@@ -36,6 +35,7 @@ packages+=(
         ## Network
         bind-utils
         iproute
+        iptables-services
         iputils
         net-tools
         openssh-clients

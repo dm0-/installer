@@ -112,7 +112,6 @@ function install_packages() {
         local -rx PKGDIR="$ROOT/var/cache/binpkgs"
 
         opt bootable || opt networkd && packages+=(sys-apps/systemd)
-        opt iptables && packages+=(net-firewall/iptables)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
 
         mkdir -p "$ROOT"/{lib,lib64,usr/{lib,lib64,src}}
@@ -216,19 +215,11 @@ CONFIG_RETPOLINE=y'
 CONFIG_64BIT=y
 CONFIG_SMP=y
 CONFIG_X86_LOCAL_APIC=y'
-        opt iptables || opt networkd && echo '# Network settings
+        opt networkd && echo '# Network settings
 CONFIG_NET=y
 CONFIG_INET=y
 CONFIG_IPV6=y
 CONFIG_PACKET=y'
-        opt iptables && echo '# Firewall settings
-CONFIG_NETFILTER=y
-CONFIG_NF_CONNTRACK=y
-CONFIG_NETFILTER_XT_MATCH_STATE=y
-CONFIG_IP_NF_IPTABLES=y
-CONFIG_IP_NF_FILTER=y
-CONFIG_IP6_NF_IPTABLES=y
-CONFIG_IP6_NF_FILTER=y'
         opt ramdisk && echo '# Initrd settings
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_RD_XZ=y

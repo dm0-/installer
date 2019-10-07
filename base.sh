@@ -4,7 +4,6 @@ exclude_paths=({boot,dev,home,media,proc,run,srv,sys,tmp}/'*')
 declare -A options
 options[distro]=fedora
 options[bootable]=   # Include a kernel and init system to boot the image
-options[iptables]=   # Configure a strict firewall by default
 options[networkd]=   # Enable minimal DHCP networking without NetworkManager
 options[nspawn]=     # Create an executable file that runs in nspawn
 options[partuuid]=   # The partition UUID for verity to map into the root FS
@@ -97,6 +96,7 @@ function opt() { test -n "${options["${*?}"]-}" ; }
 function enter() {
         $nspawn \
             --bind="$output:/wd" \
+            $(test -e /dev/kvm && echo --bind=/dev/kvm) \
             ${loop:+--bind="$loop:/dev/loop-root"} \
             --chdir=/wd \
             --directory="$buildroot" \
@@ -131,15 +131,13 @@ fi
 function mount_root() if opt selinux || ! opt squash
 then
         mkfs.ext4 -m 0 /dev/loop-root
-        mkdir -p root  # CentOS 7
-        mount /dev/loop-root root ; trap -- 'umount root' EXIT
+        mount -o X-mount.mkdir /dev/loop-root root ; trap -- 'umount root' EXIT
 fi
 
 function unmount_root() if opt selinux || ! opt squash
 then
         e4defrag root
         umount root ; trap - EXIT
-        test "x${options[distro]}" != xcentos &&  # CentOS 7
         opt read_only && tune2fs -O read-only /dev/loop-root
         e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
 fi
@@ -243,7 +241,7 @@ EOF
         mkdir -p "$root/sysroot"
         ln -fn final.img "$root/sysroot/root.img"
         find "$root" -mindepth 1 -printf '%P\n' |
-        { cd "$root" ; cpio -H newc -R 0:0 -o ; } |  # CentOS 7
+        cpio -D "$root" -H newc -R 0:0 -o |
         xz --check=crc32 -9e | cat initrd.img - > ramdisk.img
 fi
 
@@ -252,7 +250,6 @@ then
         local dmsetup=dm-mod.create
         local root=/dev/sda
 
-        test "x${options[distro]}" = xcentos ||  # CentOS <= 8
         opt ramdisk && dmsetup=DVR
 
         opt partuuid && root=PARTUUID=${options[partuuid]}
@@ -532,6 +529,20 @@ EOF
 fi
 
 # OPTIONAL (IMAGE)
+
+function double_display_scale() {
+        compgen -G 'root/lib/kbd/consolefonts/latarcyrheb-sun32.*' &&
+        sed -i -e '/^FONT=/d' root/etc/vconsole.conf &&
+        echo 'FONT="latarcyrheb-sun32"' >> root/etc/vconsole.conf
+
+        test -s root/usr/share/glib-2.0/schemas/org.gnome.settings-daemon.plugins.xsettings.gschema.xml &&
+        cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_display.scale.gschema.override
+[org.gnome.settings-daemon.plugins.xsettings]
+overrides={'Gdk/WindowScalingFactor':<2>}
+EOF
+
+        return 0
+}
 
 function store_home_on_var() {
         opt selinux && echo /var/home /home >> root/etc/selinux/targeted/contexts/files/file_contexts.subs

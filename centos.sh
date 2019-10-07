@@ -3,13 +3,15 @@
 packages=()
 packages_buildroot=()
 
-DEFAULT_RELEASE=7.6.1810
+DEFAULT_ARCH=$($uname -m)
+DEFAULT_RELEASE=7
+options[arch]=$DEFAULT_ARCH
 options[networkd]=
 options[release]=$DEFAULT_RELEASE
 options[uefi]=
 
 function create_buildroot() {
-        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}/docker/centos-${options[release]%%.*}-docker.tar.xz"
+        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-${options[arch]:=$DEFAULT_ARCH}/docker/centos-${options[release]}-${options[arch]}-docker.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel microcode_ctl)
         opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
@@ -25,8 +27,6 @@ function create_buildroot() {
         $rm -f "$output/image.tar.xz"
 
         configure_initrd_generation
-        opt bootable && opt verity && echo 'add_dracutmodules+=" dm "' \
-            >> "$buildroot/etc/dracut.conf.d/99-settings.conf"
 
         enter /usr/bin/yum --assumeyes upgrade
         enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
@@ -37,7 +37,6 @@ function create_buildroot() {
 
 function install_packages() {
         opt bootable && packages+=(systemd)
-        opt iptables && packages+=(iptables-services NetworkManager)  # No networkd on CentOS 7
         opt selinux && packages+=(selinux-policy-targeted)
 
         mkdir -p root/var/cache/yum
@@ -45,7 +44,7 @@ function install_packages() {
         trap -- 'umount root/var/cache/yum' RETURN
 
         yum --assumeyes --installroot="$PWD/root" \
-            --releasever="${options[release]%%.*}" \
+            --releasever="${options[release]}" \
             install "${packages[@]:-filesystem}" "$@"
 
         rpm -qa | sort > packages-buildroot.txt
@@ -56,8 +55,7 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
-        test -e root/etc/sysconfig/network ||
-        touch root/etc/sysconfig/network
+        rm -fr root/etc/chkconfig.d root/etc/init{.d,tab} root/etc/rc{.d,.local,[0-6].d}
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
@@ -72,6 +70,13 @@ elif opt selinux
 then cp -p /boot/vmlinuz-* vmlinuz.relabel
 fi
 
+# Override ext4 file system handling to work with old CentOS command options.
+eval "$(
+declare -f mount_root | $sed 's/ount -o X-mount.mkdir /kdir -p root ; mount /'
+declare -f unmount_root | $sed 's/tune2fs -O read-only/: &/'
+)"
+
+# Override SELinux labeling to work with the CentOS kernel (and no busybox).
 function relabel() if opt selinux
 then
         local -r kernel=vmlinuz$(test -s vmlinuz.relabel && echo .relabel)
@@ -91,10 +96,20 @@ done
 mount /dev/sda /sysroot
 load_policy -i
 setfiles -vFr /sysroot{,/etc/selinux/targeted/contexts/files/file_contexts,}
+mksquashfs /sysroot /sysroot/squash.img -noappend -comp xz -wildcards -ef /ef
 umount /sysroot
 echo o > /proc/sysrq-trigger
 exec sleep 60
 EOF
+
+        if opt squash
+        then
+                disk=squash.img
+                echo "$disk" > "$root/ef"
+                (IFS=$'\n' ; exec echo "${exclude_paths[*]}" >> "$root/ef")
+                cp -t "$root/bin" /usr/sbin/mksquashfs
+        else cp /bin/true "$root/bin/mksquashfs"
+        fi
 
         cp -t "$root/bin" \
             /usr/*bin/{bash,load_policy,mount,setfiles,sleep,umount}
@@ -115,19 +130,32 @@ EOF
         xz --check=crc32 -9e > relabel.img
 
         umount root ; trap - EXIT
-        /usr/libexec/qemu-kvm -nodefaults -m 1G -serial stdio < /dev/null \
+        local -r cores=$(test -e /dev/kvm && nproc)
+        /usr/libexec/qemu-kvm -nodefaults -serial stdio < /dev/null \
+            ${cores:+-cpu host -smp cores="$cores"} -m 1G \
             -kernel "$kernel" -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root ; trap -- 'umount root' EXIT
+        ! opt squash || mv -t . "root/$disk"
 fi
 
-function squash() if opt squash
-then
-        local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
-        disk=squash.img
-        mksquashfs root "$disk" -noappend "$xattrs" -comp xz \
-            -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
-fi
+# Override squashfs creation since CentOS doesn't support zstd.
+opt selinux && function squash() { : ; } ||
+eval "$(declare -f squash | $sed 's/ zstd .* 22 / xz /')"
+
+# Override ramdisk creation to support old CentOS cpio options.
+eval "$(declare -f build_ramdisk |
+$sed 's/cpio -D \([^ ]*\) \([^|]*\)|/{ cd \1 ; cpio \2 ; } |/'
+)"
+
+# Override dm-init with userspace since the CentOS kernel is too old.
+eval "$(
+declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/'
+declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/
+# CentOS does not add device mapper support to the initrd by default.
+/hostonly=/r'<(echo \
+    "opt verity && echo 'add_dracutmodules+=\" dm \"'" \
+    '>> "$buildroot/etc/dracut.conf.d/99-settings.conf"'))"
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
@@ -170,7 +198,7 @@ EOF
 # OPTIONAL (BUILDROOT)
 
 function enable_epel() {
-        local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]%%.*}.noarch.rpm"
+        local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
         script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -210,7 +238,7 @@ EOF
 }
 
 function enable_rpmfusion() {
-        local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]%%.*}/x86_64/r/rpmfusion-free-release-${options[release]%%.*}-4.noarch.rpm"
+        local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/${options[arch]}/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
         enable_epel
         script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
@@ -254,12 +282,10 @@ EOF
 
 # OPTIONAL (IMAGE)
 
-eval "_$(declare -f store_home_on_var)"
-function store_home_on_var() {
-        "_${FUNCNAME[0]}" "$@"
-        sed -i -e 's/^Q /d /' root/usr/lib/tmpfiles.d/home.conf
-}
+# Override the tmpfiles leaf quota group since CentOS systemd is too old.
+eval "$(declare -f store_home_on_var | $sed 's/Q /d /')"
 
 # WORKAROUNDS
 
+# CentOS is too old to provide sysusers, so just pretend it always works.
 function systemd-sysusers() { : ; }
