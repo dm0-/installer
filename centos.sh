@@ -1,23 +1,17 @@
 . fedora.sh  # Inherit Fedora's RPM functions.
 
-packages=()
-packages_buildroot=()
-
-DEFAULT_ARCH=$($uname -m)
-DEFAULT_RELEASE=7
-options[arch]=$DEFAULT_ARCH
+DEFAULT_RELEASE=8
 options[networkd]=
-options[release]=$DEFAULT_RELEASE
-options[uefi]=
 
 function create_buildroot() {
-        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-${options[arch]:=$DEFAULT_ARCH}/docker/centos-${options[release]}-${options[arch]}-docker.tar.xz"
+        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-container.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel microcode_ctl)
-        opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
+        opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
+        opt bootable && opt squash && packages_buildroot+=(kernel-modules)
+        opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
-        opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        opt uefi && packages_buildroot+=(centos-logos)
         packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
@@ -28,53 +22,39 @@ function create_buildroot() {
 
         configure_initrd_generation
 
-        enter /usr/bin/yum --assumeyes upgrade
-        enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
+        # Disable bad packaging options.
+        $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
 
-        # Let the configuration decide if the system should have documentation.
-        $sed -i -e '/^tsflags=/d' "$buildroot/etc/yum.conf"
-}
-
-function install_packages() {
-        opt bootable && packages+=(systemd)
-        opt selinux && packages+=(selinux-policy-targeted)
-
-        mkdir -p root/var/cache/yum
-        mount --bind /var/cache/yum root/var/cache/yum
-        trap -- 'umount root/var/cache/yum' RETURN
-
-        yum --assumeyes --installroot="$PWD/root" \
-            --releasever="${options[release]}" \
-            install "${packages[@]:-filesystem}" "$@"
-
-        rpm -qa | sort > packages-buildroot.txt
-        rpm --root="$PWD/root" -qa | sort > packages.txt
+        enter /usr/bin/dnf --assumeyes upgrade
+        enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
 }
 
 function distro_tweaks() {
+        exclude_paths+=('usr/lib/.build-id')
+
+        rm -fr root/etc/chkconfig.d root/etc/init{.d,tab} root/etc/rc{.d,.local,[0-6].d}
+
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
-        rm -fr root/etc/chkconfig.d root/etc/init{.d,tab} root/etc/rc{.d,.local,[0-6].d}
+        test -x root/usr/bin/update-crypto-policies &&
+        chroot root /usr/bin/update-crypto-policies --set FUTURE
+
+        test -s root/etc/dnf/dnf.conf &&
+        sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg logo.bmp
-        cp -p /boot/vmlinuz-* vmlinuz
-        cp -p /boot/initramfs-* initrd.img
+        # convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg logo.bmp
+        cp -pt . /lib/modules/*/vmlinuz
+        cp -p /boot/*/*/initrd initrd.img
         cp -pt . root/etc/os-release
 elif opt selinux
-then cp -p /boot/vmlinuz-* vmlinuz.relabel
+then cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
 fi
-
-# Override ext4 file system handling to work with old CentOS command options.
-eval "$(
-declare -f mount_root | $sed 's/ount -o X-mount.mkdir /kdir -p root ; mount /'
-declare -f unmount_root | $sed 's/tune2fs -O read-only/: &/'
-)"
 
 # Override SELinux labeling to work with the CentOS kernel (and no busybox).
 function relabel() if opt selinux
@@ -90,7 +70,7 @@ export PATH=/bin
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
-for mod in crct10dif_common crc-t10dif sd_mod libata ata_piix jbd2 mbcache ext4
+for mod in sd_mod libata ata_piix jbd2 mbcache ext4
 do insmod "/lib/$mod.ko"
 done
 mount /dev/sda /sysroot
@@ -115,7 +95,7 @@ EOF
             /usr/*bin/{bash,load_policy,mount,setfiles,sleep,umount}
         cp /usr/bin/kmod "$root/bin/insmod"
         find /usr/lib/modules/*/kernel '(' \
-            -name crct10dif_common.ko.xz -o -name crc-t10dif.ko.xz -o -name sd_mod.ko.xz -o \
+            -name sd_mod.ko.xz -o \
             -name libata.ko.xz -o -name ata_piix.ko.xz -o \
             -name ext4.ko.xz -o -name jbd2.ko.xz -o -name mbcache.ko.xz -o \
             -false ')' -exec cp -at "$root/lib" '{}' +
@@ -126,7 +106,7 @@ EOF
         while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
-        { cd "$root" ; cpio -H newc -R 0:0 -o ; } |
+        cpio -D "$root" -H newc -R 0:0 -o |
         xz --check=crc32 -9e > relabel.img
 
         umount root ; trap - EXIT
@@ -143,19 +123,11 @@ fi
 opt selinux && function squash() { : ; } ||
 eval "$(declare -f squash | $sed 's/ zstd .* 22 / xz /')"
 
-# Override ramdisk creation to support old CentOS cpio options.
-eval "$(declare -f build_ramdisk |
-$sed 's/cpio -D \([^ ]*\) \([^|]*\)|/{ cd \1 ; cpio \2 ; } |/'
-)"
-
 # Override dm-init with userspace since the CentOS kernel is too old.
 eval "$(
 declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/'
-declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/
-# CentOS does not add device mapper support to the initrd by default.
-/hostonly=/r'<(echo \
-    "opt verity && echo 'add_dracutmodules+=\" dm \"'" \
-    '>> "$buildroot/etc/dracut.conf.d/99-settings.conf"'))"
+declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/'
+)"
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
@@ -164,32 +136,32 @@ function verify_distro() {
         $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBFOn/0sBEADLDyZ+DQHkcTHDQSE0a0B2iYAEXwpPvs67cJ4tmhe/iMOyVMh9
-Yw/vBIF8scm6T/vPN5fopsKiW9UsAhGKg0epC6y5ed+NAUHTEa6pSOdo7CyFDwtn
-4HF61Esyb4gzPT6QiSr0zvdTtgYBRZjAEPFVu3Dio0oZ5UQZ7fzdZfeixMQ8VMTQ
-4y4x5vik9B+cqmGiq9AW71ixlDYVWasgR093fXiD9NLT4DTtK+KLGYNjJ8eMRqfZ
-Ws7g7C+9aEGHfsGZ/SxLOumx/GfiTloal0dnq8TC7XQ/JuNdB9qjoXzRF+faDUsj
-WuvNSQEqUXW1dzJjBvroEvgTdfCJfRpIgOrc256qvDMp1SxchMFltPlo5mbSMKu1
-x1p4UkAzx543meMlRXOgx2/hnBm6H6L0FsSyDS6P224yF+30eeODD4Ju4BCyQ0jO
-IpUxmUnApo/m0eRelI6TRl7jK6aGqSYUNhFBuFxSPKgKYBpFhVzRM63Jsvib82rY
-438q3sIOUdxZY6pvMOWRkdUVoz7WBExTdx5NtGX4kdW5QtcQHM+2kht6sBnJsvcB
-JYcYIwAUeA5vdRfwLKuZn6SgAUKdgeOtuf+cPR3/E68LZr784SlokiHLtQkfk98j
-NXm6fJjXwJvwiM2IiFyg8aUwEEDX5U+QOCA0wYrgUQ/h8iathvBJKSc9jQARAQAB
-tEJDZW50T1MtNyBLZXkgKENlbnRPUyA3IE9mZmljaWFsIFNpZ25pbmcgS2V5KSA8
-c2VjdXJpdHlAY2VudG9zLm9yZz6JAjUEEwECAB8FAlOn/0sCGwMGCwkIBwMCBBUC
-CAMDFgIBAh4BAheAAAoJECTGqKf0qA61TN0P/2730Th8cM+d1pEON7n0F1YiyxqG
-QzwpC2Fhr2UIsXpi/lWTXIG6AlRvrajjFhw9HktYjlF4oMG032SnI0XPdmrN29lL
-F+ee1ANdyvtkw4mMu2yQweVxU7Ku4oATPBvWRv+6pCQPTOMe5xPG0ZPjPGNiJ0xw
-4Ns+f5Q6Gqm927oHXpylUQEmuHKsCp3dK/kZaxJOXsmq6syY1gbrLj2Anq0iWWP4
-Tq8WMktUrTcc+zQ2pFR7ovEihK0Rvhmk6/N4+4JwAGijfhejxwNX8T6PCuYs5Jiv
-hQvsI9FdIIlTP4XhFZ4N9ndnEwA4AH7tNBsmB3HEbLqUSmu2Rr8hGiT2Plc4Y9AO
-aliW1kOMsZFYrX39krfRk2n2NXvieQJ/lw318gSGR67uckkz2ZekbCEpj/0mnHWD
-3R6V7m95R6UYqjcw++Q5CtZ2tzmxomZTf42IGIKBbSVmIS75WY+cBULUx3PcZYHD
-ZqAbB0Dl4MbdEH61kOI8EbN/TLl1i077r+9LXR1mOnlC3GLD03+XfY8eEBQf7137
-YSMiW5r/5xwQk7xEcKlbZdmUJp3ZDTQBXT06vavvp3jlkqqH9QOE8ViZZ6aKQLqv
-pL+4bs52jzuGwTMT7gOR5MzD+vT0fVS7Xm8MjOxvZgbHsAgzyFGlI1ggUQmU7lu3
-uPNL0eRx4S1G4Jn5
-=OGYX
+mQINBFzMWxkBEADHrskpBgN9OphmhRkc7P/YrsAGSvvl7kfu+e9KAaU6f5MeAVyn
+rIoM43syyGkgFyWgjZM8/rur7EMPY2yt+2q/1ZfLVCRn9856JqTIq0XRpDUe4nKQ
+8BlA7wDVZoSDxUZkSuTIyExbDf0cpw89Tcf62Mxmi8jh74vRlPy1PgjWL5494b3X
+5fxDidH4bqPZyxTBqPrUFuo+EfUVEqiGF94Ppq6ZUvrBGOVo1V1+Ifm9CGEK597c
+aevcGc1RFlgxIgN84UpuDjPR9/zSndwJ7XsXYvZ6HXcKGagRKsfYDWGPkA5cOL/e
+f+yObOnC43yPUvpggQ4KaNJ6+SMTZOKikM8yciyBwLqwrjo8FlJgkv8Vfag/2UR7
+JINbyqHHoLUhQ2m6HXSwK4YjtwidF9EUkaBZWrrskYR3IRZLXlWqeOi/+ezYOW0m
+vufrkcvsh+TKlVVnuwmEPjJ8mwUSpsLdfPJo1DHsd8FS03SCKPaXFdD7ePfEjiYk
+nHpQaKE01aWVSLUiygn7F7rYemGqV9Vt7tBw5pz0vqSC72a5E3zFzIIuHx6aANry
+Gat3aqU3qtBXOrA/dPkX9cWE+UR5wo/A2UdKJZLlGhM2WRJ3ltmGT48V9CeS6N9Y
+m4CKdzvg7EWjlTlFrd/8WJ2KoqOE9leDPeXRPncubJfJ6LLIHyG09h9kKQARAQAB
+tDpDZW50T1MgKENlbnRPUyBPZmZpY2lhbCBTaWduaW5nIEtleSkgPHNlY3VyaXR5
+QGNlbnRvcy5vcmc+iQI3BBMBAgAhBQJczFsZAhsDBgsJCAcDAgYVCAIJCgsDFgIB
+Ah4BAheAAAoJEAW1VbOEg8ZdjOsP/2ygSxH9jqffOU9SKyJDlraL2gIutqZ3B8pl
+Gy/Qnb9QD1EJVb4ZxOEhcY2W9VJfIpnf3yBuAto7zvKe/G1nxH4Bt6WTJQCkUjcs
+N3qPWsx1VslsAEz7bXGiHym6Ay4xF28bQ9XYIokIQXd0T2rD3/lNGxNtORZ2bKjD
+vOzYzvh2idUIY1DgGWJ11gtHFIA9CvHcW+SMPEhkcKZJAO51ayFBqTSSpiorVwTq
+a0cB+cgmCQOI4/MY+kIvzoexfG7xhkUqe0wxmph9RQQxlTbNQDCdaxSgwbF2T+gw
+byaDvkS4xtR6Soj7BKjKAmcnf5fn4C5Or0KLUqMzBtDMbfQQihn62iZJN6ZZ/4dg
+q4HTqyVpyuzMXsFpJ9L/FqH2DJ4exGGpBv00ba/Zauy7GsqOc5PnNBsYaHCply0X
+407DRx51t9YwYI/ttValuehq9+gRJpOTTKp6AjZn/a5Yt3h6jDgpNfM/EyLFIY9z
+V6CXqQQ/8JRvaik/JsGCf+eeLZOw4koIjZGEAg04iuyNTjhx0e/QHEVcYAqNLhXG
+rCTTbCn3NSUO9qxEXC+K/1m1kaXoCGA0UWlVGZ1JSifbbMx0yxq/brpEZPUYm+32
+o8XfbocBWljFUJ+6aljTvZ3LQLKTSPW7TFO+GXycAOmCGhlXh2tlc6iTc41PACqy
+yy+mHmSv
+=kkH7
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
         $gpg --verify "$@"
@@ -203,31 +175,31 @@ function enable_epel() {
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBFKuaIQBEAC1UphXwMqCAarPUH/ZsOFslabeTVO2pDk5YnO96f+rgZB7xArB
-OSeQk7B90iqSJ85/c72OAn4OXYvT63gfCeXpJs5M7emXkPsNQWWSju99lW+AqSNm
-jYWhmRlLRGl0OO7gIwj776dIXvcMNFlzSPj00N2xAqjMbjlnV2n2abAE5gq6VpqP
-vFXVyfrVa/ualogDVmf6h2t4Rdpifq8qTHsHFU3xpCz+T6/dGWKGQ42ZQfTaLnDM
-jToAsmY0AyevkIbX6iZVtzGvanYpPcWW4X0RDPcpqfFNZk643xI4lsZ+Y2Er9Yu5
-S/8x0ly+tmmIokaE0wwbdUu740YTZjCesroYWiRg5zuQ2xfKxJoV5E+Eh+tYwGDJ
-n6HfWhRgnudRRwvuJ45ztYVtKulKw8QQpd2STWrcQQDJaRWmnMooX/PATTjCBExB
-9dkz38Druvk7IkHMtsIqlkAOQMdsX1d3Tov6BE2XDjIG0zFxLduJGbVwc/6rIc95
-T055j36Ez0HrjxdpTGOOHxRqMK5m9flFbaxxtDnS7w77WqzW7HjFrD0VeTx2vnjj
-GqchHEQpfDpFOzb8LTFhgYidyRNUflQY35WLOzLNV+pV3eQ3Jg11UFwelSNLqfQf
-uFRGc+zcwkNjHh5yPvm9odR1BIfqJ6sKGPGbtPNXo7ERMRypWyRz0zi0twARAQAB
-tChGZWRvcmEgRVBFTCAoNykgPGVwZWxAZmVkb3JhcHJvamVjdC5vcmc+iQI4BBMB
-AgAiBQJSrmiEAhsPBgsJCAcDAgYVCAIJCgsEFgIDAQIeAQIXgAAKCRBqL66iNSxk
-5cfGD/4spqpsTjtDM7qpytKLHKruZtvuWiqt5RfvT9ww9GUUFMZ4ZZGX4nUXg49q
-ixDLayWR8ddG/s5kyOi3C0uX/6inzaYyRg+Bh70brqKUK14F1BrrPi29eaKfG+Gu
-MFtXdBG2a7OtPmw3yuKmq9Epv6B0mP6E5KSdvSRSqJWtGcA6wRS/wDzXJENHp5re
-9Ism3CYydpy0GLRA5wo4fPB5uLdUhLEUDvh2KK//fMjja3o0L+SNz8N0aDZyn5Ax
-CU9RB3EHcTecFgoy5umRj99BZrebR1NO+4gBrivIfdvD4fJNfNBHXwhSH9ACGCNv
-HnXVjHQF9iHWApKkRIeh8Fr2n5dtfJEF7SEX8GbX7FbsWo29kXMrVgNqHNyDnfAB
-VoPubgQdtJZJkVZAkaHrMu8AytwT62Q4eNqmJI1aWbZQNI5jWYqc6RKuCK6/F99q
-thFT9gJO17+yRuL6Uv2/vgzVR1RGdwVLKwlUjGPAjYflpCQwWMAASxiv9uPyYPHc
-ErSrbRG0wjIfAR3vus1OSOx3xZHZpXFfmQTsDP7zVROLzV98R3JwFAxJ4/xqeON4
-vCPFU6OsT3lWQ8w7il5ohY95wmujfr6lk89kEzJdOTzcn7DBbUru33CQMGKZ3Evt
-RjsC7FDbL017qxS+ZVA/HGkyfiu4cpgV8VUnbql5eAZ+1Ll6Dw==
-=hdPa
+mQINBFz3zvsBEADJOIIWllGudxnpvJnkxQz2CtoWI7godVnoclrdl83kVjqSQp+2
+dgxuG5mUiADUfYHaRQzxKw8efuQnwxzU9kZ70ngCxtmbQWGmUmfSThiapOz00018
++eo5MFabd2vdiGo1y+51m2sRDpN8qdCaqXko65cyMuLXrojJHIuvRA/x7iqOrRfy
+a8x3OxC4PEgl5pgDnP8pVK0lLYncDEQCN76D9ubhZQWhISF/zJI+e806V71hzfyL
+/Mt3mQm/li+lRKU25Usk9dWaf4NH/wZHMIPAkVJ4uD4H/uS49wqWnyiTYGT7hUbi
+ecF7crhLCmlRzvJR8mkRP6/4T/F3tNDPWZeDNEDVFUkTFHNU6/h2+O398MNY/fOh
+yKaNK3nnE0g6QJ1dOH31lXHARlpFOtWt3VmZU0JnWLeYdvap4Eff9qTWZJhI7Cq0
+Wm8DgLUpXgNlkmquvE7P2W5EAr2E5AqKQoDbfw/GiWdRvHWKeNGMRLnGI3QuoX3U
+pAlXD7v13VdZxNydvpeypbf/AfRyrHRKhkUj3cU1pYkM3DNZE77C5JUe6/0nxbt4
+ETUZBTgLgYJGP8c7PbkVnO6I/KgL1jw+7MW6Az8Ox+RXZLyGMVmbW/TMc8haJfKL
+MoUo3TVk8nPiUhoOC0/kI7j9ilFrBxBU5dUtF4ITAWc8xnG6jJs/IsvRpQARAQAB
+tChGZWRvcmEgRVBFTCAoOCkgPGVwZWxAZmVkb3JhcHJvamVjdC5vcmc+iQI4BBMB
+AgAiBQJc9877AhsPBgsJCAcDAgYVCAIJCgsEFgIDAQIeAQIXgAAKCRAh6kWrL4bW
+oWagD/4xnLWws34GByVDQkjprk0fX7Iyhpm/U7BsIHKspHLL+Y46vAAGY/9vMvdE
+0fcr9Ek2Zp7zE1RWmSCzzzUgTG6BFoTG1H4Fho/7Z8BXK/jybowXSZfqXnTOfhSF
+alwDdwlSJvfYNV9MbyvbxN8qZRU1z7PEWZrIzFDDToFRk0R71zHpnPTNIJ5/YXTw
+NqU9OxII8hMQj4ufF11040AJQZ7br3rzerlyBOB+Jd1zSPVrAPpeMyJppWFHSDAI
+WK6x+am13VIInXtqB/Cz4GBHLFK5d2/IYspVw47Solj8jiFEtnAq6+1Aq5WH3iB4
+bE2e6z00DSF93frwOyWN7WmPIoc2QsNRJhgfJC+isGQAwwq8xAbHEBeuyMG8GZjz
+xohg0H4bOSEujVLTjH1xbAG4DnhWO/1VXLX+LXELycO8ZQTcjj/4AQKuo4wvMPrv
+9A169oETG+VwQlNd74VBPGCvhnzwGXNbTK/KH1+WRH0YSb+41flB3NKhMSU6dGI0
+SGtIxDSHhVVNmx2/6XiT9U/znrZsG5Kw8nIbbFz+9MGUUWgJMsd1Zl9R8gz7V9fp
+n7L7y5LhJ8HOCMsY/Z7/7HUs+t/A1MI4g7Q5g5UuSZdgi0zxukiWuCkLeAiAP4y7
+zKK4OjJ644NDcWCHa36znwVmkz3ixL8Q0auR15Oqq2BjR/fyog==
+=84m8
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$url" > epel.rpm
@@ -238,38 +210,38 @@ EOF
 }
 
 function enable_rpmfusion() {
-        local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/${options[arch]}/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
+        local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
         enable_epel
         script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBFVE8DcBEACmsFjnapHXm5l0dXbyxXZU8sZVawRIQ/lG9Yc9tSICcY8QuSxu
-636wsVHiQHd0sIipk6vvgWfTTV+w0OxyovY8PFciEtOC4JZBJO1cT952sDxRTzcU
-Y+DArqPUwqyMqJo86BxwoQi9qdg4eNlp5RNamzbu2yKpPZUk4RWF0QnlEJ5bQ8xY
-Q2HyzR6YUsKBuCbNV/OevxxSjSFesWqmE2zIFVDsNvS+FGbH6SwDrKgBeDHCeg35
-KQgHyNkONoe7EjfCVdWwWsOdo9pqEKZKd4U6Sz234d9JqvF7y3+Lc85l/TxU+G/C
-uXxRki5XVx3sMH0UgK0nn0fBEv95Dtq5I7EWNYDOesFDbBRjhqo5dh51yOcfn1QO
-ATKGwo2WZTGc32kOXwu/zzZaT37HulyOpJ/8jAoOQ6qH5T7RDy2M1vlAvGcdy2dz
-GUyD2bNlPSp1exw6CWOXjty/9nOglJBBsr/YwTundSKpZSKPkn3z74ZAD4Pqviwx
-yRsk1UjHlCm8sPfahkpRheFKDJT/wIBUhI7tbzyfxMaNwryc1U+yOiAl92sMr8ra
-a0CGk48cFa6vulSq/ELdt/qF+I0TywacaTvU3ySSd3Juff54c8ELNBjTGY4MAomk
-y1P755q83yBdYaRDU6U1ljKP1GP8Kgilk6QCWu1izFPepPK4Bi7ZGTUEhQARAQAB
-tE5SUE0gRnVzaW9uIGZyZWUgcmVwb3NpdG9yeSBmb3IgRUwgKDcpIDxycG1mdXNp
-b24tYnVpbGRzeXNAbGlzdHMucnBtZnVzaW9uLm9yZz6JAjIEEwECABwFAlVE8DcC
-GwMECwkIBwMVCAoDFgIAAh4BAheAAAoJEHWLPRj1z2weGigQAKO+ULRBzztGDg3m
-ev8rDEOfv49x3T4+tTYlMOtvsg8Jvi5okGp+bXO0qZkw8463Ljrs5FAW1/oIGFYA
-D9RMDnlgpDAhP6Gho/tGIPc6yfSHOUm2uS5Ve1Q7j3eBHr8IlAvpg/1U9IIS7LDU
-WcVNjpsBzog8pGXRBSYx5yi7ddP5GcQPLwn0TT7jkawzrlmfnMz3un6gaxgFIxmS
-wzd+lr7CHP3Lptxt3Oe5pliEQ58kuBzt0gkxGkkbeRyolareanJBlIozYIM3TQum
-K4UbXIjPWlHr02z+qtrkpkDgM5aO+rEPGctd4W12zT5Gqp5Ij5fuFUHgFKvxf+0F
-t7RDWffAiKtk8HX0PoytIBY9fiQtZXjnbPq1rT65brz6bc85HR3sRx2+gn9IN+Cg
-OwdV7NoL8Dj7w3J5DMS1yT1KbmwRHHyKD0muL3NUw9RZXPmmUakbIvLZlERKhyca
-JZlkakLUOvesXcZg2Zqug36ET0AQO/Af7e6dw8jXBc4BN/R5U8LU0ENaB3apRcdF
-NEDqxPo98MGzIxqJUjWkwJfRvdqAPEM8JLeyhcuChsmwIGF0WbLsmVJ90LJxsoZQ
-G+iQKiFwF8HO6fBk4APSAtic+j+9uHoLMS9tWsLABmNQCvjtRe6hxz20yud672uo
-OEGWGYNPKeu56Dbc18pxBHez9m42
-=buWg
+mQINBFwzh0wBEADfwWMombl8hSzfzeWwGEyBXs4S+9YYmxgtFjnCzR4aUIXxevvf
+tY8YWWEeaIosG/V+XJuw+EjcKCDk0RpFimBIyO6IjwkJTVmFVYuzVc/O3fs64Hbl
+Dm1fMpOrnVUJnV59nUhDkcnYdysMPKuBJghw+a85FlhnlDlnVC94XPcD5QyTfjpR
+bfvCSCFSTobIHUoOI7SK7r7x+qldQeopnCQILZyhaeXDW+jFC1E50oaUtw2sMvfF
+q0d03f8yZsiJm2sVpPJ/zEJG8yXogJyEsfMXDoxn7sA8mP09W3cScci/fE7tIUu+
+3HXzAn8CqZRCxIp2uDvpeom7e8NqwIorWZDiP7IhdQr1sf4bud07buCdovmHRSjE
++IuW9gTFAHVFdL3dEwzOMKkdV3i6ru4VVjPm4K4SEbFHaKDrwJy+RlVmcPdH99HI
+aHqj5GU140D4grp814hkciy2EXiJP6qMqi8thAQof3ljr4ZZB3/g9tOl/zE865Xp
+RvmKS7qv45Vr6wCYvoquaAvm3wusUgQL3TWlAhfGqys13ijqmJIwz75YbL8J9hma
+biwLHl4xrWe5quNXdUsC/ijThKbl8duUWYw4nBN1azcVZHV2bZMgnxOsZp3zN0lU
+RB1K7U4kEni8c11PGHsL7uH/OuSy3Wq7WPpX7J5nrMbJMmqL3s5jyUkhVQARAQAB
+tE5SUE0gRnVzaW9uIGZyZWUgcmVwb3NpdG9yeSBmb3IgRUwgKDgpIDxycG1mdXNp
+b24tYnVpbGRzeXNAbGlzdHMucnBtZnVzaW9uLm9yZz6JAkUEEwEIAC8WIQSDeTXN
+GeEjqn+KjmmXnwxpFYs4EQUCXDOHTAIbAwQLCQgHAxUICgIeAQIXgAAKCRCXnwxp
+FYs4EVdWEADfHIbm/1o6Pf/KRU4SYLFm45AnDQ4OKCEH8y8SvvPJQMKZYnXfiblt
+XYK1ec6F4obgl2eNKZoIrKS6CBwu3NpvjWXCPBn/rkiksB7pbDid6j0veHrZmrnG
+6Ngo2VnGIjLcDRPcAn/WjzpevS8X9q6AF9bZoQ8BSoxCAoGueko1R02iWtZPlV1P
+IQEW2cF9HQdI1vw0Nh+ohiDO87/mNyVUdjootpncVnArlf5MGj8Ut9zo6yJSlxG0
+7lvMnreH4OeIaJPGYRHhsFtSfe7HbPaCmYAmlCFLmw3AhHuEnYSCAt2kMVxlUrAc
+li/FxEyXAKS/C2OYk3jDA215K/G14tBWDkNLwyULiURDH6lvWyRqyOVzr198AJLK
+3WK6G5RfngV82VyW0SX4XScnQxuk55HsMC8CKapmPtdjDjqR1qrKDe6umNskwPII
+tCU7ZZL+8Do/eMHqJgUBS5II+bSngVSfO4Yz/zeU0WWZhDirh9C3CeZ3kEVSLQq/
+eC9Zt2/x8xykXXKeswg5I0m0+FBAo9w2ChXyi9rQSFEScqCqml+7elQZTF/TrsHC
+Os+yoXdCv3hm0wFMdQl4PeXrzmZOB/kMC+XIESoRpRVBod2C6EzHKYCXzoY9iqla
+RmIw/1lMM/XnE/x+XQzvkcOQPHSxQ+iJjD5arhoROh2wCvfb3IPnYw==
+=Fpo1
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$url" > rpmfusion-free.rpm
@@ -280,12 +252,7 @@ exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
 }
 
-# OPTIONAL (IMAGE)
-
-# Override the tmpfiles leaf quota group since CentOS systemd is too old.
-eval "$(declare -f store_home_on_var | $sed 's/Q /d /')"
-
 # WORKAROUNDS
 
-# CentOS is too old to provide sysusers, so just pretend it always works.
-function systemd-sysusers() { : ; }
+# The CentOS 7 implementation is so different that it needs its own file.
+test "x${options[release]-}" != x7 || . centos7.sh

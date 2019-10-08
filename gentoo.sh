@@ -1,7 +1,6 @@
 packages=(sys-apps/baselayout sys-libs/glibc)
 packages_buildroot=()
 
-DEFAULT_ARCH=$($uname -m)
 DEFAULT_PROFILE=17.1
 DEFAULT_RELEASE=$($curl -L https://gentoo.osuosl.org/releases/amd64/autobuilds/latest-stage3-amd64-hardened-selinux+nomultilib.txt | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
 options[arch]=$DEFAULT_ARCH

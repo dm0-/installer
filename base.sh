@@ -1,3 +1,4 @@
+DEFAULT_ARCH=$($uname -m)
 disk=ext4.img
 exclude_paths=({boot,dev,home,media,proc,run,srv,sys,tmp}/'*')
 

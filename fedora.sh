@@ -3,11 +3,9 @@ packages_buildroot=(glibc-minimal-langpack)
 
 DEFAULT_RELEASE=30
 options[arch]=
-options[release]=$DEFAULT_RELEASE
 
 function create_buildroot() {
-        local -r arch=$($uname -m)
-        local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$arch/images/Fedora-Container-Base-${options[release]}-1.2.$arch.tar.xz"
+        local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-1.2.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
@@ -18,7 +16,7 @@ function create_buildroot() {
         packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
-        $curl -L "${image%-Base*}-${options[release]}-1.2-$arch-CHECKSUM" > "$output/checksum"
+        $curl -L "${image%-Base*}-${options[release]}-1.2-$DEFAULT_ARCH-CHECKSUM" > "$output/checksum"
         $curl -L "$image" > "$output/image.tar.xz"
         verify_distro "$output/checksum" "$output/image.tar.xz"
         $tar -xJOf "$output/image.tar.xz" '*/layer.tar' | $tar -C "$buildroot" -x

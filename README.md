@@ -49,14 +49,14 @@ The project is currently at the stage where I've just dumped some useful things 
 A few bits currently expect to be running on x86_64.  Three distros are supported to varying degrees:
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
-  - CentOS is too old to support the UEFI and networkd functionality until a CentOS 8 container image is available.
-  - Gentoo is currently untested due to hardware constraints, but it should support all features.
+  - CentOS does not include networkd, so you should always install `NetworkManager` for networking (and `iptables-services` for a firewall).  CentOS 7 is too old to support building a UEFI image.
+  - Gentoo supports all features in theory, but needs to be reworked to support nontrivial builds.  Its SELinux policy is currently unsupported with systemd, so it should not be run in enforcing mode.
 
 ### General
 
 **Improve the command-line interface.**  Automatic Secure Boot signing should be offered as an option here, which would need to specify which key to use.  There should also be an option to take a public keyring file that is used to verify the signature of the etc Git overlay commit on checkout, and maybe an SSH key to support securely cloning the repo as a means of automated provisioning.  Add validation error messages.
 
-**Implement content whitelisting.**  The images currently include all installed files with an option to blacklist paths using an exclude list.  The opposite should be supported for minimal systems, where individual files, directories, entire packages, and ELF binaries (as a shortcut for all linked libraries) can be listed for inclusion and everything else is dropped.  Also, the exclude list is only used with squashfs.
+**Implement content whitelisting.**  (There is a prototype in *TheBindingOfIsaac.sh*.)  The images currently include all installed files with an option to blacklist paths using an exclude list.  The opposite should be supported for minimal systems, where individual files, directories, entire packages, and ELF binaries (as a shortcut for all linked libraries) can be listed for inclusion and everything else is dropped.
 
 **Support an etc Git overlay for real.**  The `/etc` directory contains the read-only default configuration files with a writable overlay, and if Git is installed, the modified files in the overlay are tracked in a repository.  The repository database is saved in `/var` so the changes can be stored persistently.  At the moment, the Git overlay is mounted by a systemd generator when it's already running in the root file system.  This allows configuring services, but not things like `fstab` or other generators.  It needs to be set up by an initrd before pivoting to the real root file system, and it should verify the commit's signature so that everything is cryptographically verified in the booted system.
 
@@ -64,7 +64,7 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 **Fix the UEFI splash image colors.**  The distro logo colors are off when booting a UEFI executable, even though they are correct when viewing the source image.  Figure out how the colors need to be mapped.
 
-**Fix squashfs SELinux labels.**  The squashfs image appears to use the default context for a label that wasn't defined in the host policy (at least with CentOS 7).  This can result in errors in some cases.  If there is no easy way to fix this, the dumb solution of using the labeling VM to run `mksquashfs` works, but it will be horribly slow without passing through a host KVM device.  (The uncompressed ext4 image is not affected.)
+**Fix squashfs SELinux labels.**  (There is a prototype in CentOS.)  The squashfs image appears to use the default context for a label that wasn't defined in the host policy (at least with CentOS 7).  This can result in errors in some cases.  If there is no easy way to fix this, the dumb solution of using the labeling VM to run `mksquashfs` works, but it will be horribly slow without passing through a host KVM device.  (The uncompressed ext4 image is not affected.)
 
 **Instrument returning an error state from the SELinux labeling virtual machine.**  If labeling fails right now, the build system won't know about it.
 
@@ -80,13 +80,13 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 ### CentOS
 
-**Drop CentOS 7 support as soon as a CentOS 8 image is available.**  As usual, the software included with CentOS is wildly obsolete.  CentOS 7 doesn't even include networkd or a UEFI stub to create bootable files.  Some of its shortcomings can be addressed by stealing files from a Fedora package, but part of the reason for using the target distro as the build root is so that any distro-specific changes are reflected in the final output.  Supporting features by using another distro is counter to this goal, so it is better to just not support versions that don't implement required functionality.
+There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. lack of networkd, lack of ImageMagick in 8, lack of a UEFI stub in 7, etc.), so they will not be fixed by this script.
 
 ### Gentoo
 
 **Support real cross-compiling.**  I'm eventually going to use this to produce images for slow embedded chips from an amd64 workstation, so `crossdev` needs to be configured properly.
 
-**Figure out if the Gentoo SELinux policy is feasible to enforce with systemd.**  It's still unsupported by the distro, and forcibly enabling it results in boot failures because systemd can't even search the root directory.
+**Figure out if the Gentoo SELinux policy is feasible to enforce with systemd.**  It's still unsupported by the distro and causes severe problems with both `strict` and `targeted`.
 
 **Add some examples.**  All the example systems are currently Fedora-based, but Gentoo is definitely the most flexible option and needs a few practical examples so it is clear what it can do.
 
