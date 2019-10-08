@@ -11,7 +11,7 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
-        opt uefi && packages_buildroot+=(centos-logos)
+        opt uefi && packages_buildroot+=(centos-logos ImageMagick)
         packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
@@ -25,6 +25,7 @@ function create_buildroot() {
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
 
+        opt uefi && enable_epel  # EPEL is required for ImageMagick.
         enter /usr/bin/dnf --assumeyes upgrade
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
 }
@@ -48,7 +49,7 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        # convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg logo.bmp
+        opt uefi && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg logo.bmp
         cp -pt . /lib/modules/*/vmlinuz
         cp -p /boot/*/*/initrd initrd.img
         cp -pt . root/etc/os-release
@@ -170,8 +171,9 @@ EOF
 # OPTIONAL (BUILDROOT)
 
 function enable_epel() {
+        local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
-        script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -210,9 +212,10 @@ EOF
 }
 
 function enable_rpmfusion() {
-        local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
+        local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
+        local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-0.1.noarch.rpm"
         enable_epel
-        script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -245,10 +248,49 @@ RmIw/1lMM/XnE/x+XQzvkcOQPHSxQ+iJjD5arhoROh2wCvfb3IPnYw==
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$url" > rpmfusion-free.rpm
-curl -L "${url/-free-release-/-free-release-tainted-}" > rpmfusion-free-tainted.rpm
-rpm --checksig rpmfusion-free{,-tainted}.rpm
-rpm --install rpmfusion-free{,-tainted}.rpm
-exec rm -f rpmfusion-free{,-tainted}.rpm
+rpm --checksig rpmfusion-free.rpm
+rpm --install rpmfusion-free.rpm
+exec rm -f rpmfusion-free.rpm
+EOF
+        test "x$*" = x+nonfree || return 0
+        key=${key//free/nonfree}
+        url=${url//free/nonfree}
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+rpmkeys --import /dev/stdin << 'EOG'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBFwzh1YBEAC7Ar5IGGne3Vm7nPLQjHB32NAlqRWNsnAfpyquGuRFeL3X/83k
+FxaLX4wTBc/fqtRC+HRPaKxDNPlI9TOTyYnn8F96v8grOPB8joy9mbDIsekK4uAc
+tec36/++mV00yiKiS8cPQKgkAr7oZTqgz4LXV8z/ROUwOKQqi68YjL1WvEzVEZ0B
+QBo5TSiYhGP1qMTHuH6PN3n+MBCDTWBAj2WxK9i/ga3NgcsJIqnXEgmKg9NoL9qq
+ZMTynrayGbaaqoPgF1vOmegQNa3/3xy3kF7Ax1bofy9l44sWYi0Dge5yYnsJrdZ7
+PYVSXghbWYNolZ1BS4tyXwQb+DfOq3vgfo+82eHK7RiM0KaJAfFzCIFxNe45ihAR
+Mn8xSICN3RMiF+1uY6VNUXFZQVbxsmqEnBfXqBMWlM1aBjntpzf7+MzothmaEg67
+oSGG154vmyCnzwgeCWnptua+SUoZhXiHW3OtiwBtz6pP1xPVibKXeoLmP+wQ+rBA
+gnAw/Qpnpx/xz906cl/5soKNzbKxIjh904+/1FYFWh4OcBwxVNtk9OcM7nBO+6u3
+CPhGav09YEByE9RR/MkM9FUK8oqkxXDfD2NPgZJ/wTvvanGbHNJDDa+jh97rajNs
+OANp61jtNZv5i7ocNjkPl8Yh4UxmUW+TDWPqoBpXSAjT1Xis3h5sM9wJjwARAQAB
+tFFSUE0gRnVzaW9uIG5vbmZyZWUgcmVwb3NpdG9yeSBmb3IgRUwgKDgpIDxycG1m
+dXNpb24tYnVpbGRzeXNAbGlzdHMucnBtZnVzaW9uLm9yZz6JAkUEEwEIAC8WIQTP
+n9WfYdZhIUbNrI4UtnktvdqEdQUCXDOHVgIbAwQLCQgHAxUICgIeAQIXgAAKCRAU
+tnktvdqEdVZKD/9WOrxPq/cXRPlWxSxPPIe4FTo88HmOPwE1cbFwoq7e7zLoUkDS
+efiD9m4szxYHUeGXvp0gkh6/FLDkvMQnlHoJviVDYK3sPAudqAOl2KtZlWE4SykD
+mNjONZMcPXBtceGmur1ZiqSFiidBkDS8Z316dhfxAJqtiVZFL1iUuaIZVX2vYcJc
+zvDJe4JVeZQ9lYxpvnwcmPOoe4M7eJlniKNK5tsBHa4daI2iIehIsVoz1CY4VO5N
+C3rfAOUs8wDKJEKRFe30nPhPgzojA9uhD++cOymhnbxLQBQnS6mHlGJ7hYMI8YaJ
+P21G8pRcYmyZbC/fbeB+91dR+uGeZ8qKPRO4/EnPCcbBkrlVawCmh1QXThx1Mwrt
+j56J3ppZm15zMkf8PsXOj3VXQSHAPLwPATE0vmh+EAbEydBg41bv+e3SCkpaYsjC
+egrXACGnoCL2wdXPxsJUCmUWWSkCGKmYbCMq2Rod+FqZ48igxh3V4v7kVSFThkML
+fdF04ENL9r5PUdfM8JCW8KlXvkSjMROUxTzVyuyMd9Ct7FkUDIryBXufGKQ9jyA6
+FPYwBme26R8Vu3hI9VCFgO1e0rVFyvDuiBnJZ0atXqkn9vnXkA2zVfabb0PN5Pn/
+dHObVLLxbTYoPqQl+lCZtfyyELWx13EYkn4VkG+y0D79aC7sxwEeZX1n5w==
+=WjVe
+-----END PGP PUBLIC KEY BLOCK-----
+EOG
+curl -L "$url" > rpmfusion-nonfree.rpm
+rpm --checksig rpmfusion-nonfree.rpm
+rpm --install rpmfusion-nonfree.rpm
+exec rm -f rpmfusion-nonfree.rpm
 EOF
 }
 

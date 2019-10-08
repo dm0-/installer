@@ -80,7 +80,7 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 ### CentOS
 
-There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. lack of networkd, lack of ImageMagick in 8, lack of a UEFI stub in 7, etc.), so they will not be fixed by this script.
+There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. lack of networkd, lack of a UEFI stub in 7, etc.), so they will not be fixed by this script.
 
 ### Gentoo
 

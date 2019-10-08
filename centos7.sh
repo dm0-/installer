@@ -126,8 +126,9 @@ EOF
 # OPTIONAL (BUILDROOT)
 
 function enable_epel() {
+        local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
-        script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -166,9 +167,10 @@ EOF
 }
 
 function enable_rpmfusion() {
-        local -r url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
+        local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
+        local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
         enable_epel
-        script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -201,10 +203,51 @@ OEGWGYNPKeu56Dbc18pxBHez9m42
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$url" > rpmfusion-free.rpm
-curl -L "${url/-free-release-/-free-release-tainted-}" > rpmfusion-free-tainted.rpm
+curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
 rpm --checksig rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
+EOF
+        test "x$*" = x+nonfree || return 0
+        key=${key//free/nonfree}
+        url=${url//free/nonfree}
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+rpmkeys --import /dev/stdin << 'EOG'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBFVE8KwBEADAINLGFvBAfBPErA7/zzsGyNgKB1tuyuJVeANZdCxYrWp3G2k0
+bwllSkuyBIDLauLzerWsRfNTSW7nAu818G2nfBrX8xUPwCSeECJwUneW0FO72hZ9
+NsUXOGC5UShrEcWmjku2ZqsJmDtikUyY6wMsLTiUyooMtwleGu26+nrXKrr7MxAJ
+PjNOXwJ1g7LK55Wucv7uhUtRN7ioGUwG24i2pyp9zJ8ElVO8c0BbcfDHYarjYNME
+kzalY6N+UQCur5OLkJwI195pqie2TjpyvpG0A+noWpRBV8j6dwrI3fmO2AtAQZdt
+39t4AMNoEGiaxClOqeOGPU1zju2cP5EXbCGMKj1pbmvzUdoxknvZJus38s3SjndK
+KL9SRwr4e3VOaCZWEDsBQNQvqC3RnPpGbFZksAv6VtgZAzHX1UrYdtxEhWQ+ZXaV
+MSbsgJa8ph2dhG1vK6X2z46/zNHU//ESFwmu/jjHWJP2pOEM20yjo3GHX1uBKmuJ
+hci2573ZJJubxGf4hSUTylu1lNZ5+SWczQPxyirTZqYwuYV9kdX1kANQ7xCi/2J9
+1yOsTyANWlofkCzr4x+sDDjyK5zL9jkleXbKmO+g6nRDIpCvDXCODMT5nfi/+/qY
+2FqcwQawhDdKh/U6OQ0N6FM4hhmPTqgtDINnn/m+k1viYv1b0RJcjo+/OwARAQAB
+tFFSUE0gRnVzaW9uIG5vbmZyZWUgcmVwb3NpdG9yeSBmb3IgRUwgKDcpIDxycG1m
+dXNpb24tYnVpbGRzeXNAbGlzdHMucnBtZnVzaW9uLm9yZz6JAjIEEwECABwFAlVE
+8KwCGwMECwkIBwMVCAoDFgIAAh4BAheAAAoJEMj3bfGjEI9sreUP+wXzGVNm5f4v
+SsqLGGlGlNIfhtLBBzEX47cbl5qwiT1YoajV6R5ccUeH0oh85Q6sQQ+1VzlTghzi
+XdR7HF5HEt3CXLfSIwqlQGjDiwpA8RaohZ3XUmGIsCo+/RhUc2r87MWqXhf1YdEi
+0KfI40WQXHPqy+RBbnLHRKHvSY8z/x4aa1jOOfOl/kLo6xjtjtB8su17at9+WPro
+fAJOXzM11XYNLDpP3zj8zmY46Fhji03u4URom8AWmxKMebzzv+zCLvjlOodvHjuB
+7OQT7uZBjM1DT1saqy0XuANSQNv/ylnhhQ8vnbZxL0IzPWMxGOZjjnY5/ZLLNlmJ
++6qbXLWFM+WeYidM9+yUKK7jLDufGOKvsJMbQug2dgbs9Nkj5aTRQfRBv5szwRoi
+xKhyyar9tJp1WjnKcmh9lVMuXqrQ4C7LEJp9SiDhdjXNojKjnwlKHSSKgQ8iBIF6
+1rMOc4IaaGSJpWMuCRHPckZPwxxeeRiAYOH3MUbe2eJZZnQLVJH5IahokjMgOGFi
+kOvnMlvsXRWbp0NBtRDBrtk2+w/pbqnOCbEKPBKdupeo2M4Zc2EE8arxiswRT4G+
+StgWlrhjmlGJbTkngGK4cHrf5cwgEDNdM60io4EVRJ9B3LcjJdFMIC0Ep4/28+vw
+LMOlOqkf/TTZWb3HXsWQgLt6zIWSi6pS
+=h3MJ
+-----END PGP PUBLIC KEY BLOCK-----
+EOG
+curl -L "$url" > rpmfusion-nonfree.rpm
+curl -L "${url/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
+rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
+rpm --install rpmfusion-nonfree{,-tainted}.rpm
+exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
 }
 
