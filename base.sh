@@ -16,14 +16,15 @@ options[uefi]=       # Generate a single UEFI executable containing boot files
 options[verity]=     # Prevent file system modification with dm-verity
 
 function usage() {
-        echo "Usage: $0 [-BKRSUVZadhpu] \
+        echo "Usage: $0 [-BKRSUVZhu] \
+[-a <userspec>] [-d <distro>] [-p <package-list>] \
 [-E <uefi-binary-path>] [[-I] -P <partuuid>] \
-<config.sh> [<parameter>]...
+[<config.sh> [<parameter>]...]
 
 This program will produce a root file system from a given system configuration
 file.  Parameters after the configuration file are passed to it, so their
 meanings are specific to each system (typically listing paths for host files to
-be copied into the target file system).
+be copied into the build root).
 
 The output options described below can change or ammend the produced files, but
 the configuration file can forcibly enable them to declare they are a required
@@ -108,7 +109,7 @@ function enter() {
 
 function script() {
         $cat <([[ $- =~ x ]] && echo "PS4='+\e[34m+\e[0m '"$'\nset -x') - |
-        enter /bin/bash -euo pipefail -O nullglob
+        enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@"
 }
 
 # Distros should override these functions.
@@ -123,7 +124,7 @@ function customize() { : ; }
 
 function create_root_image() if opt selinux || ! opt squash
 then
-        local -r size=$(opt ramdisk && ! opt squash && echo 1792M || echo 4G)
+        local -r size=$(opt squash && echo 10 || echo 4)G
         $truncate --size="${1:-$size}" "$output/$disk"
         declare -g loop=$($losetup --show --find "$output/$disk")
         trap -- "$losetup --detach $loop" EXIT
@@ -132,20 +133,19 @@ fi
 function mount_root() if opt selinux || ! opt squash
 then
         mkfs.ext4 -m 0 /dev/loop-root
-        mount -o X-mount.mkdir /dev/loop-root root ; trap -- 'umount root' EXIT
+        mount -o X-mount.mkdir /dev/loop-root root
 fi
 
 function unmount_root() if opt selinux || ! opt squash
 then
         e4defrag root
-        umount root ; trap - EXIT
+        umount root
         opt read_only && tune2fs -O read-only /dev/loop-root
         e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
 fi
 
 function relabel() if opt selinux
 then
-        local -r kernel=vmlinuz$(test -s vmlinuz.relabel && echo .relabel)
         local -r root=$(mktemp --directory --tmpdir="$PWD" relabel.XXXXXXXXXX)
         mkdir -p "$root"/{bin,dev,etc,lib,lib64,proc,sys,sysroot}
         ln -fst "$root/etc" ../sysroot/etc/selinux
@@ -158,16 +158,28 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount /dev/sda /sysroot
 /bin/load_policy -i
+sed -i -e '/^SELINUX=/s/=.*/=enforcing/' /sysroot/etc/selinux/config
 /bin/setfiles -vFr /sysroot \
     /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
+/bin/mksquashfs /sysroot /sysroot/squash.img \
+    -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
 umount /sysroot
 poweroff -f
 exec sleep 60
 EOF
 
+        if opt squash
+        then
+                disk=squash.img
+                echo "$disk" > "$root/ef"
+                (IFS=$'\n' ; echo "${exclude_paths[*]}" >> "$root/ef")
+                cp -t "$root/bin" /usr/*bin/mksquashfs
+        else cp /bin/true "$root/bin/mksquashfs"
+        fi
+
         local cmd
         cp -t "$root/bin" /*bin/busybox /usr/sbin/{load_policy,setfiles}
-        for cmd in ash mount poweroff sleep umount
+        for cmd in ash mount poweroff sed sleep umount
         do ln -fns busybox "$root/bin/$cmd"
         done
 
@@ -179,16 +191,17 @@ EOF
         cpio -D "$root" -H newc -R 0:0 -o |
         xz --check=crc32 -9e > relabel.img
 
-        umount root ; trap - EXIT
-        qemu-system-x86_64 -nodefaults -m 1G -serial stdio < /dev/null \
-            -kernel "$kernel" -append console=ttyS0 \
+        umount root
+        local -r cores=$(test -e /dev/kvm && nproc)
+        qemu-system-x86_64 -nodefaults -serial stdio < /dev/null \
+            ${cores:+-enable-kvm -cpu host -smp cores="$cores"} -m 1G \
+            -kernel vmlinuz.relabel -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
-        mount /dev/loop-root root ; trap -- 'umount root' EXIT
-
-        sed -i -e '/^SELINUX=/s/=.*/=enforcing/' root/etc/selinux/config
+        mount /dev/loop-root root
+        ! opt squash || mv -t . "root/$disk"
 fi
 
-function squash() if opt squash
+function squash() if opt squash && ! opt selinux
 then
         local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
         disk=squash.img

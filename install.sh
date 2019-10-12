@@ -88,16 +88,16 @@ produce_uefi_exe
 produce_nspawn_exe
 EOF
 
-# Save the UEFI binary.
-if opt uefi_path
-then
-        $mkdir -p "${options[uefi_path]%/*}"
-        $cp -p "$output/BOOTX64.EFI" "${options[uefi_path]}"
-fi
-
 # Write the file system to disk at the given partition.
 if opt install_to_disk
 then
         disk=$($blkid -lo device -t "PARTUUID=${options[partuuid]}")
         $dd if="$output/final.img" of="$disk" status=progress
+fi
+
+# Save the UEFI binary.
+if opt uefi_path
+then
+        $mkdir -p "${options[uefi_path]%/*}"
+        $cp -p "$output/BOOTX64.EFI" "${options[uefi_path]}"
 fi

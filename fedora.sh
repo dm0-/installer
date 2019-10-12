@@ -106,9 +106,13 @@ user-switch-enabled=false
 [org.gnome.desktop.session]
 idle-delay=0
 [org.gnome.desktop.wm.keybindings]
+cycle-windows=['<Alt>Escape','<Alt>Tab']
+cycle-windows-backward=['<Shift><Alt>Escape','<Shift><Alt>Tab']
 panel-main-menu=['<Super>s','<Alt>F1','XF86LaunchA']
 panel-run-dialog=['<Super>r','<Alt>F2']
 show-desktop=['<Super>d']
+switch-applications=['<Super>Tab']
+switch-applications-backward=['<Shift><Super>Tab']
 [org.gnome.desktop.wm.preferences]
 button-layout='menu:minimize,maximize,close'
 focus-mode='sloppy'
@@ -161,12 +165,13 @@ EOF
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
-        cp -pt . /lib/modules/*/vmlinuz
-        cp -p /boot/initramfs-* initrd.img
-        cp -pt . root/etc/os-release
+        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
+        test -s initrd.img || cp -p /boot/initramfs-* initrd.img
+        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
+        test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
-then cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
+then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
 fi
 
 function configure_initrd_generation() if opt bootable
@@ -206,9 +211,7 @@ then
 fi
 device=$(systemd-escape --path "$device").device
 rundir=/run/systemd/system
-mkdir -p "$rundir/dev-dm\x2d0.device.requires"
-ln -fst "$rundir/dev-dm\x2d0.device.requires" ../dmsetup-verity-root.service
-exec echo > "$rundir/dmsetup-verity-root.service" "[Unit]
+echo > "$rundir/dmsetup-verity-root.service" "[Unit]
 DefaultDependencies=no
 After=$device
 Before=dev-dm\x2d0.device
@@ -216,7 +219,9 @@ Requires=$device
 [Service]
 ExecStart=/usr/sbin/dmsetup create --concise \"$concise\"
 RemainAfterExit=yes
-Type=oneshot"'
+Type=oneshot"
+mkdir -p "$rundir/dev-dm\x2d0.device.requires"
+ln -fst "$rundir/dev-dm\x2d0.device.requires" ../dmsetup-verity-root.service'
                 $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
                 echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
                     "install_optional_items+=\" $gendir/dmsetup-verity-root \""

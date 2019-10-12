@@ -49,18 +49,18 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg logo.bmp
-        cp -pt . /lib/modules/*/vmlinuz
-        cp -p /boot/*/*/initrd initrd.img
-        cp -pt . root/etc/os-release
+        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
+        test -s initrd.img || cp -p /boot/*/*/initrd initrd.img
+        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg logo.bmp
+        test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
-then cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
+then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
 fi
 
 # Override SELinux labeling to work with the CentOS kernel (and no busybox).
 function relabel() if opt selinux
 then
-        local -r kernel=vmlinuz$(test -s vmlinuz.relabel && echo .relabel)
         local -r root=$(mktemp --directory --tmpdir="$PWD" relabel.XXXXXXXXXX)
         mkdir -p "$root"/{bin,dev,etc,lib,lib64,proc,sys,sysroot}
         ln -fst "$root/etc" ../sysroot/etc/selinux
@@ -87,7 +87,7 @@ EOF
         then
                 disk=squash.img
                 echo "$disk" > "$root/ef"
-                (IFS=$'\n' ; exec echo "${exclude_paths[*]}" >> "$root/ef")
+                (IFS=$'\n' ; echo "${exclude_paths[*]}" >> "$root/ef")
                 cp -t "$root/bin" /usr/sbin/mksquashfs
         else cp /bin/true "$root/bin/mksquashfs"
         fi
@@ -110,18 +110,17 @@ EOF
         cpio -D "$root" -H newc -R 0:0 -o |
         xz --check=crc32 -9e > relabel.img
 
-        umount root ; trap - EXIT
+        umount root
         local -r cores=$(test -e /dev/kvm && nproc)
         /usr/libexec/qemu-kvm -nodefaults -serial stdio < /dev/null \
             ${cores:+-cpu host -smp cores="$cores"} -m 1G \
-            -kernel "$kernel" -append console=ttyS0 \
+            -kernel vmlinuz.relabel -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
-        mount /dev/loop-root root ; trap -- 'umount root' EXIT
+        mount /dev/loop-root root
         ! opt squash || mv -t . "root/$disk"
 fi
 
 # Override squashfs creation since CentOS doesn't support zstd.
-opt selinux && function squash() { : ; } ||
 eval "$(declare -f squash | $sed 's/ zstd .* 22 / xz /')"
 
 # Override dm-init with userspace since the CentOS kernel is too old.

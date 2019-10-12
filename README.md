@@ -64,8 +64,6 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 **Fix the UEFI splash image colors.**  The distro logo colors are off when booting a UEFI executable, even though they are correct when viewing the source image.  Figure out how the colors need to be mapped.
 
-**Fix squashfs SELinux labels.**  (There is a prototype in CentOS.)  The squashfs image appears to use the default context for a label that wasn't defined in the host policy (at least with CentOS 7).  This can result in errors in some cases.  If there is no easy way to fix this, the dumb solution of using the labeling VM to run `mksquashfs` works, but it will be horribly slow without passing through a host KVM device.  (The uncompressed ext4 image is not affected.)
-
 **Instrument returning an error state from the SELinux labeling virtual machine.**  If labeling fails right now, the build system won't know about it.
 
 **Use the list of excluded paths in ext4.**  Only squashfs is dropping the files.

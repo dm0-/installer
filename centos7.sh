@@ -58,12 +58,13 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg logo.bmp
-        cp -p /boot/vmlinuz-* vmlinuz
-        cp -p /boot/initramfs-* initrd.img
-        cp -pt . root/etc/os-release
+        test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
+        test -s initrd.img || cp -p /boot/initramfs-* initrd.img
+        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg logo.bmp
+        test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
-then cp -p /boot/vmlinuz-* vmlinuz.relabel
+then test -s vmlinuz.relabel || cp -p /boot/vmlinuz-* vmlinuz.relabel
 fi
 
 # Override ext4 file system handling to work with old CentOS 7 command options.

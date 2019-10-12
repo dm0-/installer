@@ -20,6 +20,7 @@ packages+=(
         findutils
         git-core
         kbd
+        lsof
         man-{db,pages}
         strace
         tar

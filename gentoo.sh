@@ -155,9 +155,9 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black logo.bmp
-        cp -p /boot/vmlinuz-* vmlinuz
-        cp -pt . root/etc/os-release
+        test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black logo.bmp
+        test -s os-release || cp -pt . root/etc/os-release
 fi
 
 function build_ramdisk() if opt ramdisk
