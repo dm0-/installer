@@ -9,6 +9,7 @@ function create_buildroot() {
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
+        opt executable && opt uefi && packages_buildroot+=(dosfstools)
         opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
@@ -168,7 +169,7 @@ then
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
         test -s initrd.img || cp -p /boot/initramfs-* initrd.img
         opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim -type truecolor logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
 then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel

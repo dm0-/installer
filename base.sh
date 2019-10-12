@@ -4,16 +4,16 @@ exclude_paths=({boot,dev,home,media,proc,run,srv,sys,tmp}/'*')
 
 declare -A options
 options[distro]=fedora
-options[bootable]=   # Include a kernel and init system to boot the image
-options[networkd]=   # Enable minimal DHCP networking without NetworkManager
-options[nspawn]=     # Create an executable file that runs in nspawn
-options[partuuid]=   # The partition UUID for verity to map into the root FS
-options[ramdisk]=    # Produce an initrd that sets up the root FS in memory
-options[read_only]=  # Use tmpfs in places to make a read-only system usable
-options[selinux]=    # Enforce SELinux policy
-options[squash]=     # Produce a compressed squashfs image
-options[uefi]=       # Generate a single UEFI executable containing boot files
-options[verity]=     # Prevent file system modification with dm-verity
+options[bootable]=    # Include a kernel and init system to boot the image
+options[executable]=  # Create an executable disk image file
+options[networkd]=    # Enable minimal DHCP networking without NetworkManager
+options[partuuid]=    # The partition UUID for verity to map into the root FS
+options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
+options[read_only]=   # Use tmpfs in places to make a read-only system usable
+options[selinux]=     # Enforce SELinux policy
+options[squash]=      # Produce a compressed squashfs image
+options[uefi]=        # Generate a single UEFI executable containing boot files
+options[verity]=      # Prevent file system modification with dm-verity
 
 function usage() {
         echo "Usage: $0 [-BKRSUVZhu] \
@@ -79,6 +79,8 @@ function imply_options() {
         opt squash || opt verity && options[read_only]=1
         opt uefi_path && options[uefi]=1
         opt uefi || opt ramdisk && options[bootable]=1
+        opt executable && opt uefi && ! opt ramdisk && ! opt partuuid &&
+        options[partuuid]=$(</proc/sys/kernel/random/uuid)
         opt distro || options[distro]=fedora  # This can't be unset.
 }
 
@@ -86,6 +88,8 @@ function validate_options() {
         # Validate form, but don't look for a device yet (because hot-plugging exists).
         opt partuuid &&
         [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
+        # A partition UUID must be set to create a bootable UEFI disk image.
+        opt executable && opt uefi && ! opt ramdisk && opt partuuid
         # A partition is required when writing to disk.
         opt install_to_disk && opt partuuid
         # A UEFI executable is required in order to save it.
@@ -517,29 +521,71 @@ then
             /usr/lib/systemd/boot/efi/linuxx64.efi.stub BOOTX64.EFI
 fi
 
-function produce_nspawn_exe() if opt nspawn
+function produce_executable_image() if opt executable
 then
         local -ir bs=512 start=2048
-        local -i size=$(stat --format=%s final.img)
+        local -i esp=0 size=0
+
+        # The disk image has a root file system when not using a UEFI ramdisk.
+        opt ramdisk && opt uefi || size=$(stat --format=%s final.img)
         (( size % bs )) && size+=$(( bs - size % bs ))
 
-        truncate --size=$(( size + (start + 33) * bs )) nspawn.img
-        echo g \
-            n 1 $start $(( size / bs + start - 1 )) \
-            t 0fc63daf-8483-4772-8e79-3d69d8477de4 \
-            w | tr ' ' '\n' | fdisk nspawn.img
+        # The disk image has an ESP when using a UEFI binary.
+        opt uefi && esp=$(( $(stat --format=%s BOOTX64.EFI) + 5242880 ))
+        esp=$(( (esp - esp % 1048576) / bs ))
 
-        echo $'\nTHE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT_TO_RUN' |
-        cat - launch.sh |
-        dd bs=$bs conv=notrunc of=nspawn.img seek=34
-        dd bs=$bs conv=notrunc if=final.img of=nspawn.img seek=$start
+        # Format a disk image with the appropriate partition layout.
+        truncate --size=$(( size + (start + esp + 33) * bs )) disk.exe
+        if opt ramdisk && opt uefi
+        then
+                echo g \
+                    n 1 $start $(( start + esp - 1 )) \
+                    t c12a7328-f81f-11d2-ba4b-00a0c93ec93b \
+                    w
+        elif opt uefi
+        then
+                echo g \
+                    n 1 $start $(( start + esp - 1 )) \
+                    n 2 $(( start + esp )) $(( size / bs + start + esp - 1 )) \
+                    t 1 c12a7328-f81f-11d2-ba4b-00a0c93ec93b \
+                    t 2 0fc63daf-8483-4772-8e79-3d69d8477de4 \
+                    ${options[partuuid]:+x u 2 "${options[partuuid]}" r} \
+                    w
+        else
+                echo g \
+                    n 1 $start $(( size / bs + start - 1 )) \
+                    t 0fc63daf-8483-4772-8e79-3d69d8477de4 \
+                    ${options[partuuid]:+x u "${options[partuuid]}" r} \
+                    w
+        fi | tr ' ' '\n' | fdisk disk.exe
 
-        dd bs=$bs conv=notrunc of=nspawn.img << 'EOF'
+        # Create the ESP with a terrible loop device workaround.
+        if opt uefi
+        then
+                losetup -d /dev/loop-root
+                losetup \
+                    --offset=$(( start * bs )) --sizelimit=$(( esp * bs )) \
+                    /dev/loop-root disk.exe
+                mkfs.vfat -F32 /dev/loop-root
+                mount /dev/loop-root root
+                mkdir -p root/EFI/BOOT
+                cp -t root/EFI/BOOT BOOTX64.EFI
+                umount root
+        fi
+
+        # Write the root file system if not using a UEFI ramdisk.
+        opt ramdisk && opt uefi ||
+        dd bs=$bs conv=notrunc if=final.img of=disk.exe seek=$(( start + esp ))
+
+        # Weave the launcher script around the GPT.
+        dd bs=$bs conv=notrunc of=disk.exe << 'EOF'
 #!/bin/bash -eu
 IMAGE=$(readlink /proc/$$/fd/255)
 : << 'THE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT_TO_RUN'
 EOF
-        chmod 0755 nspawn.img
+        echo $'\nTHE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT_TO_RUN' |
+        cat - launch.sh | dd bs=$bs conv=notrunc of=disk.exe seek=34
+        chmod 0755 disk.exe
 fi
 
 # OPTIONAL (IMAGE)

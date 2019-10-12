@@ -8,6 +8,7 @@ function create_buildroot() {
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
+        opt executable && opt uefi && packages_buildroot+=(dosfstools)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
@@ -38,6 +39,10 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
+        mkdir -p root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d
+        echo > root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d/tmpfiles.conf \
+            -e '[Unit]\nAfter=systemd-tmpfiles-setup.service'
+
         test -x root/usr/bin/update-crypto-policies &&
         chroot root /usr/bin/update-crypto-policies --set FUTURE
 
@@ -52,7 +57,7 @@ then
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
         test -s initrd.img || cp -p /boot/*/*/initrd initrd.img
         opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg logo.bmp
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg -type truecolor logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
 then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
@@ -80,7 +85,7 @@ setfiles -vFr /sysroot{,/etc/selinux/targeted/contexts/files/file_contexts,}
 mksquashfs /sysroot /sysroot/squash.img -noappend -comp xz -wildcards -ef /ef
 umount /sysroot
 echo o > /proc/sysrq-trigger
-exec sleep 60
+read -rst 60
 EOF
 
         if opt squash
@@ -93,7 +98,7 @@ EOF
         fi
 
         cp -t "$root/bin" \
-            /usr/*bin/{bash,load_policy,mount,setfiles,sleep,umount}
+            /usr/*bin/{bash,load_policy,mount,setfiles,umount}
         cp /usr/bin/kmod "$root/bin/insmod"
         find /usr/lib/modules/*/kernel '(' \
             -name sd_mod.ko.xz -o \

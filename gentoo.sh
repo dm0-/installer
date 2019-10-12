@@ -14,6 +14,7 @@ function create_buildroot() {
         local stage3="https://gentoo.osuosl.org/releases/$arch/autobuilds/${options[release]:=$DEFAULT_RELEASE}/hardened/stage3-$arch-hardened+nomultilib-${options[release]}.tar.xz"
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
+        opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools)
         opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio sys-apps/busybox)
         opt selinux && packages_buildroot+=(app-emulation/qemu) && profile+=/selinux && stage3=${stage3/+/-selinux+}
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
@@ -156,7 +157,7 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black logo.bmp
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black -type truecolor logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 fi
 

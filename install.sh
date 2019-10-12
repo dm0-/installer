@@ -85,7 +85,7 @@ verity
 build_ramdisk
 kernel_cmdline
 produce_uefi_exe
-produce_nspawn_exe
+produce_executable_image
 EOF
 
 # Write the file system to disk at the given partition.

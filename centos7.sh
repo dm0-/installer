@@ -10,6 +10,7 @@ function create_buildroot() {
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH-docker.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel microcode_ctl)
+        opt executable && opt uefi && packages_buildroot+=(dosfstools)
         opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
@@ -53,6 +54,10 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
+        mkdir -p root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d
+        echo > root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d/tmpfiles.conf \
+            -e '[Unit]\nAfter=systemd-tmpfiles-setup.service'
+
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
 
@@ -61,7 +66,7 @@ then
         test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
         test -s initrd.img || cp -p /boot/initramfs-* initrd.img
         opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg logo.bmp
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg -type truecolor logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
 then test -s vmlinuz.relabel || cp -p /boot/vmlinuz-* vmlinuz.relabel
