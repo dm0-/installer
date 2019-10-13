@@ -157,7 +157,7 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black -type truecolor logo.bmp
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 fi
 

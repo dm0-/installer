@@ -57,7 +57,7 @@ then
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
         test -s initrd.img || cp -p /boot/*/*/initrd initrd.img
         opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg -type truecolor logo.bmp
+        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 elif opt selinux
 then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel

@@ -42,6 +42,7 @@ then
             ../systemd-networkd-wait-online.service
 
         # Have all unconfigured network interfaces default to DHCP.
+        mkdir -p root/usr/lib/systemd/network
         cat << 'EOF' > root/usr/lib/systemd/network/99-dhcp.network
 [Network]
 DHCP=yes
