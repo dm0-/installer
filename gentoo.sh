@@ -19,7 +19,8 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(app-emulation/qemu) && profile+=/selinux && stage3=${stage3/+/-selinux+}
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
-        opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
+        opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork) &&
+        opt sb_cert && opt sb_key && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
         test "x${options[arch]:=$DEFAULT_ARCH}" = "x$DEFAULT_ARCH" || packages_buildroot+=(sys-devel/crossdev)
 
         $mkdir -p "$buildroot"
@@ -43,6 +44,9 @@ echo -e 'sslv2\nsslv3\n-systemd' >> /etc/portage/profile/use.mask
 echo sys-kernel/gentoo-sources >> /etc/portage/package.accept_keywords/linux.conf
 echo sys-kernel/linux-headers >> /etc/portage/package.accept_keywords/linux.conf
 echo 'sec-policy/*' >> /etc/portage/package.accept_keywords/selinux.conf
+
+# Accept the Secure Boot signing utility.
+echo app-crypt/pesign >> /etc/portage/package.accept_keywords/pesign.conf
 
 # Accept CPU microcode licenses.
 echo sys-firmware/intel-microcode intel-ucode >> /etc/portage/package.license/ucode.conf
@@ -71,8 +75,9 @@ sys-apps/util-linux static-libs
 sys-fs/lvm2 -* device-mapper-only static
 EOG
 
-# Support building the UEFI boot stub and its logo image.
+# Support building the UEFI boot stub, its logo image, and signing tools.
 ${options[uefi]:+:} false && cat << 'EOG' >> /etc/portage/package.use/host.conf
+dev-libs/nss utils
 media-gfx/imagemagick png
 sys-apps/systemd gnuefi
 sys-apps/pciutils -udev

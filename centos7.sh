@@ -14,7 +14,8 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
-        opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        opt uefi && packages_buildroot+=(centos-logos ImageMagick) &&
+        opt sb_cert && opt sb_key && packages_buildroot+=(openssl pesign)
         packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"

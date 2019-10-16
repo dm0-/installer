@@ -1,6 +1,11 @@
 # This is a standalone workstation image that includes Firefox, VLC (supporting
 # DVDs and Blu-ray discs), the GNOME desktop, some common basic utilities, and
 # enough tools to build and run anything else in VMs or containers.
+#
+# An out-of-tree driver for a USB wireless device is included to demonstrate
+# setting up a build environment for it.  If Secure Boot keys were given to the
+# install command, they will be used to sign the module so that it is usable
+# on a locked down Secure Boot system.  This assumes the certificate is in db.
 
 options+=(
         [networkd]=   # Disable networkd so the desktop can use NetworkManager.
@@ -125,5 +130,12 @@ function customize() {
         chroot root /usr/bin/update-crypto-policies --set NEXT
 
         # Install the out-of-tree kernel driver.
-        install -pm 0644 -t root/lib/modules/*/kernel/drivers/net/wireless rtl8812au/88XXau.ko
+        install -pm 0644 -t root/lib/modules/*/kernel/drivers/net/wireless \
+            rtl8812au/88XXau.ko
+
+        # Sign the custom kernel module to be usable with Secure Boot.
+        ! opt sb_key ||
+        /lib/modules/*/build/scripts/sign-file \
+            sha256 "$keydir/sign.key" "$keydir/sign.crt" \
+            root/lib/modules/*/kernel/drivers/net/wireless/88XXau.ko
 }

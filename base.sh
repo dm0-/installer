@@ -17,8 +17,9 @@ options[verity]=      # Prevent file system modification with dm-verity
 
 function usage() {
         echo "Usage: $0 [-BKRSUVZhu] \
-[-a <userspec>] [-d <distro>] [-p <package-list>] \
 [-E <uefi-binary-path>] [[-I] -P <partuuid>] \
+[-c <pem-certificate> -k <pem-private-key>] \
+[-a <userspec>] [-d <distro>] [-p <package-list>] \
 [<config.sh> [<parameter>]...]
 
 This program will produce a root file system from a given system configuration
@@ -50,6 +51,14 @@ Install options:
         the root file system on boot.  If this option is not used, the kernel
         will assume that the root file system is on /dev/sda.
         Example: -P e08ede5f-56d4-4d6d-b8d9-abf7ef5be608
+
+Signing options:
+  -c <pem-certificate>
+        Use the given PEM certificate for Secure Boot signing.  When not using
+        UEFI, the certificate can still be used e.g. for kernel module signing.
+  -k <pem-private-key>
+        Use the given PEM private key for Secure Boot signing.  When not using
+        UEFI, the private key can still be used e.g. for kernel module signing.
 
 Customization options:
   -a <username>:[<uid>]:[<group-list>]:[<comment>]
@@ -85,6 +94,9 @@ function imply_options() {
 }
 
 function validate_options() {
+        # Secure Boot signing requires both a key and a certificate.
+        opt sb_cert && opt sb_key ; opt sb_cert && test -s "${options[sb_cert]}"
+        opt sb_key && opt sb_cert ; opt sb_key && test -s "${options[sb_key]}"
         # Validate form, but don't look for a device yet (because hot-plugging exists).
         opt partuuid &&
         [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
@@ -94,7 +106,8 @@ function validate_options() {
         opt install_to_disk && opt partuuid
         # A UEFI executable is required in order to save it.
         opt uefi_path && opt uefi
-        return 0
+        # The distro must be set or something went wrong.
+        opt distro
 }
 
 function opt() { test -n "${options["${*?}"]-}" ; }
@@ -115,6 +128,32 @@ function script() {
         $cat <([[ $- =~ x ]] && echo "PS4='+\e[34m+\e[0m '"$'\nset -x') - |
         enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@"
 }
+
+function script_with_keydb() if opt sb_cert && opt sb_key
+then enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@" << EOF
+PS4='+\e[34m+\e[0m '
+$([[ $- =~ x ]] && echo 'set -x')
+keydir=\$(mktemp -d)
+cat << 'EOP-' > "\$keydir/sign.key"
+$(<"${options[sb_key]}")
+EOP-
+cat << 'EOP-' > "\$keydir/sign.crt"
+$(<"${options[sb_cert]}")
+EOP-
+if ${options[uefi]:+:} false
+then
+        openssl pkcs12 -export \
+            -in "\$keydir/sign.crt" -inkey "\$keydir/sign.key" \
+            -name sb -out "\$keydir/sign.p12" -password pass:
+        certutil --empty-password -N -d "\$keydir"
+        pk12util -W '' -d "\$keydir" -i "\$keydir/sign.p12"
+fi
+{
+$(</dev/stdin)
+} < /dev/null
+EOF
+else script "$@"
+fi
 
 # Distros should override these functions.
 function create_buildroot() { : ; }
@@ -224,7 +263,7 @@ then
         opt partuuid && root=PARTUUID=${options[partuuid]}
         opt ramdisk && root=/dev/loop0
 
-        while read
+        while read -rs
         do verity[${REPLY%%:*}]=${REPLY#*:}
         done < <(veritysetup format "$disk" signatures.img)
 
@@ -518,7 +557,14 @@ then
             ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
             --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
-            /usr/lib/systemd/boot/efi/linuxx64.efi.stub BOOTX64.EFI
+            /usr/lib/systemd/boot/efi/linuxx64.efi.stub unsigned.efi
+
+        if opt sb_cert && opt sb_key
+        then
+                pesign --certdir="$keydir" --certificate=sb --force \
+                    --in=unsigned.efi --out=BOOTX64.EFI --sign
+        else ln -fn unsigned.efi BOOTX64.EFI
+        fi
 fi
 
 function produce_executable_image() if opt executable
@@ -626,11 +672,11 @@ function wine_gog_script() while read
 do
         local -A r=()
 
-        while read -r
+        while read -rs
         do
                 REPLY=${REPLY:1:-1}
-                k=${REPLY%%:*} ; k=${k//\"/}
-                v=${REPLY#*:} ; v=${v#\"} ; v=${v%\"}
+                local k=${REPLY%%:*} v=${REPLY#*:}
+                k=${k//\"/} ; v=${v#\"} ; v=${v%\"}
                 r[${k:-_}]=$v
         done <<< "${REPLY//,/$'\n'}"
 

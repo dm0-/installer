@@ -27,7 +27,7 @@ uname=${UNAME:-uname}
 . base.sh
 
 # Parse command-line options.
-while getopts :BE:IKP:RSUVZa:d:hp:u opt
+while getopts :BE:IKP:RSUVZa:c:d:hk:p:u opt
 do
         case "$opt" in
             B) options[bootable]=1 ;;
@@ -41,8 +41,10 @@ do
             V) options[verity]=1 ;;
             Z) options[selinux]=1 ;;
             a) options[adduser]+="${OPTARG//$'\n'/ }"$'\n' ;;
+            c) options[sb_cert]=$OPTARG ;;
             d) options[distro]=$OPTARG ;;
             h) usage ; exit 0 ;;
+            k) options[sb_key]=$OPTARG ;;
             p) options[packages]=$OPTARG ;;
             u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
             *) usage 1>&2 ; exit 1 ;;
@@ -64,7 +66,7 @@ buildroot="$output/buildroot"
 create_buildroot
 customize_buildroot "$@"
 create_root_image
-script << EOF
+script_with_keydb << EOF
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
 mount_root

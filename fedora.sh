@@ -13,7 +13,8 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
-        opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
+        opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick) &&
+        opt sb_cert && opt sb_key && packages_buildroot+=(nss-tools openssl pesign)
         packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
@@ -388,6 +389,6 @@ function save_rpm_db() {
             'L /var/lib/rpm - - - - ../../usr/lib/rpm-db'
 }
 
-function drop_package() while read
+function drop_package() while read -rs
 do exclude_paths+=("${REPLY#/}")
 done < <(rpm --root="$PWD/root" -qal "$@")

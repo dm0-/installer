@@ -54,8 +54,6 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 ### General
 
-**Improve the command-line interface.**  Automatic Secure Boot signing should be offered as an option here, which would need to specify which key to use.  There should also be an option to take a public keyring file that is used to verify the signature of the etc Git overlay commit on checkout, and maybe an SSH key to support securely cloning the repo as a means of automated provisioning.  Add validation error messages.
-
 **Implement content whitelisting.**  (There is a prototype in *TheBindingOfIsaac.sh*.)  The images currently include all installed files with an option to blacklist paths using an exclude list.  The opposite should be supported for minimal systems, where individual files, directories, entire packages, and ELF binaries (as a shortcut for all linked libraries) can be listed for inclusion and everything else is dropped.
 
 **Support an etc Git overlay for real.**  The `/etc` directory contains the read-only default configuration files with a writable overlay, and if Git is installed, the modified files in the overlay are tracked in a repository.  The repository database is saved in `/var` so the changes can be stored persistently.  At the moment, the Git overlay is mounted by a systemd generator when it's already running in the root file system.  This allows configuring services, but not things like `fstab` or other generators.  It needs to be set up by an initrd before pivoting to the real root file system, and it should verify the commit's signature so that everything is cryptographically verified in the booted system.
