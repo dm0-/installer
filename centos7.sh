@@ -35,6 +35,7 @@ function create_buildroot() {
 
 function install_packages() {
         opt bootable && packages+=(systemd)
+        opt networkd && packages+=(systemd-networkd systemd-resolved)
         opt selinux && packages+=(selinux-policy-targeted)
 
         mkdir -p root/var/cache/yum

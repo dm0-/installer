@@ -49,7 +49,7 @@ The project is currently at the stage where I've just dumped some useful things 
 A few bits currently expect to be running on x86_64.  Three distros are supported to varying degrees:
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
-  - CentOS does not include networkd, so you should always install `NetworkManager` for networking (and `iptables-services` for a firewall).  CentOS 7 is too old to support building a UEFI image.
+  - CentOS 8 does not include networkd, so you should always install `NetworkManager` for networking.  CentOS 7 is too old to support building a UEFI image.
   - Gentoo supports all features in theory, but needs to be reworked to support nontrivial builds.  Its SELinux policy is currently unsupported with systemd, so it should not be run in enforcing mode.
 
 ### General
@@ -74,7 +74,7 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 ### CentOS
 
-There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. lack of networkd, lack of a UEFI stub in 7, etc.), so they will not be fixed by this script.
+There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. lack of networkd in 8, lack of a UEFI stub in 7, etc.), so they will not be fixed by this script.
 
 ### Gentoo
 

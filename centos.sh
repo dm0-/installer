@@ -253,9 +253,10 @@ RmIw/1lMM/XnE/x+XQzvkcOQPHSxQ+iJjD5arhoROh2wCvfb3IPnYw==
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$url" > rpmfusion-free.rpm
-rpm --checksig rpmfusion-free.rpm
-rpm --install rpmfusion-free.rpm
-exec rm -f rpmfusion-free.rpm
+curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
+rpm --checksig rpmfusion-free{,-tainted}.rpm
+rpm --install rpmfusion-free{,-tainted}.rpm
+exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
         test "x$*" = x+nonfree || return 0
         key=${key//free/nonfree}
@@ -293,9 +294,10 @@ dHObVLLxbTYoPqQl+lCZtfyyELWx13EYkn4VkG+y0D79aC7sxwEeZX1n5w==
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$url" > rpmfusion-nonfree.rpm
-rpm --checksig rpmfusion-nonfree.rpm
-rpm --install rpmfusion-nonfree.rpm
-exec rm -f rpmfusion-nonfree.rpm
+curl -L "${url/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
+rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
+rpm --install rpmfusion-nonfree{,-tainted}.rpm
+exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
 }
 
