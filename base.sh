@@ -196,6 +196,7 @@ then
 
         cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
 #!/bin/ash -eux
+trap -- 'poweroff -f ; exec sleep 60' EXIT
 export PATH=/bin
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
@@ -206,9 +207,8 @@ mount /dev/sda /sysroot
     /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
 /bin/mksquashfs /sysroot /sysroot/squash.img \
     -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
+echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
-poweroff -f
-exec sleep 60
 EOF
 
         if opt squash
@@ -222,7 +222,7 @@ EOF
 
         local cmd
         cp -t "$root/bin" /*bin/busybox /usr/sbin/{load_policy,setfiles}
-        for cmd in ash mount poweroff sleep umount
+        for cmd in ash echo mount poweroff sleep umount
         do ln -fns busybox "$root/bin/$cmd"
         done
 
@@ -241,7 +241,8 @@ EOF
             -kernel vmlinuz.relabel -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root
-        ! opt squash || mv -t . "root/$disk"
+        opt squash && mv -t . "root/$disk"
+        test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS
 fi
 
 function squash() if opt squash && ! opt selinux

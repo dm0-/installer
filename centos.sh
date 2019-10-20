@@ -38,7 +38,7 @@ function create_buildroot() {
 dnf download --source systemd
 rpm --checksig systemd-[0-9]*.src.rpm
 dnf --assumeyes --enablerepo=PowerTools builddep systemd-[0-9]*.src.rpm
-rpm -i systemd-[0-9]*.src.rpm
+rpm --install systemd-[0-9]*.src.rpm
 sed -i \
     -e '/^ *-Dnetworkd=/s/=false/=true/' \
     -e '/ systemd-resolve /{p;s/193/192/g;s/Resolver/Network Management/g;s/resolve/network/g;}' \
@@ -92,6 +92,7 @@ then
 
         cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
 #!/bin/bash -eux
+trap -- 'echo o > /proc/sysrq-trigger ; read -rst 60' EXIT
 export PATH=/bin
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
@@ -103,9 +104,8 @@ mount /dev/sda /sysroot
 load_policy -i
 setfiles -vFr /sysroot{,/etc/selinux/targeted/contexts/files/file_contexts,}
 mksquashfs /sysroot /sysroot/squash.img -noappend -comp xz -wildcards -ef /ef
+echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
-echo o > /proc/sysrq-trigger
-read -rst 60
 EOF
 
         if opt squash
@@ -142,7 +142,8 @@ EOF
             -kernel vmlinuz.relabel -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root
-        ! opt squash || mv -t . "root/$disk"
+        opt squash && mv -t . "root/$disk"
+        test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS
 fi
 
 # Override squashfs creation since CentOS doesn't support zstd.
