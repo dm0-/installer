@@ -49,7 +49,7 @@ The project is currently at the stage where I've just dumped some useful things 
 A few bits currently expect to be running on x86_64.  Three distros are supported to varying degrees:
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
-  - CentOS 8 does not include networkd, so you should always install `NetworkManager` for networking.  CentOS 7 is too old to support building a UEFI image.
+  - CentOS 8 should support everything.  CentOS 7 is too old to support building a UEFI image.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
 
 ### General
@@ -74,11 +74,13 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
 ### CentOS
 
-There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. lack of networkd in 8, lack of a UEFI stub in 7, etc.), so they will not be fixed by this script.
+There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. CentOS 7 is too old to have a UEFI stub), so they will not be fixed by this script.
 
 ### Gentoo
 
 **Implement optional file filtering functions based on categories like debugging or development.**  Packages such as GCC should be filtered to install runtime components like `libstdc++` but not compilers and headers for systems that won't do development.  This could probably be implemented for all distros, but it will only be useful in Gentoo since Fedora et al. use subpackages for that functionality which can just be omitted.
+
+**Maybe support using a specific commit for the repository.**  Since Gentoo's repository is maintained in a rolling-release style, there should be a way to specify a snapshot to get the same ebuild revisions.
 
 **Add some examples.**  All the example systems are currently Fedora-based, but Gentoo is definitely the most flexible option and needs a few practical examples so it is clear what it can do.
 
