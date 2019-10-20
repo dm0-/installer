@@ -190,7 +190,8 @@ fi
 function relabel() if opt selinux
 then
         local -r root=$(mktemp --directory --tmpdir="$PWD" relabel.XXXXXXXXXX)
-        mkdir -p "$root"/{bin,dev,etc,lib,lib64,proc,sys,sysroot}
+        mkdir -p "$root"/{bin,dev,etc,lib,proc,sys,sysroot}
+        ln -fns lib "$root/lib64"
         ln -fst "$root/etc" ../sysroot/etc/selinux
 
         cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
@@ -201,7 +202,6 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount /dev/sda /sysroot
 /bin/load_policy -i
-sed -i -e '/^SELINUX=/s/=.*/=enforcing/' /sysroot/etc/selinux/config
 /bin/setfiles -vFr /sysroot \
     /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
 /bin/mksquashfs /sysroot /sysroot/squash.img \
@@ -222,13 +222,13 @@ EOF
 
         local cmd
         cp -t "$root/bin" /*bin/busybox /usr/sbin/{load_policy,setfiles}
-        for cmd in ash mount poweroff sed sleep umount
+        for cmd in ash mount poweroff sleep umount
         do ln -fns busybox "$root/bin/$cmd"
         done
 
         { ldd "$root"/bin/* || : ; } |
         sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
-        while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
+        while read -rs ; do cp -t "$root/lib" "$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
@@ -637,7 +637,7 @@ fi
 # OPTIONAL (IMAGE)
 
 function double_display_scale() {
-        compgen -G 'root/lib/kbd/consolefonts/latarcyrheb-sun32.*' &&
+        compgen -G 'root/???/*/consolefonts/latarcyrheb-sun32.*' &&
         sed -i -e '/^FONT=/d' root/etc/vconsole.conf &&
         echo 'FONT="latarcyrheb-sun32"' >> root/etc/vconsole.conf
 

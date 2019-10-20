@@ -68,7 +68,8 @@ fi
 function relabel() if opt selinux
 then
         local -r root=$(mktemp --directory --tmpdir="$PWD" relabel.XXXXXXXXXX)
-        mkdir -p "$root"/{bin,dev,etc,lib,lib64,proc,sys,sysroot}
+        mkdir -p "$root"/{bin,dev,etc,lib,proc,sys,sysroot}
+        ln -fns lib "$root/lib64"
         ln -fst "$root/etc" ../sysroot/etc/selinux
 
         cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
@@ -110,7 +111,7 @@ EOF
 
         { ldd "$root"/bin/* || : ; } |
         sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
-        while read -rs ; do cp "$REPLY" "$root$REPLY" ; done
+        while read -rs ; do cp -t "$root/lib" "$REPLY" ; done
 
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |

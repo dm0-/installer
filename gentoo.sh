@@ -1,4 +1,4 @@
-packages=(sys-apps/baselayout sys-libs/glibc)
+packages=()
 packages_buildroot=()
 
 DEFAULT_PROFILE=17.1
@@ -21,7 +21,7 @@ function create_buildroot() {
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork) &&
         opt sb_cert && opt sb_key && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
-        test "x${options[arch]:=$DEFAULT_ARCH}" = "x$DEFAULT_ARCH" || packages_buildroot+=(sys-devel/crossdev)
+        packages_buildroot+=(dev-util/debugedit sys-devel/crossdev)
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -34,11 +34,16 @@ function create_buildroot() {
 ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
 mkdir -p /etc/portage/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
 cat <(echo) - << 'EOG' >> /etc/portage/make.conf
-FEATURES="\$FEATURES -selinux"
+FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -selinux"
+POLICY_TYPES="targeted"
 USE="\$USE ${options[selinux]:+selinux} systemd"
 EOG
-echo -selinux >> /etc/portage/profile/use.force
-echo -e 'sslv2\nsslv3\n-systemd' >> /etc/portage/profile/use.mask
+echo -e '-selinux\n-static\n-static-libs' >> /etc/portage/profile/use.force
+echo -e 'sslv2\nsslv3\n-cet\n-systemd' >> /etc/portage/profile/use.mask
+cat << 'EOG' >> /etc/portage/profile/package.provided
+# These Python tools are not useful, and they pull in horrific dependencies.
+app-admin/setools-9999
+EOG
 
 # Accept the newest kernel and SELinux policy.
 echo sys-kernel/gentoo-sources >> /etc/portage/package.accept_keywords/linux.conf
@@ -55,15 +60,21 @@ echo sys-kernel/linux-firmware linux-fw-redistributable no-source-code >> /etc/p
 # Support SELinux with systemd.
 echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/package.unmask/systemd.conf
 
-# Support zstd squashfs compression.
+# Support zstd squashfs compression (and fix a missing linked library).
 echo '~sys-fs/squashfs-tools-4.4' >> /etc/portage/package.accept_keywords/squashfs-tools.conf
 echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
+echo 'LDFLAGS="-lgcc_s \$LDFLAGS"' >> /etc/portage/env/squashfs-tools.conf
+echo 'sys-fs/squashfs-tools squashfs-tools.conf' >> /etc/portage/package.env/squashfs-tools.conf
 
 # Fix bad packaging not being compatible with UsrMerge.
 echo 'PKG_INSTALL_MASK="/lib*/libpam*.so"' >> /etc/portage/env/pam.conf
 echo 'PKG_INSTALL_MASK="/usr/sbin/setfiles"' >> /etc/portage/env/policycoreutils.conf
 echo 'sys-libs/pam pam.conf' >> /etc/portage/package.env/pam.conf
 echo 'sys-apps/policycoreutils policycoreutils.conf' >> /etc/portage/package.env/policycoreutils.conf
+
+# Fix cross-compiling GPG.
+echo 'CPPFLAGS="-I\${SYSROOT}/usr/include/libusb-1.0"' > /etc/portage/env/gnupg.conf
+echo 'app-crypt/gnupg gnupg.conf' > /etc/portage/package.env/gnupg.conf
 
 # Turn off extra busybox features to make initrds smaller.
 echo 'sys-apps/busybox -* static' >> /etc/portage/package.use/host.conf
@@ -84,28 +95,37 @@ sys-apps/pciutils -udev
 EOG
 
 emerge-webrsync
-emerge \
-    --changed-use --deep --jobs=4 --oneshot --update --verbose --with-bdeps=y \
+emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
     @world ${packages_buildroot[*]} $*
 
 test -d /usr/src/linux && make -C /usr/src/linux -j$(nproc) mrproper V=1
 
-if test -x /usr/bin/crossdev
-then
-        cat << 'EOG' > /etc/portage/repos.conf/crossdev.conf
+cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
 location = /var/db/repos/crossdev
 EOG
-        crossdev --stable --target ${options[arch]}-pc-linux-gnu
-fi
 
-mkdir -p "/build/${options[arch]}/etc"
-cp -at "/build/${options[arch]}/etc" /etc/portage
-cd "/build/${options[arch]}/etc/portage"
-echo 'PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"' >> make.conf
-echo systemd > profile/use.force
-echo -e 'static\nstatic-libs\nsplit-usr' >> profile/use.mask
+mkdir -p "/usr/${options[arch]}-gentoo-linux-gnu/etc"
+cp -at "/usr/${options[arch]}-gentoo-linux-gnu/etc" /etc/portage
+cd "/usr/${options[arch]}-gentoo-linux-gnu/etc/portage"
+cat << 'EOG' >> make.conf
+CHOST="${options[arch]}-gentoo-linux-gnu"
+ROOT="/usr/\$CHOST"
+SYSROOT="\$ROOT"
+PKG_CONFIG_SYSROOT_DIR="\$SYSROOT"
+PKGDIR="\$ROOT/var/cache/binpkgs"
+PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"
+FEATURES="\$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
+USE="\$USE -static -static-libs"
+EOG
+cat << 'EOG' >> package.use/kill.conf
+# Use the kill command from util-linux to minimize systemd dependencies.
+sys-apps/coreutils -kill
+sys-apps/util-linux kill
+sys-process/procps -kill
+EOG
 rm -f package.use/host.conf
+echo split-usr >> profile/use.mask
 EOF
 
         build_relabel_kernel
@@ -113,38 +133,50 @@ EOF
 }
 
 function install_packages() {
-        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/build/${options[arch]}"
-        local -rx PKGDIR="$ROOT/var/cache/binpkgs"
-
         opt bootable || opt networkd && packages+=(sys-apps/systemd)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
+        packages+=(sys-apps/baselayout)
 
+        # Create the cross-compiler toolchain in the native build root.
+        crossdev --stable --target "${options[arch]}-gentoo-linux-gnu"
+
+        # Initialize a directory layout for the cross-compiled build root.
+        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[arch]}-gentoo-linux-gnu"
         mkdir -p "$ROOT"/{lib,lib64,usr/{lib,lib64,src}}
 
-        opt bootable && test -s /usr/src/linux/.config
-        if test -s /usr/src/linux/.config
+        # Build the final kernel, and link its configuration in the build root.
+        if opt bootable
         then
+                test -s /usr/src/linux/.config
                 make -C /usr/src/linux -j$(nproc) V=1
                 make -C /usr/src/linux install V=1
                 ln -fst "$ROOT/usr/src" ../../../../usr/src/linux
         fi
 
-        # Cheat bootstrapping.
-        mv "$ROOT"/etc/portage/profile/use.force{,.save}
-        echo -selinux > "$ROOT"/etc/portage/profile/use.force
-        USE='-* kill' emerge --jobs=4 --oneshot --verbose sys-apps/util-linux
-        mv "$ROOT"/etc/portage/profile/use.force{.save,}
-        packages+=(sys-apps/util-linux)
+        # Build the cross-compiled toolchain packages first.
+        USE=-selinux emerge --jobs=4 --verbose \
+            sys-devel/gcc sys-kernel/linux-headers sys-libs/glibc
+        packages+=(sys-devel/gcc sys-libs/glibc)  # Install libstdc++ etc.
 
-        # Compile a build root for the target system, making binary packages.
-        emerge --jobs=4 -1bv "${packages[@]}" "$@"
+        # Install these outside the dependency graph because portage is broken.
+        emerge --jobs=4 --nodeps --verbose \
+            ${options[selinux]:+sec-policy/selinux-base} x11-base/xcb-proto
+
+        # Cheat systemd bootstrapping.
+        USE='-* kill' emerge --jobs=4 --verbose sys-apps/util-linux
+
+        # Cross-compile everything and make binary packages for the target.
+        emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
+            @world "${packages[@]}" "$@"
 
         # Install the target root from binaries with no build dependencies.
         mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib,sbin}}
         mkdir -pm 0700 root/root
         [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
         (cd root ; exec ln -fst . usr/*)
+        ln -fns .. "root/usr/${options[arch]}-gentoo-linux-gnu"  # Lazily work around bad packaging.
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
+        rm -f "root/usr/${options[arch]}-gentoo-linux-gnu"
 
         qlist -CIRSSUv > packages-buildroot.txt
         qlist --root=/ -CIRSSUv > packages-host.txt
@@ -155,8 +187,17 @@ function distro_tweaks() {
         ln -fns ../lib/systemd/systemd root/usr/sbin/init
         ln -fns ../proc/self/mounts root/etc/mtab
 
+        sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
+
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
+
+        # The targeted policy does not support a sensitivity level.
+        sed -i -e 's/t:s0/t/g' \
+            root/usr/lib/systemd/system{/*.mount,-generators/etcgo*}
+
+        # Magenta looks more "Gentoo" than green, as in the website and logo.
+        sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
 }
 
 function save_boot_files() if opt bootable
@@ -249,7 +290,8 @@ CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y'
         opt uefi && echo '# UEFI settings
-CONFIG_EFI=y'
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y'
         opt verity && echo '# Verity settings
 CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
@@ -300,6 +342,8 @@ CONFIG_SECURITY_SELINUX=y
 # Support initial SELinux labeling.
 CONFIG_FUTEX=y
 CONFIG_SECURITY_SELINUX_DEVELOP=y
+# Support POSIX timers for mksquashfs.
+CONFIG_POSIX_TIMERS=y
 # Support the default hard drive in QEMU.
 CONFIG_PCI=y
 CONFIG_ATA=y

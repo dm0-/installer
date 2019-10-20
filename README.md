@@ -50,7 +50,7 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 
   - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
   - CentOS 8 does not include networkd, so you should always install `NetworkManager` for networking.  CentOS 7 is too old to support building a UEFI image.
-  - Gentoo supports all features in theory, but needs to be reworked to support nontrivial builds.  Its SELinux policy is currently unsupported with systemd, so it should not be run in enforcing mode.
+  - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
 
 ### General
 
@@ -78,9 +78,7 @@ There is nothing planned to change here at this point.  CentOS must be perfect. 
 
 ### Gentoo
 
-**Support real cross-compiling.**  I'm eventually going to use this to produce images for slow embedded chips from an amd64 workstation, so `crossdev` needs to be configured properly.
-
-**Figure out if the Gentoo SELinux policy is feasible to enforce with systemd.**  It's still unsupported by the distro and causes severe problems with both `strict` and `targeted`.
+**Implement optional file filtering functions based on categories like debugging or development.**  Packages such as GCC should be filtered to install runtime components like `libstdc++` but not compilers and headers for systems that won't do development.  This could probably be implemented for all distros, but it will only be useful in Gentoo since Fedora et al. use subpackages for that functionality which can just be omitted.
 
 **Add some examples.**  All the example systems are currently Fedora-based, but Gentoo is definitely the most flexible option and needs a few practical examples so it is clear what it can do.
 

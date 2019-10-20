@@ -15,9 +15,10 @@ ln -fns ../getty@.service \
 
 # Configure a default font and keymap for the console.
 rm -f root/etc/vconsole.conf
-compgen -G 'root/lib/kbd/consolefonts/eurlatgr.*' &&
+compgen -G 'root/???/*/consolefonts/eurlatgr.*' &&
 echo 'FONT="eurlatgr"' >> root/etc/vconsole.conf
-compgen -G 'root/lib/kbd/keymaps/legacy/i386/qwerty/emacs2.*' &&
+compgen -G 'root/lib/kbd/keymaps/legacy/i386/qwerty/emacs2.*' ||
+compgen -G 'root/usr/share/keymaps/i386/qwerty/emacs2.*' &&
 echo 'KEYMAP="emacs2"' >> root/etc/vconsole.conf
 
 # Select a preferred display manager when it is installed.
