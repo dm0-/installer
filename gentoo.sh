@@ -15,7 +15,7 @@ function create_buildroot() {
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools)
-        opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio sys-apps/busybox)
+        opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio)
         opt selinux && packages_buildroot+=(app-emulation/qemu) && profile+=/selinux && stage3=${stage3/+/-selinux+}
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
@@ -35,8 +35,10 @@ ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
 mkdir -p /etc/portage/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
 cat <(echo) - << 'EOG' >> /etc/portage/make.conf
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -selinux"
+INPUT_DEVICES="libinput"
 POLICY_TYPES="targeted"
 USE="\$USE ${options[selinux]:+selinux} systemd"
+VIDEO_CARDS="amdgpu intel nouveau"
 EOG
 echo -e '-selinux\n-static\n-static-libs' >> /etc/portage/profile/use.force
 echo -e 'sslv2\nsslv3\n-cet\n-systemd' >> /etc/portage/profile/use.mask
@@ -79,13 +81,6 @@ echo 'app-crypt/gnupg gnupg.conf' > /etc/portage/package.env/gnupg.conf
 # Turn off extra busybox features to make initrds smaller.
 echo 'sys-apps/busybox -* static' >> /etc/portage/package.use/host.conf
 
-# Statically link dmsetup to only need to copy one file into the initrd.
-${options[ramdisk]:+:} false && cat << 'EOG' >> /etc/portage/package.use/host.conf
-dev-libs/libaio static-libs
-sys-apps/util-linux static-libs
-sys-fs/lvm2 -* device-mapper-only static
-EOG
-
 # Support building the UEFI boot stub, its logo image, and signing tools.
 ${options[uefi]:+:} false && cat << 'EOG' >> /etc/portage/package.use/host.conf
 dev-libs/nss utils
@@ -108,6 +103,7 @@ EOG
 mkdir -p "/usr/${options[arch]}-gentoo-linux-gnu/etc"
 cp -at "/usr/${options[arch]}-gentoo-linux-gnu/etc" /etc/portage
 cd "/usr/${options[arch]}-gentoo-linux-gnu/etc/portage"
+sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g&/' make.conf
 cat << 'EOG' >> make.conf
 CHOST="${options[arch]}-gentoo-linux-gnu"
 ROOT="/usr/\$CHOST"
@@ -148,6 +144,7 @@ function install_packages() {
         if opt bootable
         then
                 test -s /usr/src/linux/.config
+                opt sb_key && sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=\".*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
                 make -C /usr/src/linux -j$(nproc) V=1
                 make -C /usr/src/linux install V=1
                 ln -fst "$ROOT/usr/src" ../../../../usr/src/linux
@@ -161,6 +158,9 @@ function install_packages() {
         # Install these outside the dependency graph because portage is broken.
         emerge --jobs=4 --nodeps --verbose \
             ${options[selinux]:+sec-policy/selinux-base} x11-base/xcb-proto
+
+        # Fonts need this but don't depend on it.
+        emerge --jobs=4 --nodeps --verbose media-fonts/font-util
 
         # Cheat systemd bootstrapping.
         USE='-* kill' emerge --jobs=4 --verbose sys-apps/util-linux
@@ -176,21 +176,34 @@ function install_packages() {
         (cd root ; exec ln -fst . usr/*)
         ln -fns .. "root/usr/${options[arch]}-gentoo-linux-gnu"  # Lazily work around bad packaging.
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
-        rm -f "root/usr/${options[arch]}-gentoo-linux-gnu"
+        mv -t root/usr/bin root/gcc-bin/*/*
+        rm -fr root/{binutils,gcc}-bin "root/usr/${options[arch]}-gentoo-linux-gnu"
 
         qlist -CIRSSUv > packages-buildroot.txt
         qlist --root=/ -CIRSSUv > packages-host.txt
         qlist --root=root -CIRSSUv > packages.txt
+
+        # Cross-compile minimal tools for an initrd after everything is done.
+        if opt ramdisk
+        then
+                opt verity && FEATURES=-buildpkg USE=static-libs \
+                emerge --changed-use --jobs=4 --oneshot --verbose \
+                    dev-libs/libaio sys-apps/util-linux
+                FEATURES=-buildpkg USE='-* device-mapper-only static' \
+                emerge --jobs=4 --nodeps --oneshot --verbose \
+                    sys-apps/busybox ${options[verity]:+sys-fs/lvm2}
+        fi
 }
 
 function distro_tweaks() {
         ln -fns ../lib/systemd/systemd root/usr/sbin/init
         ln -fns ../proc/self/mounts root/etc/mtab
 
-        sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
-
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
+
+        # The targeted policy seems more realistic to get working first.
+        sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
 
         # The targeted policy does not support a sensitivity level.
         sed -i -e 's/t:s0/t/g' \
@@ -209,13 +222,14 @@ fi
 
 function build_ramdisk() if opt ramdisk
 then
+        local -r sysroot="/usr/${options[arch]}-gentoo-linux-gnu"
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
         mkdir -p "$root"/{bin,dev,proc,sys,sysroot}
-        cp -pt "$root/bin" /bin/busybox
+        cp -pt "$root/bin" "$sysroot/bin/busybox"
         for cmd in ash mount losetup switch_root
         do ln -fns busybox "$root/bin/$cmd"
         done
-        opt verity && cp -p /sbin/dmsetup.static "$root/bin/dmsetup"
+        opt verity && cp -p "$sysroot/sbin/dmsetup.static" "$root/bin/dmsetup"
         cat << EOF > "$root/init" && chmod 0755 "$root/init"
 #!/bin/ash -eux
 export PATH=/bin
@@ -241,6 +255,7 @@ then
         echo '# Basic settings
 CONFIG_ACPI=y
 CONFIG_BLOCK=y
+CONFIG_KERNEL_XZ=y
 CONFIG_MULTIUSER=y
 CONFIG_SHMEM=y
 CONFIG_UNIX=y
@@ -256,6 +271,9 @@ CONFIG_BINFMT_ELF=y
 CONFIG_BINFMT_SCRIPT=y
 # Security settings
 CONFIG_FORTIFY_SOURCE=y
+CONFIG_HARDENED_USERCOPY=y
+CONFIG_RANDOMIZE_BASE=y
+CONFIG_RANDOMIZE_MEMORY=y
 CONFIG_RETPOLINE=y'
         test "x${options[arch]}" = xx86_64 && echo '# Architecture settings
 CONFIG_64BIT=y
@@ -273,11 +291,18 @@ CONFIG_RD_XZ=y
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
 CONFIG_BLK_DEV_LOOP_MIN_COUNT=1'
+        opt sb_key && opt sb_cert && echo '# Signing settings
+CONFIG_MODULE_SIG=y
+CONFIG_MODULE_SIG_ALL=y
+CONFIG_MODULE_SIG_FORCE=y
+CONFIG_MODULE_SIG_SHA512=y'
         opt selinux && echo '# SELinux settings
 CONFIG_AUDIT=y
 CONFIG_SECURITY=y
 CONFIG_SECURITY_NETWORK=y
-CONFIG_SECURITY_SELINUX=y'
+CONFIG_SECURITY_SELINUX=y
+CONFIG_SECURITY_SELINUX_DEVELOP=y    # XXX: Start permissive.
+CONFIG_SECURITY_SELINUX_BOOTPARAM=y  # XXX: Support toggling at boot to test.'
         opt squash && echo '# Squashfs settings
 CONFIG_MISC_FILESYSTEMS=y
 CONFIG_SQUASHFS=y

@@ -133,7 +133,7 @@ function customize() {
         install -pm 0644 -t root/lib/modules/*/kernel/drivers/net/wireless \
             rtl8812au/88XXau.ko
 
-        # Sign the custom kernel module to be usable with Secure Boot.
+        # Sign the out-of-tree kernel modules to be usable with Secure Boot.
         ! opt sb_key ||
         /lib/modules/*/build/scripts/sign-file \
             sha256 "$keydir/sign.key" "$keydir/sign.crt" \

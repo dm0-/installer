@@ -140,6 +140,7 @@ EOP-
 cat << 'EOP-' > "\$keydir/sign.crt"
 $(<"${options[sb_cert]}")
 EOP-
+cat "\$keydir/sign.crt" <(echo) "\$keydir/sign.key" > "\$keydir/sign.pem"
 if ${options[uefi]:+:} false
 then
         openssl pkcs12 -export \
