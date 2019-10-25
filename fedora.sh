@@ -182,6 +182,16 @@ then
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
 
+        # Load NVMe support before verity so dm-init can find the partition.
+        if opt nvme
+        then
+                $mkdir -p "$buildroot/etc/modprobe.d"
+                echo > "$buildroot/etc/modprobe.d/nvme-verity.conf" \
+                    'softdep dm-verity pre: nvme'
+                echo >> "$buildroot/etc/dracut.conf.d/99-nvme-verity.conf" \
+                    'install_optional_items+=" /etc/modprobe.d/nvme-verity.conf "'
+        fi
+
         # Since systemd can't skip canonicalization, wait for a udev hack.
         if opt verity
         then

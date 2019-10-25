@@ -7,6 +7,7 @@ options[distro]=fedora
 options[bootable]=    # Include a kernel and init system to boot the image
 options[executable]=  # Create an executable disk image file
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
+options[nvme]=        # Support root on an NVMe disk.
 options[partuuid]=    # The partition UUID for verity to map into the root FS
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
@@ -643,8 +644,10 @@ function double_display_scale() {
         sed -i -e '/^FONT=/d' root/etc/vconsole.conf &&
         echo 'FONT="latarcyrheb-sun32"' >> root/etc/vconsole.conf
 
-        test -s root/usr/share/glib-2.0/schemas/org.gnome.settings-daemon.plugins.xsettings.gschema.xml &&
+        test -s root/usr/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml &&
         cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_display.scale.gschema.override
+[org.gnome.desktop.interface]
+scaling-factor=2
 [org.gnome.settings-daemon.plugins.xsettings]
 overrides={'Gdk/WindowScalingFactor':<2>}
 EOF

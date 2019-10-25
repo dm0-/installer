@@ -61,6 +61,7 @@ echo sys-kernel/linux-firmware linux-fw-redistributable no-source-code >> /etc/p
 
 # Support SELinux with systemd.
 echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/package.unmask/systemd.conf
+echo -e 'gnome-base/*\ngnome-extra/*' >> /etc/portage/package.unmask/gnome.conf
 
 # Support zstd squashfs compression (and fix a missing linked library).
 echo '~sys-fs/squashfs-tools-4.4' >> /etc/portage/package.accept_keywords/squashfs-tools.conf
@@ -284,6 +285,9 @@ CONFIG_NET=y
 CONFIG_INET=y
 CONFIG_IPV6=y
 CONFIG_PACKET=y'
+        opt nvme && echo '# NVMe settings
+CONFIG_PCI=y
+CONFIG_BLK_DEV_NVME=y'
         opt ramdisk && echo '# Initrd settings
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_RD_XZ=y

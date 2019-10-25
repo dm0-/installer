@@ -8,7 +8,7 @@ options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [executable]=1   # Generate a VM image for fast testing.
         [networkd]=1     # Let systemd manage the network configuration.
-        [ramdisk]=1      # Bundle the root file system into an initrd.
+        [nvme]=1         # Support root on an NVMe disk.
         [selinux]=1      # Load a targeted SELinux policy in permissive mode.
         [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=1         # Create a UEFI executable that boots into this image.
@@ -17,9 +17,11 @@ options+=(
 
 packages+=(
         # Utilities
+        app-arch/tar
         app-editors/emacs
         app-shells/bash
         dev-vcs/git
+        sys-apps/file
         sys-apps/findutils
         sys-apps/gawk
         sys-apps/grep
@@ -36,6 +38,7 @@ packages+=(
         net-firewall/iptables
         net-misc/wget
         net-wireless/wpa_supplicant
+        sys-apps/iproute2
 
         # Graphics
         x11-apps/xrandr
@@ -59,39 +62,43 @@ packages_buildroot+=(
 )
 
 function customize_buildroot() {
-        local -r sysroot="$buildroot/usr/${options[arch]}-gentoo-linux-gnu"
+        local -r portage="$buildroot/usr/${options[arch]}-gentoo-linux-gnu/etc/portage"
 
         # Assume the build system is the target, and tune compilation for it.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
-            "$sysroot/etc/portage/make.conf"
+            "$portage/make.conf"
         enter /usr/bin/cpuid2cpuflags |
-        $sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "$sysroot/etc/portage/make.conf"
+        $sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "$portage/make.conf"
+        echo 'USE="$USE -multiarch"' >> "$portage/make.conf"
 
         # Enable general system settings.
-        echo >> "$sysroot/etc/portage/make.conf" 'USE="$USE' \
-            curl emacs gcrypt gdbm git gmp gpg imagemagick libxml2 lzma mpfr ncurses pcre2 readline sqlite udev uuid \
+        echo >> "$portage/make.conf" 'USE="$USE' twm \
+            curl emacs gcrypt gdbm git gmp gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
             icu idn libidn2 nls unicode \
-            apng gif jpeg jpeg2k png svg webp xpm \
-            acl caps cracklib pam seccomp xattr xcsecurity \
-            acpi dri kms libglvnd opengl smartcard usb uvm vaapi vdpau wifi \
-            cairo gtk3 pulseaudio X xcb xinerama xkb xorg \
-            branding cet dynamic-loading ipv6 jit offensive threads wide-int \
-            -gallium -llvm -perl -python -sendmail'"'
+            apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            bzip2 gzip lz4 lzma lzo xz zlib zstd \
+            acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
+            acpi dri kms libglvnd libkms opengl usb uvm vaapi vdpau wifi \
+            cairo gtk3 pango plymouth pulseaudio X xcb xinerama xkb xorg \
+            branding cet ipv6 jit lto offensive threads \
+            dynamic-loading hwaccel postproc secure-delete wide-int \
+            -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" \
-            'USE="$USE' -gallium -llvm -perl -python -sendmail -X'"'
-        echo >> "$buildroot/etc/portage/make.conf" 'VIDEO_CARDS=""'
+        $cat << 'EOF' >> "$buildroot/etc/portage/make.conf"
+USE="$USE -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X"
+VIDEO_CARDS=""
+EOF
 
         # Don't build Emacs as a GUI application.
-        echo 'app-editors/emacs -X' >> "$sysroot/etc/portage/package.use/emacs.conf"
+        echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
 
         # Use the latest NVIDIA drivers.
-        echo 'VIDEO_CARDS="nvidia"' >> "$sysroot/etc/portage/make.conf"
-        echo x11-drivers/nvidia-drivers >> "$sysroot/etc/portage/package.accept_keywords/nvidia.conf"
-        echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$sysroot/etc/portage/package.license/nvidia.conf"
-        echo 'x11-drivers/nvidia-drivers -tools' >> "$sysroot/etc/portage/package.use/nvidia.conf"
+        echo 'VIDEO_CARDS="nvidia"' >> "$portage/make.conf"
+        echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
+        echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
+        echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
 
         # Produce the kernel config by disabling everything, then enabling system settings.
         write_minimal_system_kernel_configuration > "$output/config"
@@ -190,8 +197,6 @@ CONFIG_KVM_INTEL=y
 CONFIG_MICROCODE_INTEL=y
 CONFIG_SCHED_MC=y
 CONFIG_SCHED_MC_PRIO=y
-## NVMe hard drive
-CONFIG_BLK_DEV_NVME=y
 ## Intel Wi-Fi 6 AX200
 CONFIG_CFG80211=y
 CONFIG_MAC80211=y
@@ -225,7 +230,6 @@ CONFIG_INPUT_MOUSE=y
 CONFIG_KEYBOARD_ATKBD=y
 CONFIG_MOUSE_PS2=y
 ## QEMU default disk
-CONFIG_PCI=y
 CONFIG_ATA=y
 CONFIG_ATA_BMDMA=y
 CONFIG_ATA_SFF=y
