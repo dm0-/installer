@@ -44,11 +44,9 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Status / Notes / To Do
 
-The project is currently at the stage where I've just dumped some useful things into shell functions that are randomly scattered around the directory.  It will be completely revised at some point.  Don't expect anything in here to be stable.  Don't use this in general.
+The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Three distros are supported to varying degrees:
 
-A few bits currently expect to be running on x86_64.  Three distros are supported to varying degrees:
-
-  - Fedora supports all features, but only Fedora 30 can be used since it is the only release with an imported GPG key.
+  - Fedora supports all features, but only Fedora 30 and 31 (the default) can be used.
   - CentOS 8 should support everything.  CentOS 7 is too old to support building a UEFI image.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
 
@@ -65,8 +63,6 @@ A few bits currently expect to be running on x86_64.  Three distros are supporte
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
 
 ### Fedora
-
-**Support different Fedora releases.**  The Fedora container is signed with a different key for each release, so in order to use anything other than the latest version, a keyring for supported releases needs to be maintained.  A workaround is to set e.g. `options[release]=31` in `customize_buildroot` to install packages from that release into the image after the buildroot has been created with a supported release.
 
 **Report when the image should be updated.**  When a system saves the RPM database and has network access, it should automatically check Fedora updates for enhancements, bug fixes, and security issues so it can create a report advising when an updated immutable image should be created and applied.  I will probably implement this in a custom package in my local repo and integrate it with a real monitoring server, but I am noting it here in case I decide to add it to the base system and put a report in root's MOTD (to provide the information without assumptions about network monitoring).  The equivalent can be done for CentOS or via GLSAs, but Fedora is my priority here.
 
