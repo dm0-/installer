@@ -30,10 +30,14 @@ packages+=(
         sys-apps/man-pages
         sys-apps/sed
         sys-apps/which
+        sys-process/lsof
         sys-process/procps
         ## Accounts
         app-admin/sudo
         sys-apps/shadow
+        ## Hardware
+        sys-apps/pciutils
+        sys-apps/usbutils
         ## Network
         net-firewall/iptables
         net-misc/wget
@@ -70,7 +74,13 @@ function customize_buildroot() {
             "$portage/make.conf"
         enter /usr/bin/cpuid2cpuflags |
         $sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "$portage/make.conf"
-        echo 'USE="$USE -multiarch"' >> "$portage/make.conf"
+        echo 'USE="$USE cet"' >> "$portage/make.conf"
+
+        # Use the latest NVIDIA drivers.
+        echo -e 'USE="$USE kmod"\nVIDEO_CARDS="nvidia"' >> "$portage/make.conf"
+        echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
+        echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
+        echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
@@ -81,28 +91,21 @@ function customize_buildroot() {
             acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
             acpi dri kms libglvnd libkms opengl usb uvm vaapi vdpau wifi \
             cairo gtk3 pango plymouth pulseaudio X xcb xinerama xkb xorg \
-            branding cet ipv6 jit lto offensive threads \
+            branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete wide-int \
             -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
-        $cat << 'EOF' >> "$buildroot/etc/portage/make.conf"
-USE="$USE -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X"
-VIDEO_CARDS=""
-EOF
+        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
+            -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X'"'
 
         # Don't build Emacs as a GUI application.
         echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
 
-        # Use the latest NVIDIA drivers.
-        echo 'VIDEO_CARDS="nvidia"' >> "$portage/make.conf"
-        echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
-        echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
-        echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
-
-        # Produce the kernel config by disabling everything, then enabling system settings.
+        # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig KCONFIG_ALLCONFIG=/wd/config V=1
+        enter /usr/bin/make -C /usr/src/linux allnoconfig \
+            ARCH=x86 KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
 function customize() {
@@ -117,6 +120,7 @@ function customize() {
                 usr/lib/.build-id
                 usr/lib/debug
                 usr/lib/firmware
+                usr/libexec/gcc
                 usr/src
         )
 

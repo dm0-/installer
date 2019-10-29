@@ -1,22 +1,15 @@
 packages=()
 packages_buildroot=()
 
-DEFAULT_PROFILE=17.1
-DEFAULT_RELEASE=$($curl -L https://gentoo.osuosl.org/releases/amd64/autobuilds/latest-stage3-amd64-hardened-selinux+nomultilib.txt | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
-options[arch]=$DEFAULT_ARCH
-options[profile]=$DEFAULT_PROFILE
-options[release]=$DEFAULT_RELEASE
-
 function create_buildroot() {
-        local -A archmap=([x86_64]=amd64)
-        local -r arch="${archmap[$DEFAULT_ARCH]:-amd64}"
-        local profile="default/linux/$arch/${options[profile]:=$DEFAULT_PROFILE}/no-multilib/hardened"
-        local stage3="https://gentoo.osuosl.org/releases/$arch/autobuilds/${options[release]:=$DEFAULT_RELEASE}/hardened/stage3-$arch-hardened+nomultilib-${options[release]}.tar.xz"
+        local -r hostprofile=${options[hostprofile]:-$(archmap_profile)}
+        local -r profile=${options[profile]:-$(archmap_profile "${options[arch]-}")}
+        local -r stage3=${options[stage3]:-$(archmap_stage3)}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools)
         opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio)
-        opt selinux && packages_buildroot+=(app-emulation/qemu) && profile+=/selinux && stage3=${stage3/+/-selinux+}
+        opt selinux && packages_buildroot+=(app-emulation/qemu)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork) &&
@@ -31,14 +24,14 @@ function create_buildroot() {
         $rm -f "$output/digests" "$output/stage3.tar.xz"
 
         script << EOF
-ln -fns /var/db/repos/gentoo/profiles/$profile /etc/portage/make.profile
+ln -fns ../../var/db/repos/gentoo/profiles/$hostprofile /etc/portage/make.profile
 mkdir -p /etc/portage/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
-cat <(echo) - << 'EOG' >> /etc/portage/make.conf
-FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -selinux"
+cat <(echo /etc/env.d/gcc/config-* | sed 's/[^-]*-\(.*\)/\nCBUILD="\1"/') - << 'EOG' >> /etc/portage/make.conf
+FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -selinux"
 INPUT_DEVICES="libinput"
 POLICY_TYPES="targeted"
 USE="\$USE ${options[selinux]:+selinux} systemd"
-VIDEO_CARDS="amdgpu intel nouveau"
+VIDEO_CARDS=""
 EOG
 echo -e '-selinux\n-static\n-static-libs' >> /etc/portage/profile/use.force
 echo -e 'sslv2\nsslv3\n-cet\n-systemd' >> /etc/portage/profile/use.mask
@@ -75,10 +68,6 @@ echo 'PKG_INSTALL_MASK="/usr/sbin/setfiles"' >> /etc/portage/env/policycoreutils
 echo 'sys-libs/pam pam.conf' >> /etc/portage/package.env/pam.conf
 echo 'sys-apps/policycoreutils policycoreutils.conf' >> /etc/portage/package.env/policycoreutils.conf
 
-# Fix cross-compiling GPG.
-echo 'CPPFLAGS="-I\${SYSROOT}/usr/include/libusb-1.0"' > /etc/portage/env/gnupg.conf
-echo 'app-crypt/gnupg gnupg.conf' > /etc/portage/package.env/gnupg.conf
-
 # Turn off extra busybox features to make initrds smaller.
 echo 'sys-apps/busybox -* static' >> /etc/portage/package.use/host.conf
 
@@ -101,9 +90,10 @@ cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 location = /var/db/repos/crossdev
 EOG
 
-mkdir -p "/usr/${options[arch]}-gentoo-linux-gnu/etc"
+mkdir -p "/usr/${options[arch]:=$DEFAULT_ARCH}-gentoo-linux-gnu/etc"
 cp -at "/usr/${options[arch]}-gentoo-linux-gnu/etc" /etc/portage
 cd "/usr/${options[arch]}-gentoo-linux-gnu/etc/portage"
+ln -fns ../../../../var/db/repos/gentoo/profiles/$profile make.profile
 sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g&/' make.conf
 cat << 'EOG' >> make.conf
 CHOST="${options[arch]}-gentoo-linux-gnu"
@@ -113,7 +103,14 @@ PKG_CONFIG_SYSROOT_DIR="\$SYSROOT"
 PKGDIR="\$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"
 FEATURES="\$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
-USE="\$USE -static -static-libs"
+USE="\$USE -kmod -multiarch -static -static-libs"
+EOG
+echo 'CPPFLAGS="-I\${SYSROOT}/usr/include/libusb-1.0"' > env/libusb.conf
+echo 'CPPFLAGS="-I\${SYSROOT}/usr/include/python3.6m"' > env/python.conf
+cat << 'EOG' > package.env/fix-cross-compiling.conf
+app-crypt/gnupg libusb.conf
+dev-python/pypax python.conf
+sys-apps/portage python.conf
 EOG
 cat << 'EOG' >> package.use/kill.conf
 # Use the kill command from util-linux to minimize systemd dependencies.
@@ -146,7 +143,9 @@ function install_packages() {
         then
                 test -s /usr/src/linux/.config
                 opt sb_key && sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=\".*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
-                make -C /usr/src/linux -j$(nproc) V=1
+                make -C /usr/src/linux -j$(nproc) V=1 \
+                    ARCH="${options[arch]/#i[3-6]86/x86}" \
+                    CROSS_COMPILE="${options[arch]}-gentoo-linux-gnu-"
                 make -C /usr/src/linux install V=1
                 ln -fst "$ROOT/usr/src" ../../../../usr/src/linux
         fi
@@ -204,6 +203,7 @@ function distro_tweaks() {
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
 
         # The targeted policy seems more realistic to get working first.
+        test -s root/etc/selinux/config &&
         sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
 
         # The targeted policy does not support a sensitivity level.
@@ -463,4 +463,42 @@ yqu4wb67pwMX312ABdpW
 EOF
         $gpg --verify "$1"
         test x$($sed -n '/^[0-9a-f]/{s/ .*//p;q;}' "$1") = x$($sha512sum "$2" | $sed -n '1s/ .*//p')
+}
+
+function archmap() case "${*:-$DEFAULT_ARCH}" in
+    aarch64)  echo arm64 ;;
+    arm*)     echo arm ;;
+    i[3-6]86) echo x86 ;;
+    x86_64)   echo amd64 ;;
+    *) return 1 ;;
+esac
+
+function archmap_profile() {
+        local -r nomulti=$(test ${#:-0} -eq 0 || echo /no-multilib)
+        local -r selinux=${options[selinux]:+/selinux}
+        case "${*:-$DEFAULT_ARCH}" in
+            aarch64)  echo default/linux/arm64/17.0/systemd ;;
+            armv7a)   echo default/linux/arm/17.0/armv7a ;;
+            i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
+            x86_64)   echo default/linux/amd64/17.1$nomulti/hardened$selinux ;;
+            *) return 1 ;;
+        esac
+}
+
+function archmap_stage3() {
+        local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
+        local -r selinux=${options[selinux]:+-selinux}
+
+        local stage3
+        case "${*:-$DEFAULT_ARCH}" in
+            armv7a)  stage3=stage3-armv7a_hardfp ;;
+            i[45]86) stage3=stage3-i486 ;;
+            i686)    stage3=stage3-i686-hardened ;;
+            x86_64)  stage3=stage3-amd64-hardened$selinux ;;
+            *) return 1 ;;
+        esac
+
+        local -r build=$($curl -L "$base/latest-$stage3.txt" | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
+        [[ $stage3 =~ hardened ]] && stage3="hardened/$stage3"
+        echo "$base/$build/$stage3-$build.tar.xz"
 }

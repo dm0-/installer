@@ -2,7 +2,6 @@ packages=(glibc-minimal-langpack)
 packages_buildroot=(glibc-minimal-langpack)
 
 DEFAULT_RELEASE=30
-options[arch]=
 
 function create_buildroot() {
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-1.2.$DEFAULT_ARCH.tar.xz"
