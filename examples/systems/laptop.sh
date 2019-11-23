@@ -18,8 +18,9 @@ options+=(
 packages+=(
         # Utilities
         app-arch/tar
-        app-editors/emacs
+        app-arch/unzip
         app-shells/bash
+        dev-util/strace
         dev-vcs/git
         sys-apps/file
         sys-apps/findutils
@@ -40,14 +41,14 @@ packages+=(
         sys-apps/usbutils
         ## Network
         net-firewall/iptables
+        net-misc/openssh
         net-misc/wget
         net-wireless/wpa_supplicant
         sys-apps/iproute2
 
         # Graphics
         x11-apps/xrandr
-        x11-drivers/nvidia-drivers
-        x11-drivers/xf86-input-libinput
+        x11-base/xorg-server
         x11-terms/xterm
         x11-wm/twm
 )
@@ -60,17 +61,14 @@ packages_buildroot+=(
         net-wireless/wireless-regdb
         sys-firmware/intel-microcode
         sys-kernel/linux-firmware
-
-        # The Git dependency for gettext should be in BDEPEND.
-        dev-vcs/git
 )
 
 function customize_buildroot() {
-        local -r portage="$buildroot/usr/${options[arch]}-gentoo-linux-gnu/etc/portage"
+        local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Assume the build system is the target, and tune compilation for it.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize -flto=jobserver&/' \
             "$portage/make.conf"
         enter /usr/bin/cpuid2cpuflags |
         $sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "$portage/make.conf"
@@ -84,28 +82,30 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl emacs gcrypt gdbm git gmp gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            curl gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
             icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
-            acpi dri kms libglvnd libkms opengl usb uvm vaapi vdpau wifi \
+            acpi dri kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
             cairo gtk3 pango plymouth pulseaudio X xcb xinerama xkb xorg \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete wide-int \
-            -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
+            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X'"'
 
-        # Don't build Emacs as a GUI application.
+        # Install Emacs as a terminal application.
+        packages+=(app-editors/emacs)
+        echo 'USE="$USE emacs"' >> "$portage/make.conf"
         echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig \
-            ARCH=x86 KCONFIG_ALLCONFIG=/wd/config V=1
+        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=x86 \
+            CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
 function customize() {
@@ -121,6 +121,8 @@ function customize() {
                 usr/lib/debug
                 usr/lib/firmware
                 usr/libexec/gcc
+                usr/local
+                usr/share/gcc-data
                 usr/src
         )
 
@@ -163,7 +165,7 @@ CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
 # Support encrypted partitions.
-CONFIG_DM_CRYPT=y
+CONFIG_DM_CRYPT=m
 # Support running virtual machines in QEMU.
 CONFIG_HIGH_RES_TIMERS=y
 CONFIG_VIRTUALIZATION=y
@@ -190,9 +192,20 @@ CONFIG_IP_NF_IPTABLES=y
 CONFIG_IP_NF_FILTER=y
 CONFIG_IP6_NF_IPTABLES=y
 CONFIG_IP6_NF_FILTER=y
+# Support some optional systemd functionality.
+CONFIG_BPF_JIT=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_CGROUP_BPF=y
+CONFIG_COREDUMP=y
+CONFIG_MAGIC_SYSRQ=y
+CONFIG_NET_SCHED=y
+CONFIG_NET_SCH_DEFAULT=y
+CONFIG_NET_SCH_FQ_CODEL=y
 # TARGET HARDWARE: Lenovo Thinkpad P1 (Gen 2)
-## Bundle firmware/microcode for CPU, wifi, bluetooth
-CONFIG_EXTRA_FIRMWARE="intel-ucode/06-9e-0d iwlwifi-cc-a0-48.ucode intel/ibt-20-1-3.sfi regulatory.db regulatory.db.p7s"
+CONFIG_PCI_MSI=y
+CONFIG_PM=y
+## Bundle firmware/microcode
+CONFIG_EXTRA_FIRMWARE="intel/ibt-20-1-3.ddc intel/ibt-20-1-3.sfi intel-ucode/06-9e-0d iwlwifi-cc-a0-48.ucode regulatory.db regulatory.db.p7s"
 ## Intel Core i7 9850H
 CONFIG_ARCH_RANDOM=y
 CONFIG_CPU_SUP_INTEL=y
@@ -201,15 +214,36 @@ CONFIG_KVM_INTEL=y
 CONFIG_MICROCODE_INTEL=y
 CONFIG_SCHED_MC=y
 CONFIG_SCHED_MC_PRIO=y
+## USB 3 support
+CONFIG_USB_SUPPORT=y
+CONFIG_USB=y
+CONFIG_USB_PCI=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_PCI=y
+## Intel e1000e gigabit Ethernet
+CONFIG_NETDEVICES=y
+CONFIG_ETHERNET=y
+CONFIG_NET_VENDOR_INTEL=y
+CONFIG_E1000E=y
 ## Intel Wi-Fi 6 AX200
 CONFIG_CFG80211=y
 CONFIG_MAC80211=y
-CONFIG_NETDEVICES=y
 CONFIG_WLAN=y
 CONFIG_WLAN_VENDOR_INTEL=y
 CONFIG_IWLMVM=y
 CONFIG_IWLWIFI=y
-## Nvidia Quadro T2000 (enable modules to build the proprietary driver)
+## Bluetooth (built in 5.0 over USB)
+CONFIG_BT=y
+CONFIG_BT_HCIBTUSB=y
+CONFIG_BT_BREDR=y
+CONFIG_BT_LE=y
+CONFIG_BT_HS=y
+## Intel HDA sound
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_PCI=y
+CONFIG_SND_HDA_INTEL=y
+## NVIDIA Quadro T2000 (enable modules to build the proprietary driver)
 CONFIG_MODULES=y
 CONFIG_MODULE_COMPRESS=y
 CONFIG_MODULE_COMPRESS_XZ=y
@@ -217,22 +251,26 @@ CONFIG_MTRR=y
 CONFIG_MTRR_SANITIZER=y
 CONFIG_SYSVIPC=y
 CONFIG_ZONE_DMA=y
-## Input
-CONFIG_INPUT=y
-CONFIG_INPUT_EVDEV=y
-# TARGET HARDWARE: QEMU
-## QEMU default graphics
-CONFIG_DRM_BOCHS=y
-## QEMU default network
-CONFIG_NETDEVICES=y
-CONFIG_ETHERNET=y
-CONFIG_NET_VENDOR_INTEL=y
-CONFIG_E1000=y
-## QEMU default PS/2 input
+## Keyboard, touchpad, and trackpoint
 CONFIG_INPUT_KEYBOARD=y
 CONFIG_INPUT_MOUSE=y
 CONFIG_KEYBOARD_ATKBD=y
 CONFIG_MOUSE_PS2=y
+## Input
+CONFIG_HID=y
+CONFIG_HID_BATTERY_STRENGTH=y
+CONFIG_HID_GENERIC=y
+CONFIG_INPUT=y
+CONFIG_INPUT_EVDEV=y
+## Optional USB devices
+CONFIG_HID_GYRATION=m  # wireless mouse and keyboard
+CONFIG_USB_ACM=m       # fit-PC status LED
+CONFIG_USB_HID=m       # mice and keyboards
+# TARGET HARDWARE: QEMU
+## QEMU default graphics
+CONFIG_DRM_BOCHS=m
+## QEMU default network
+CONFIG_E1000=m
 ## QEMU default disk
 CONFIG_ATA=y
 CONFIG_ATA_BMDMA=y

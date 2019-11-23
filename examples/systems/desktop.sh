@@ -33,6 +33,7 @@ packages+=(
         vim-minimal
         which
         ## Accounts
+        cracklib-dicts
         passwd
         sudo
         ## Hardware

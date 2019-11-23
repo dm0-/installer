@@ -40,7 +40,7 @@ function install_packages() {
 
         mkdir -p root/var/cache/yum
         mount --bind /var/cache/yum root/var/cache/yum
-        trap -- 'umount root/var/cache/yum' RETURN
+        trap -- 'umount root/var/cache/yum ; trap - RETURN' RETURN
 
         yum --assumeyes --installroot="$PWD/root" \
             --releasever="${options[release]}" \
@@ -59,6 +59,9 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d
         echo > root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d/tmpfiles.conf \
             -e '[Unit]\nAfter=systemd-tmpfiles-setup.service'
+
+        test -x root/usr/libexec/upowerd &&
+        echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
@@ -88,6 +91,9 @@ s/\(-name \)\?sd_mod\(.ko.xz -o\)\?/\1crct10dif_common\2 \1crc-t10dif\2 &/')"
 eval "$(declare -f build_ramdisk relabel |
 $sed 's/cpio -D \([^ ]*\) \([^|]*\)|/{ cd \1 ; cpio \2 ; } |/')"
 
+# Override the /etc overlay to disable persistent Git support.
+eval "$(declare -f overlay_etc | $sed 's/test.*git/false/')"
+
 # Override initrd configuration to add device mapper support when needed.
 eval "$(declare -f configure_initrd_generation | $sed /hostonly=/r<(echo \
     "opt verity && echo 'add_dracutmodules+=\" dm \"'" \
@@ -95,7 +101,7 @@ eval "$(declare -f configure_initrd_generation | $sed /hostonly=/r<(echo \
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
-        trap -- "$rm -fr $GNUPGHOME" RETURN
+        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

@@ -2,9 +2,10 @@ packages=()
 packages_buildroot=()
 
 function create_buildroot() {
-        local -r hostprofile=${options[hostprofile]:-$(archmap_profile)}
-        local -r profile=${options[profile]:-$(archmap_profile "${options[arch]-}")}
+        local -r arch=${options[arch]:=$DEFAULT_ARCH}
+        local -r profile=${options[profile]:-$(archmap_profile "$arch")}
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
+        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools)
@@ -14,7 +15,6 @@ function create_buildroot() {
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork) &&
         opt sb_cert && opt sb_key && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
-        packages_buildroot+=(dev-util/debugedit sys-devel/crossdev)
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -23,103 +23,167 @@ function create_buildroot() {
         $tar -C "$buildroot" -xJf "$output/stage3.tar.xz"
         $rm -f "$output/digests" "$output/stage3.tar.xz"
 
-        script << EOF
-ln -fns ../../var/db/repos/gentoo/profiles/$hostprofile /etc/portage/make.profile
-mkdir -p /etc/portage/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
-cat <(echo /etc/env.d/gcc/config-* | sed 's/[^-]*-\(.*\)/\nCBUILD="\1"/') - << 'EOG' >> /etc/portage/make.conf
+        # Write a portage profile common to the native host and target system.
+        local portage="$buildroot/etc/portage"
+        $ln -fns "../../var/db/repos/gentoo/profiles/$(archmap_profile)" "$portage/make.profile"
+        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
+        echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
+        $cat << EOF >> "$portage/make.conf"
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -selinux"
 INPUT_DEVICES="libinput"
 POLICY_TYPES="targeted"
 USE="\$USE ${options[selinux]:+selinux} systemd"
 VIDEO_CARDS=""
-EOG
-echo -e '-selinux\n-static\n-static-libs' >> /etc/portage/profile/use.force
-echo -e 'sslv2\nsslv3\n-cet\n-systemd' >> /etc/portage/profile/use.mask
-cat << 'EOG' >> /etc/portage/profile/package.provided
+EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
+# Accept boot-related utilities with no stable versions.
+app-crypt/pesign
+sys-boot/vboot-utils
+EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
+# Accept the newest kernel and SELinux policy.
+sys-kernel/gentoo-sources
+sys-kernel/linux-headers
+sec-policy/*
+EOF
+        $cat << 'EOF' >> "$portage/package.license/ucode.conf"
+# Accept CPU microcode licenses.
+sys-firmware/intel-microcode intel-ucode
+sys-kernel/linux-firmware linux-fw-redistributable no-source-code
+EOF
+        $cat << 'EOF' >> "$portage/package.unmask/systemd.conf"
+# Unmask systemd when SELinux is enabled.
+gnome-base/*
+gnome-extra/*
+sys-apps/gentoo-systemd-integration
+sys-apps/systemd
+EOF
+        $cat << 'EOF' >> "$portage/package.use/kmod.conf"
+# Support installing kernels configured with compressed modules.
+sys-apps/kmod lzma
+EOF
+        $cat << 'EOF' >> "$portage/package.use/squashfs-tools.conf"
+# Support zstd squashfs compression.
+sys-fs/squashfs-tools zstd
+EOF
+        $cat << 'EOF' >> "$portage/profile/package.provided"
 # These Python tools are not useful, and they pull in horrific dependencies.
 app-admin/setools-9999
-EOG
+EOF
+        $cat << 'EOF' >> "$portage/profile/packages"
+# Don't force building HFS utilities.
+-*sys-fs/hfsutils
+-*sys-fs/hfsplusutils
+EOF
+        $cat << 'EOF' >> "$portage/profile/use.mask"
+# Mask support for insecure protocols.
+sslv2
+sslv3
+EOF
 
-# Accept the newest kernel and SELinux policy.
-echo sys-kernel/gentoo-sources >> /etc/portage/package.accept_keywords/linux.conf
-echo sys-kernel/linux-headers >> /etc/portage/package.accept_keywords/linux.conf
-echo 'sec-policy/*' >> /etc/portage/package.accept_keywords/selinux.conf
+        # Permit selectively toggling important features.
+        echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
+        echo -e '-cet\n-systemd' >> "$portage/profile/use.mask"
 
-# Accept the Secure Boot signing utility.
-echo app-crypt/pesign >> /etc/portage/package.accept_keywords/pesign.conf
+        # Write build environment modifiers for later use.
+        echo 'LDFLAGS="-lgcc_s $LDFLAGS"' >> "$portage/env/link-gcc_s.conf"
+        $cat << 'EOF' >> "$portage/env/no-lto.conf"
+CFLAGS="$CFLAGS -fno-lto"
+CXXFLAGS="$CXXFLAGS -fno-lto"
+FFLAGS="$FFLAGS -fno-lto"
+FCFLAGS="$FCFLAGS -fno-lto"
+EOF
 
-# Accept CPU microcode licenses.
-echo sys-firmware/intel-microcode intel-ucode >> /etc/portage/package.license/ucode.conf
-echo sys-kernel/linux-firmware linux-fw-redistributable no-source-code >> /etc/portage/package.license/ucode.conf
+        # Accept gettext-0.20.1 to fix host dependencies.
+        echo sys-devel/gettext >> "$portage/package.accept_keywords/gettext.conf"
+        # Accept pam-1.3.1 to fix UsrMerge compatibility.
+        echo sys-libs/pam >> "$portage/package.accept_keywords/pam.conf"
+        # Accept squashfs-4.4 for zstd compression and reproducibile images.
+        echo '~sys-fs/squashfs-tools-4.4' >> "$portage/package.accept_keywords/squashfs-tools.conf"
+        # Accept upower-0.99.11 to fix SELinux labels on state directories.
+        echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
+        # Fix bad policycoreutils packaging being incompatible with UsrMerge.
+        echo -e 'INSTALL_MASK="/usr/sbin/setfiles"\nPKG_INSTALL_MASK="$INSTALL_MASK"' >> "$portage/env/policycoreutils.conf"
+        echo 'sys-apps/policycoreutils policycoreutils.conf' >> "$portage/package.env/policycoreutils.conf"
 
-# Support SELinux with systemd.
-echo -e 'sys-apps/gentoo-systemd-integration\nsys-apps/systemd' >> /etc/portage/package.unmask/systemd.conf
-echo -e 'gnome-base/*\ngnome-extra/*' >> /etc/portage/package.unmask/gnome.conf
+        # Create the target portage profile based on the native root's.
+        portage="$buildroot/usr/$host/etc/portage"
+        $mkdir -p "${portage%/portage}"
+        $cp -at "${portage%/portage}" "$buildroot/etc/portage"
+        $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
+        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g&/' "$portage/make.conf"
+        $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
+ROOT="/usr/$CHOST"
+SYSROOT="$ROOT"
+PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+PKGDIR="$ROOT/var/cache/binpkgs"
+PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
+FEATURES="$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
+USE="$USE -kmod -multiarch -static -static-libs"
+EOF
+        $cat << 'EOF' >> "$portage/package.use/kill.conf"
+# Use the kill command from util-linux to minimize systemd dependencies.
+sys-apps/util-linux kill
+sys-process/procps -kill
+EOF
+        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
+        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
+        echo 'NCURSESW6_CONFIG="$SYSROOT/usr/bin/ncursesw6-config"' >> "$portage/env/cross-ncurses.conf"
+        $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
+# Adjust the environment for cross-compiling broken packages.
+app-crypt/gnupg cross-libusb.conf
+dev-python/pypax cross-python.conf
+sys-apps/portage cross-python.conf
+sys-apps/util-linux cross-ncurses.conf
+EOF
+        $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
+# Turn off LTO for broken packages.
+dev-libs/icu no-lto.conf
+sys-libs/libselinux no-lto.conf
+sys-libs/libsemanage no-lto.conf
+sys-libs/libsepol no-lto.conf
+EOF
+        echo split-usr >> "$portage/profile/use.mask"
 
-# Support zstd squashfs compression (and fix a missing linked library).
-echo '~sys-fs/squashfs-tools-4.4' >> /etc/portage/package.accept_keywords/squashfs-tools.conf
-echo 'sys-fs/squashfs-tools zstd' >> /etc/portage/package.use/squashfs-tools.conf
-echo 'LDFLAGS="-lgcc_s \$LDFLAGS"' >> /etc/portage/env/squashfs-tools.conf
-echo 'sys-fs/squashfs-tools squashfs-tools.conf' >> /etc/portage/package.env/squashfs-tools.conf
-
-# Fix bad packaging not being compatible with UsrMerge.
-echo 'PKG_INSTALL_MASK="/lib*/libpam*.so"' >> /etc/portage/env/pam.conf
-echo 'PKG_INSTALL_MASK="/usr/sbin/setfiles"' >> /etc/portage/env/policycoreutils.conf
-echo 'sys-libs/pam pam.conf' >> /etc/portage/package.env/pam.conf
-echo 'sys-apps/policycoreutils policycoreutils.conf' >> /etc/portage/package.env/policycoreutils.conf
-
-# Turn off extra busybox features to make initrds smaller.
-echo 'sys-apps/busybox -* static' >> /etc/portage/package.use/host.conf
-
-# Support building the UEFI boot stub, its logo image, and signing tools.
-${options[uefi]:+:} false && cat << 'EOG' >> /etc/portage/package.use/host.conf
+        # Write portage profile settings that only apply to the native root.
+        portage="$buildroot/etc/portage"
+        # Link a required library for building the SELinux labeling initrd.
+        echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
+        # Turn off extra busybox features to make the labeling initrd smaller.
+        echo 'sys-apps/busybox -* static' >> "$portage/package.use/busybox.conf"
+        # Work around bad dependencies requiring this on the host.
+        echo 'dev-libs/libpcre2 jit' >> "$portage/package.use/pcre2.conf"
+        # Support building the UEFI boot stub, its logo image, and signing tools.
+        opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
 media-gfx/imagemagick png
 sys-apps/systemd gnuefi
 sys-apps/pciutils -udev
-EOG
+EOF
 
+        script "${options[host]}" "${packages_buildroot[@]}" "$@" << 'EOF'
+host=$1 ; shift
+
+# Update the native build root packages to the latest versions.
 emerge-webrsync
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-    @world ${packages_buildroot[*]} $*
+    @world dev-util/debugedit sys-devel/crossdev "$@"
 
-test -d /usr/src/linux && make -C /usr/src/linux -j$(nproc) mrproper V=1
-
+# Create the cross-compiler toolchain in the native build root.
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
 location = /var/db/repos/crossdev
 EOG
+mkdir -p /usr/"$host"/usr/{bin,lib,lib64,sbin,src}
+ln -fst "/usr/$host" usr/{bin,lib,lib64,sbin}
+crossdev --stable --target "$host"
 
-mkdir -p "/usr/${options[arch]:=$DEFAULT_ARCH}-gentoo-linux-gnu/etc"
-cp -at "/usr/${options[arch]}-gentoo-linux-gnu/etc" /etc/portage
-cd "/usr/${options[arch]}-gentoo-linux-gnu/etc/portage"
-ln -fns ../../../../var/db/repos/gentoo/profiles/$profile make.profile
-sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g&/' make.conf
-cat << 'EOG' >> make.conf
-CHOST="${options[arch]}-gentoo-linux-gnu"
-ROOT="/usr/\$CHOST"
-SYSROOT="\$ROOT"
-PKG_CONFIG_SYSROOT_DIR="\$SYSROOT"
-PKGDIR="\$ROOT/var/cache/binpkgs"
-PYTHON_TARGETS="\$PYTHON_SINGLE_TARGET"
-FEATURES="\$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
-USE="\$USE -kmod -multiarch -static -static-libs"
-EOG
-echo 'CPPFLAGS="-I\${SYSROOT}/usr/include/libusb-1.0"' > env/libusb.conf
-echo 'CPPFLAGS="-I\${SYSROOT}/usr/include/python3.6m"' > env/python.conf
-cat << 'EOG' > package.env/fix-cross-compiling.conf
-app-crypt/gnupg libusb.conf
-dev-python/pypax python.conf
-sys-apps/portage python.conf
-EOG
-cat << 'EOG' >> package.use/kill.conf
-# Use the kill command from util-linux to minimize systemd dependencies.
-sys-apps/coreutils -kill
-sys-apps/util-linux kill
-sys-process/procps -kill
-EOG
-rm -f package.use/host.conf
-echo split-usr >> profile/use.mask
+# Share the clean kernel source between roots if it's installed.
+if test -d /usr/src/linux
+then
+        ln -fst "/usr/$host/usr/src" ../../../../usr/src/linux
+        make -C /usr/src/linux -j$(nproc) mrproper V=1
+fi
 EOF
 
         build_relabel_kernel
@@ -127,43 +191,38 @@ EOF
 }
 
 function install_packages() {
+        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
+
         opt bootable || opt networkd && packages+=(sys-apps/systemd)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
         packages+=(sys-apps/baselayout)
 
-        # Create the cross-compiler toolchain in the native build root.
-        crossdev --stable --target "${options[arch]}-gentoo-linux-gnu"
-
-        # Initialize a directory layout for the cross-compiled build root.
-        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[arch]}-gentoo-linux-gnu"
-        mkdir -p "$ROOT"/{lib,lib64,usr/{lib,lib64,src}}
-
-        # Build the final kernel, and link its configuration in the build root.
+        # Build the final kernel.
         if opt bootable
         then
+                local -r kernel_arch="$(archmap_kernel ${options[arch]})"
                 test -s /usr/src/linux/.config
                 opt sb_key && sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=\".*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
                 make -C /usr/src/linux -j$(nproc) V=1 \
-                    ARCH="${options[arch]/#i[3-6]86/x86}" \
-                    CROSS_COMPILE="${options[arch]}-gentoo-linux-gnu-"
-                make -C /usr/src/linux install V=1
-                ln -fst "$ROOT/usr/src" ../../../../usr/src/linux
-        fi
+                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
+                make -C /usr/src/linux install V=1 \
+                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
+        fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
-        USE=-selinux emerge --jobs=4 --verbose \
+        USE='-nls -selinux' emerge --jobs=4 --verbose \
             sys-devel/gcc sys-kernel/linux-headers sys-libs/glibc
         packages+=(sys-devel/gcc sys-libs/glibc)  # Install libstdc++ etc.
 
-        # Install these outside the dependency graph because portage is broken.
+        # These packages must be installed outside the dependency graph.
         emerge --jobs=4 --nodeps --verbose \
-            ${options[selinux]:+sec-policy/selinux-base} x11-base/xcb-proto
+            media-fonts/font-util \
+            ${options[selinux]:+sec-policy/selinux-base} \
+            x11-base/x{cb,org}-proto
 
-        # Fonts need this but don't depend on it.
-        emerge --jobs=4 --nodeps --verbose media-fonts/font-util
-
-        # Cheat systemd bootstrapping.
-        USE='-* kill' emerge --jobs=4 --verbose sys-apps/util-linux
+        # Cheat systemd and PAM bootstrapping.
+        USE='-* kill' emerge --jobs=4 --verbose \
+            sys-apps/util-linux sys-libs/libcap
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -174,11 +233,17 @@ function install_packages() {
         mkdir -pm 0700 root/root
         [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
         (cd root ; exec ln -fst . usr/*)
-        ln -fns .. "root/usr/${options[arch]}-gentoo-linux-gnu"  # Lazily work around bad packaging.
+        ln -fns .. "root/usr/${options[host]}"  # Lazily work around bad packaging.
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
         mv -t root/usr/bin root/gcc-bin/*/*
-        rm -fr root/{binutils,gcc}-bin "root/usr/${options[arch]}-gentoo-linux-gnu"
+        rm -fr root/{binutils,gcc}-bin "root/usr/${options[host]}"
 
+        # If a modular kernel was configured, install the modules.
+        opt bootable && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
+        make -C /usr/src/linux modules_install INSTALL_MOD_PATH=/wd/root V=1 \
+            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
+
+        # List everything installed in the image and what was used to build it.
         qlist -CIRSSUv > packages-buildroot.txt
         qlist --root=/ -CIRSSUv > packages-host.txt
         qlist --root=root -CIRSSUv > packages.txt
@@ -202,6 +267,19 @@ function distro_tweaks() {
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
 
+        # Add a mount point to support the ESP mount generator.
+        opt uefi && mkdir root/boot
+
+        # Create some usual stuff in /var that is missing.
+        cat << 'EOF' > root/usr/lib/tmpfiles.d/var-compat.conf
+d /var/empty
+L /var/lock - - - - ../run/lock
+EOF
+
+        # Make the OpenSSH server work.
+        test -s root/etc/ssh/sshd_config && ! grep sshd root/etc/passwd &&
+        useradd --prefix root --home-dir=/var/empty --system --uid=22 sshd
+
         # The targeted policy seems more realistic to get working first.
         test -s root/etc/selinux/config &&
         sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
@@ -216,6 +294,7 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
+        test -s vmlinux || cp -p /boot/vmlinux-* vmlinux ||
         test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
         opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
@@ -223,7 +302,7 @@ fi
 
 function build_ramdisk() if opt ramdisk
 then
-        local -r sysroot="/usr/${options[arch]}-gentoo-linux-gnu"
+        local -r sysroot="/usr/${options[host]}"
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
         mkdir -p "$root"/{bin,dev,proc,sys,sysroot}
         cp -pt "$root/bin" "$sysroot/bin/busybox"
@@ -255,7 +334,9 @@ function write_base_kernel_config() if opt bootable
 then
         echo '# Basic settings
 CONFIG_ACPI=y
+CONFIG_BASE_FULL=y
 CONFIG_BLOCK=y
+CONFIG_JUMP_LABEL=y
 CONFIG_KERNEL_XZ=y
 CONFIG_MULTIUSER=y
 CONFIG_SHMEM=y
@@ -271,11 +352,15 @@ CONFIG_TMPFS_POSIX_ACL=y
 CONFIG_BINFMT_ELF=y
 CONFIG_BINFMT_SCRIPT=y
 # Security settings
+CONFIG_BPF_JIT_ALWAYS_ON=y
 CONFIG_FORTIFY_SOURCE=y
 CONFIG_HARDENED_USERCOPY=y
 CONFIG_RANDOMIZE_BASE=y
 CONFIG_RANDOMIZE_MEMORY=y
-CONFIG_RETPOLINE=y'
+CONFIG_RETPOLINE=y
+CONFIG_STACKPROTECTOR=y
+CONFIG_STACKPROTECTOR_STRONG=y
+CONFIG_STRICT_KERNEL_RWX=y'
         test "x${options[arch]}" = xx86_64 && echo '# Architecture settings
 CONFIG_64BIT=y
 CONFIG_SMP=y
@@ -320,7 +405,15 @@ CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y'
         opt uefi && echo '# UEFI settings
 CONFIG_EFI=y
-CONFIG_EFI_STUB=y'
+CONFIG_EFI_STUB=y
+# ESP settings
+CONFIG_VFAT_FS=y
+CONFIG_FAT_DEFAULT_UTF8=y
+CONFIG_NLS=y
+CONFIG_NLS_DEFAULT="utf8"
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+CONFIG_NLS_UTF8=y'
         opt verity && echo '# Verity settings
 CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
@@ -401,7 +494,7 @@ fi
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
-        trap -- "$rm -fr $GNUPGHOME" RETURN
+        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -469,32 +562,47 @@ function archmap() case "${*:-$DEFAULT_ARCH}" in
     aarch64)  echo arm64 ;;
     arm*)     echo arm ;;
     i[3-6]86) echo x86 ;;
+    powerpc)  echo ppc ;;
     x86_64)   echo amd64 ;;
     *) return 1 ;;
 esac
 
+function archmap_kernel() case "${*:-$DEFAULT_ARCH}" in
+    aarch64)  echo arm64 ;;
+    arm*)     echo arm ;;
+    i[3-6]86) echo x86 ;;
+    powerpc)  echo powerpc ;;
+    x86_64)   echo x86 ;;
+    *) return 1 ;;
+esac
+
 function archmap_profile() {
-        local -r nomulti=$(test ${#:-0} -eq 0 || echo /no-multilib)
+        local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
+        local -r nomulti=$([[ ${native: -2} = ${target: -2} || $target != *86* || $# -gt 0 ]] && echo /no-multilib)
         local -r selinux=${options[selinux]:+/selinux}
-        case "${*:-$DEFAULT_ARCH}" in
+        case "$native" in
             aarch64)  echo default/linux/arm64/17.0/systemd ;;
             armv7a)   echo default/linux/arm/17.0/armv7a ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
+            powerpc)  echo default/linux/powerpc/ppc32/17.0 ;;
             x86_64)   echo default/linux/amd64/17.1$nomulti/hardened$selinux ;;
             *) return 1 ;;
         esac
 }
 
 function archmap_stage3() {
+        local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
+        local -r nomulti=$([[ ${native: -2} = ${target: -2} || $target != *86* ]] && echo +nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
 
         local stage3
-        case "${*:-$DEFAULT_ARCH}" in
+        case "$native" in
             armv7a)  stage3=stage3-armv7a_hardfp ;;
             i[45]86) stage3=stage3-i486 ;;
             i686)    stage3=stage3-i686-hardened ;;
-            x86_64)  stage3=stage3-amd64-hardened$selinux ;;
+            powerpc) stage3=stage3-ppc ;;
+            x86_64)  stage3=stage3-amd64-hardened$selinux$nomulti ;;
             *) return 1 ;;
         esac
 

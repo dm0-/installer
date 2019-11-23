@@ -50,6 +50,9 @@ EOF
         fi
 }
 
+# Override package installation to fix stupid pointless garbage modules.
+eval "$(declare -f install_packages | $sed '/{ *$/amkdir -p root/etc ; cp -pt root/etc /etc/os-release')"
+
 function distro_tweaks() {
         exclude_paths+=('usr/lib/.build-id')
 
@@ -61,6 +64,9 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d
         echo > root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d/tmpfiles.conf \
             -e '[Unit]\nAfter=systemd-tmpfiles-setup.service'
+
+        test -x root/usr/libexec/upowerd &&
+        echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
         test -x root/usr/bin/update-crypto-policies &&
         chroot root /usr/bin/update-crypto-policies --set FUTURE
@@ -157,7 +163,7 @@ declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/'
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
-        trap -- "$rm -fr $GNUPGHOME" RETURN
+        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

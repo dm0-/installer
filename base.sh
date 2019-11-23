@@ -67,9 +67,7 @@ Customization options:
         available number will be used.  The group list contains comma-separated
         names of supplementary groups for the user in addition to its primary
         group.  The comment (GECOS) field is usually used for a readable name.
-        This option can be used multiple times to create more accounts.  The
-        useradd program must be installed and properly configured in the image
-        for this option to function correctly.
+        This option can be used multiple times to create more accounts.
         Example: -a 'user::wheel:Sysadmin Account'
   -d <distro>
         Select the distro to install (default: fedora).  This is only used when
@@ -172,7 +170,7 @@ then
         local -r size=$(opt squash && echo 10 || echo 4)G
         $truncate --size="${1:-$size}" "$output/$disk"
         declare -g loop=$($losetup --show --find "$output/$disk")
-        trap -- "$losetup --detach $loop" EXIT
+        trap -- '$losetup --detach "$loop"' EXIT
 fi
 
 function mount_root() if opt selinux || ! opt squash
@@ -328,16 +326,16 @@ then
         exclude_paths+=(var/'*')
 
         mkdir -p root/usr/lib/systemd/system
-        cat << 'EOF' > root/usr/lib/systemd/system/var.mount
+        cat << EOF > root/usr/lib/systemd/system/var.mount
 [Unit]
-Description=Mount writeable tmpfs over /var
+Description=Mount writable tmpfs over /var
 ConditionPathIsMountPoint=!/var
 
 [Mount]
 What=tmpfs
 Where=/var
 Type=tmpfs
-Options=rootcontext=system_u:object_r:var_t:s0,mode=0755,strictatime,nodev,nosuid
+Options=${options[selinux]:+rootcontext=system_u:object_r:var_t:s0,}mode=0755,strictatime,nodev,nosuid
 
 [Install]
 WantedBy=local-fs.target
@@ -346,7 +344,7 @@ fi
 
 function tmpfs_home() if opt read_only
 then
-        cat << 'EOF' > root/usr/lib/systemd/system/home.mount
+        cat << EOF > root/usr/lib/systemd/system/home.mount
 [Unit]
 Description=Mount tmpfs over /home to create new users
 ConditionPathIsMountPoint=!/home
@@ -356,13 +354,13 @@ ConditionPathIsSymbolicLink=!/home
 What=tmpfs
 Where=/home
 Type=tmpfs
-Options=rootcontext=system_u:object_r:home_root_t:s0,mode=0755,strictatime,nodev,nosuid
+Options=${options[selinux]:+rootcontext=system_u:object_r:home_root_t:s0,}mode=0755,strictatime,nodev,nosuid
 
 [Install]
 WantedBy=local-fs.target
 EOF
 
-        cat << 'EOF' > root/usr/lib/systemd/system/root.mount
+        cat << EOF > root/usr/lib/systemd/system/root.mount
 [Unit]
 Description=Mount tmpfs over /root
 ConditionPathIsMountPoint=!/root
@@ -372,7 +370,7 @@ ConditionPathIsSymbolicLink=!/root
 What=tmpfs
 Where=/root
 Type=tmpfs
-Options=rootcontext=system_u:object_r:admin_home_t:s0,mode=0700,strictatime,nodev,nosuid
+Options=${options[selinux]:+rootcontext=system_u:object_r:admin_home_t:s0,}mode=0700,strictatime,nodev,nosuid
 
 [Install]
 WantedBy=local-fs.target
@@ -404,12 +402,11 @@ RequiresMountsFor=/run
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/mkdir -Zpm 0755 /run/etcgo/overlay /run/etcgo/wd
-ExecStartPost=-/usr/bin/chcon -t etc_t /run/etcgo/overlay
 EOF
 
         cat << 'EOF' > root/usr/lib/systemd/system/etc.mount
 [Unit]
-Description=Mount a writeable overlay over /etc
+Description=Mount a writable overlay over /etc
 ConditionPathIsMountPoint=!/etc
 After=etc-overlay-setup.service
 Requires=etc-overlay-setup.service
@@ -423,41 +420,38 @@ Options=strictatime,nodev,nosuid,lowerdir=/etc,upperdir=/run/etcgo/overlay,workd
 [Install]
 RequiredBy=local-fs.target
 EOF
+        mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../etc.mount
 
-        # Probably should just delete this workaround until it's implemented for real in the initrd.
+        opt selinux && echo /run/etcgo/overlay /etc >> root/etc/selinux/targeted/contexts/files/file_contexts.subs
+
         if test -x root/usr/bin/git
         then
-                mkdir -p root/usr/lib/systemd/system-generators
-                cat << 'EOF' > root/usr/lib/systemd/system-generators/etcgo
-#!/bin/sh -e
-set -euxo pipefail
+                cat << 'EOF' > root/usr/lib/systemd/system/etcgo.service
+[Unit]
+Description=Restore the /etc overlay from Git
+DefaultDependencies=no
+RefuseManualStop=yes
 
-# Create overlay upper directories for /etc.
-mountpoint -q /run
-mkdir -Zpm 0755 /run/etcgo/overlay /run/etcgo/wd
-chcon -t etc_t /run/etcgo/overlay || :
-
-# If /var is not mounted already, make it use tmpfs to get a usable system.
-mountpoint -q /var ||
-mount -t tmpfs -o rootcontext=system_u:object_r:var_t:s0,mode=0755,strictatime,nodev,nosuid tmpfs /var
-
-# Create the Git database for the /etc overlay in /var if it doesn't exist.
-if ! test -d /var/lib/etcgo
-then
-        mkdir -Zpm 0750 /var/lib/etcgo
-        git -C /var/lib/etcgo init --bare
-        echo 'System configuration overlay tracker' > /var/lib/etcgo/description
-        echo -e '[user]\n\tname = root\n\temail = root@localhost' >> /var/lib/etcgo/config
-        git -C /var/lib/etcgo --work-tree=../../../run/etcgo/overlay commit --allow-empty --message='Repository created'
-fi
-
-# Check out the overlay files, and mount it over /etc with correct labels.
-git -C /var/lib/etcgo worktree add --force -B master ../../../run/etcgo/overlay master
-mount -t overlay -o strictatime,nodev,nosuid,lowerdir=/etc,upperdir=/run/etcgo/overlay,workdir=/run/etcgo/wd overlay /etc
-restorecon -vFR /etc /var/lib/etcgo || :
+[Service]
+ExecStartPre=/bin/bash -c "if ! compgen -G '*' > /dev/null ; then \
+/usr/bin/git init --bare ; \
+echo 'System configuration overlay tracker' > description ; \
+echo -e '[user]\n\tname = root\n\temail = root@localhost' >> config ; \
+/usr/bin/git --work-tree=/ commit --allow-empty --message='Repository created' ; \
+fi"
+ExecStart=/usr/bin/git worktree add --force -B master ../../../run/etcgo/overlay master
+ExecStartPost=-/usr/sbin/restorecon -vFR /run/etcgo/overlay
+RemainAfterExit=yes
+RuntimeDirectory=etcgo/overlay etcgo/wd
+RuntimeDirectoryPreserve=yes
+StateDirectory=etcgo
+StateDirectoryMode=0700
+Type=oneshot
+WorkingDirectory=/var/lib/etcgo
 EOF
-                chmod 0755 root/usr/lib/systemd/system-generators/etcgo
+                rm -f root/usr/lib/systemd/system/etc-overlay-setup.service
+                sed -i -e s/-overlay-setup/go/ root/usr/lib/systemd/system/etc.mount
         fi
 fi
 
@@ -467,7 +461,7 @@ $($cat configure.pkg.d/[!.]*.sh 0<&-)
 
 function configure_system() {
         sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
-        opt adduser && test -x root/usr/sbin/useradd && (IFS=$'\n'
+        opt adduser && (IFS=$'\n'
                 for spec in ${options[adduser]}
                 do
                         spec+=::::
@@ -475,16 +469,13 @@ function configure_system() {
                         uid=${spec#*:} uid=${uid%%:*}
                         groups=${spec#*:*:} groups=${groups%%:*}
                         gecos=${spec#*:*:*:} gecos=${gecos%%:*}
-                        chroot root /usr/sbin/useradd \
+                        useradd --prefix root \
                             ${gecos:+--comment="$gecos"} \
                             ${groups:+--groups="$groups"} \
                             ${uid:+--uid="$uid"} \
                             --password= "$name"
                 done
         )
-
-        test -s root/usr/lib/systemd/system/dbus.service ||
-        ln -fns dbus-broker.service root/usr/lib/systemd/system/dbus.service
 
         test -s root/etc/sudoers &&
         sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[# ]*//;}' root/etc/sudoers
@@ -506,9 +497,6 @@ EOF
 
         # WORKAROUNDS
 
-        test -x root/usr/libexec/upowerd &&
-        echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
-
         cat << 'EOF' > root/usr/lib/tmpfiles.d/var-mail.conf
 # User modification commands expect a mail spool directory to exist.
 d /var/mail 0775 root mail
@@ -528,11 +516,8 @@ function finalize_packages() {
         local dir
 
         # Regenerate gsettings defaults.
-        if test -x root/usr/bin/glib-compile-schemas
-        then
-                test -d root/usr/share/glib-2.0/schemas
-                chroot root /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas
-        fi
+        test -d root/usr/share/glib-2.0/schemas &&
+        glib-compile-schemas root/usr/share/glib-2.0/schemas
 
         # Run depmod when kernel modules are installed.
         dir=$(compgen -G 'root/lib/modules/*') &&
@@ -656,11 +641,18 @@ EOF
 }
 
 function store_home_on_var() {
-        opt selinux && echo /var/home /home >> root/etc/selinux/targeted/contexts/files/file_contexts.subs
+        opt selinux && (cd root/etc/selinux/targeted/contexts/files
+                grep -qs ^/var/home file_contexts.subs_dist ||
+                echo /var/home /home >> file_contexts.subs
+        )
         mv root/home root/var/home ; ln -fns var/home root/home
         echo 'Q /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf
         if test "x$*" = x+root
         then
+                opt selinux && (cd root/etc/selinux/targeted/contexts/files
+                        grep -qs ^/var/roothome file_contexts.subs_dist ||
+                        echo /var/roothome /root >> file_contexts.subs
+                )
                 mv root/root root/var/roothome ; ln -fns var/roothome root/root
                 cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
 C /var/roothome 0700 root root - /etc/skel

@@ -43,7 +43,7 @@ function install_packages() {
 
         mkdir -p root/var/cache/dnf
         mount --bind /var/cache/dnf root/var/cache/dnf
-        trap -- 'umount root/var/cache/dnf' RETURN
+        trap -- 'umount root/var/cache/dnf ; trap - RETURN' RETURN
 
         dnf --assumeyes --installroot="$PWD/root" \
             ${options[arch]:+--forcearch="${options[arch]}"} \
@@ -280,7 +280,7 @@ fi
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
-        trap -- "$rm -fr $GNUPGHOME" RETURN
+        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         if test "x${options[release]}" = x31
         then $gpg --import << 'EOF'
