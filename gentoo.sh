@@ -438,6 +438,7 @@ function build_relabel_kernel() if opt selinux
 then
         echo > "$output/config.relabel" '# Assume x86_64 for now.
 CONFIG_64BIT=y
+CONFIG_MNATIVE=y
 CONFIG_SMP=y
 # Support executing programs and scripts.
 CONFIG_BINFMT_ELF=y

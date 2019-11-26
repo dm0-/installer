@@ -288,7 +288,6 @@ then
 [Unit]
 DefaultDependencies=no
 After=systemd-tmpfiles-setup-dev.service
-Before=dev-loop0.device
 Requires=systemd-tmpfiles-setup-dev.service
 [Service]
 ExecStart=/usr/sbin/losetup --find $(opt read_only && echo --read-only) /sysroot/root.img
@@ -625,6 +624,7 @@ fi
 # OPTIONAL (IMAGE)
 
 function double_display_scale() {
+        compgen -G 'root/usr/share/kbd/consolefonts/latarcyrheb-sun32.*' ||
         compgen -G 'root/???/*/consolefonts/latarcyrheb-sun32.*' &&
         sed -i -e '/^FONT=/d' root/etc/vconsole.conf &&
         echo 'FONT="latarcyrheb-sun32"' >> root/etc/vconsole.conf

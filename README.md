@@ -47,11 +47,12 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Status / Notes / To Do
 
-The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Three distros are supported to varying degrees:
+The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Four distros are supported to varying degrees:
 
-  - Fedora supports all features, but only Fedora 30 and 31 (the default) can be used.
+  - Fedora supports all features, but only Fedora 30 and 31 (the default) can be used.  Fedora 30 is the last version to support i686.
   - CentOS 8 should support everything.  CentOS 7 systemd is too old to support building a UEFI image and persistently tracking the `/etc` overlay with Git.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
+  - Arch supports everything besides SELinux, since AUR is not yet enabled during the build.  Only x86_64 is supported by the distro.
 
 ### General
 
@@ -64,6 +65,8 @@ The project may be completely revised at some point, so don't expect anything in
 **Use the list of excluded paths in ext4.**  Only squashfs is dropping the files.
 
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
+
+**Maybe start using EROFS.**  When a read-only file system is requested without using squashfs, EROFS sounds like a better choice than mounting ext4 as read-only.  It might take a while for the distros to move to Linux 5.4 and enable the file system.  CentOS will probably be left in the dust as usual.
 
 ### Fedora
 
@@ -78,6 +81,12 @@ There is nothing planned to change here at this point.  CentOS must be perfect. 
 **Implement optional file filtering functions based on categories like debugging or development.**  Packages such as GCC should be filtered to install runtime components like `libstdc++` but not compilers and headers for systems that won't do development.  This could probably be implemented for all distros, but it will only be useful in Gentoo since Fedora et al. use subpackages for that functionality which can just be omitted.
 
 **Maybe support using a specific commit for the repository.**  Since Gentoo's repository is maintained in a rolling-release style, there should be a way to specify a snapshot to get the same ebuild revisions.
+
+### Arch
+
+**Support SELinux.**  This probably entails adding a function to enable AUR packages during the build like RPM Fusion in Fedora.  There might be some ugly manual steps since AUR has separate packages built with SELinux support that replace both optional and core packages.
+
+**Fix the udev delay when ramdisk is enabled.**  Transitioning from the initrd to the real root is blocked for thirty seconds on udev shutdown when running in RAM.
 
 ### Example Systems
 

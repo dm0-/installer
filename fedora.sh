@@ -68,105 +68,6 @@ function distro_tweaks() {
         compgen -G 'root/etc/yum.repos.d/*modular*.repo' &&
         sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*modular*.repo
 
-        test -s root/etc/gdm/custom.conf &&
-        sed -i -e '/WaylandEnable=false$/s/^[# ]*//' root/etc/gdm/custom.conf
-
-        test -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml &&
-        cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
-[org.gnome.calculator]
-angle-units='radians'
-button-mode='advanced'
-[org.gnome.Charmap.WindowState]
-maximized=true
-[org.gnome.desktop.a11y]
-always-show-universal-access-status=true
-[org.gnome.desktop.calendar]
-show-weekdate=true
-[org.gnome.desktop.input-sources]
-xkb-options=['compose:rwin','ctrl:nocaps','grp_led:caps']
-[org.gnome.desktop.interface]
-clock-format='24h'
-clock-show-date=true
-clock-show-seconds=true
-clock-show-weekday=true
-[org.gnome.desktop.media-handling]
-automount=false
-automount-open=false
-autorun-never=true
-[org.gnome.desktop.notifications]
-show-in-lock-screen=false
-[org.gnome.desktop.peripherals.keyboard]
-numlock-state=true
-[org.gnome.desktop.peripherals.touchpad]
-natural-scroll=true
-tap-to-click=true
-[org.gnome.desktop.privacy]
-hide-identity=true
-recent-files-max-age=0
-remember-app-usage=false
-remember-recent-files=false
-send-software-usage-stats=false
-show-full-name-in-top-bar=false
-[org.gnome.desktop.screensaver]
-show-full-name-in-top-bar=false
-user-switch-enabled=false
-[org.gnome.desktop.session]
-idle-delay=0
-[org.gnome.desktop.wm.keybindings]
-cycle-windows=['<Alt>Escape','<Alt>Tab']
-cycle-windows-backward=['<Shift><Alt>Escape','<Shift><Alt>Tab']
-panel-main-menu=['<Super>s','<Alt>F1','XF86LaunchA']
-panel-run-dialog=['<Super>r','<Alt>F2']
-show-desktop=['<Super>d']
-switch-applications=['<Super>Tab']
-switch-applications-backward=['<Shift><Super>Tab']
-[org.gnome.desktop.wm.preferences]
-button-layout='menu:minimize,maximize,close'
-focus-mode='sloppy'
-mouse-button-modifier='<Alt>'
-visual-bell=true
-[org.gnome.eog.ui]
-statusbar=true
-[org.gnome.Evince.Default]
-continuous=false
-sizing-mode='fit-page'
-[org.gnome.settings-daemon.plugins.media-keys]
-max-screencast-length=0
-on-screen-keyboard=['<Super>k']
-[org.gnome.settings-daemon.plugins.power]
-ambient-enabled=false
-idle-dim=false
-sleep-inactive-ac-type='nothing'
-sleep-inactive-battery-type='nothing'
-[org.gnome.settings-daemon.plugins.xsettings]
-antialiasing='rgba'
-hinting='full'
-[org.gnome.shell]
-always-show-log-out=true
-favorite-apps=['firefox.desktop','vlc.desktop','gnome-terminal.desktop']
-[org.gnome.shell.keybindings]
-toggle-application-view=['<Super>a','XF86LaunchB']
-[org.gnome.shell.overrides]
-focus-change-on-pointer-rest=false
-workspaces-only-on-primary=false
-[org.gnome.Terminal.Legacy.Keybindings]
-full-screen='disabled'
-help='disabled'
-[org.gnome.Terminal.Legacy.Settings]
-default-show-menubar=false
-menu-accelerator-enabled=false
-[org.gnome.Terminal.Legacy.Profile]
-background-color='#000000'
-background-transparency-percent=20
-foreground-color='#FFFFFF'
-login-shell=true
-scrollback-lines=100000
-scrollback-unlimited=false
-scrollbar-policy='never'
-use-transparent-background=true
-use-theme-colors=false
-EOF
-
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
 
@@ -197,11 +98,9 @@ then
         # Load NVMe support before verity so dm-init can find the partition.
         if opt nvme
         then
-                $mkdir -p "$buildroot/etc/modprobe.d"
-                echo > "$buildroot/etc/modprobe.d/nvme-verity.conf" \
+                $mkdir -p "$buildroot/usr/lib/modprobe.d"
+                echo > "$buildroot/usr/lib/modprobe.d/nvme-verity.conf" \
                     'softdep dm-verity pre: nvme'
-                echo >> "$buildroot/etc/dracut.conf.d/99-nvme-verity.conf" \
-                    'install_optional_items+=" /etc/modprobe.d/nvme-verity.conf "'
         fi
 
         # Since systemd can't skip canonicalization, wait for a udev hack.
@@ -271,10 +170,8 @@ Type=oneshot'
         # Load overlayfs in the initrd in case modules aren't installed.
         if opt read_only
         then
-                $mkdir -p "$buildroot/etc/modules-load.d"
-                echo overlay > "$buildroot/etc/modules-load.d/overlay.conf"
-                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
-                    'install_optional_items+=" /etc/modules-load.d/overlay.conf "'
+                $mkdir -p "$buildroot/usr/lib/modules-load.d"
+                echo overlay > "$buildroot/usr/lib/modules-load.d/overlay.conf"
         fi
 fi
 

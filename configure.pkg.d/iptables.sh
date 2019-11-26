@@ -3,14 +3,15 @@ then
         local restore=$(test -s root/usr/lib/systemd/system/iptables-restore.service && echo -restore)
 
         # Map the rules from /var into /etc if needed.
-        test -n "$restore" && cat << 'EOF' > root/usr/lib/tmpfiles.d/iptables.conf
+        test -n "$restore" && mkdir -p root/etc/iptables &&
+        cat << 'EOF' > root/usr/lib/tmpfiles.d/iptables.conf
 d /var/lib/iptables
-L /var/lib/iptables/rules-save - - - - ../../../etc/iptables
+L /var/lib/iptables/rules-save - - - - ../../../etc/iptables/iptables.rules
 EOF
 
         # Write very simple IPv4 firewall rules until they are customized.
-        (test -n "$restore" && cd root/etc || cd root/etc/sysconfig
-                cat > iptables ; chmod 0600 iptables
+        (cd root/etc/iptables && ext=.rules || cd root/etc/sysconfig
+                cat > iptables${ext-} ; chmod 0600 iptables${ext-}
         ) << 'EOF'
 *filter
 :INPUT DROP [0:0]
@@ -32,14 +33,15 @@ then
         local restore=$(test -s root/usr/lib/systemd/system/ip6tables-restore.service && echo -restore)
 
         # Map the rules from /var into /etc if needed.
-        test -n "$restore" && cat << 'EOF' > root/usr/lib/tmpfiles.d/ip6tables.conf
+        test -n "$restore" && mkdir -p root/etc/iptables &&
+        cat << 'EOF' > root/usr/lib/tmpfiles.d/ip6tables.conf
 d /var/lib/ip6tables
-L /var/lib/ip6tables/rules-save - - - - ../../../etc/ip6tables
+L /var/lib/ip6tables/rules-save - - - - ../../../etc/iptables/ip6tables.rules
 EOF
 
         # Write local-only IPv6 firewall rules until they are customized.
-        (test -n "$restore" && cd root/etc || cd root/etc/sysconfig
-                cat > ip6tables ; chmod 0600 ip6tables
+        (cd root/etc/iptables && ext=.rules || cd root/etc/sysconfig
+                cat > ip6tables${ext-} ; chmod 0600 ip6tables${ext-}
         ) << 'EOF'
 *filter
 :INPUT DROP [0:0]

@@ -136,19 +136,19 @@ exec qemu-kvm -nodefaults \
     "$@"
 EOF
 
-        # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
-options nvidia NVreg_UsePageAttributeTable=1
-options nvidia-drm modeset=1
-EOF
-
         # Sign the out-of-tree kernel modules due to required signatures.
-        ! opt sb_key ||
+        opt sb_key &&
         for module in root/lib/modules/*/video/nvidia*.ko
         do
                 /usr/src/linux/scripts/sign-file \
                     sha512 "$keydir/sign.key" "$keydir/sign.crt" "$module"
         done
+
+        # Make NVIDIA use kernel mode setting and the page attribute table.
+        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
+options nvidia NVreg_UsePageAttributeTable=1
+options nvidia-drm modeset=1
+EOF
 }
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
@@ -202,6 +202,7 @@ CONFIG_NET_SCHED=y
 CONFIG_NET_SCH_DEFAULT=y
 CONFIG_NET_SCH_FQ_CODEL=y
 # TARGET HARDWARE: Lenovo Thinkpad P1 (Gen 2)
+CONFIG_MNATIVE=y  # Assume the build system is the target.
 CONFIG_PCI_MSI=y
 CONFIG_PM=y
 ## Bundle firmware/microcode
