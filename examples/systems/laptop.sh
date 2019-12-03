@@ -159,7 +159,7 @@ CONFIG_MICROCODE=y
 # Enable bootloader interaction for managing system image updates.
 CONFIG_EFI_VARS=y
 CONFIG_EFI_BOOTLOADER_CONTROL=y
-# Support ext2/ext3/ext4 (which is not included otherwise when using squashfs).
+# Support ext2/ext3/ext4 (which is not included for read-only images).
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y

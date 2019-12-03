@@ -105,6 +105,8 @@ function validate_options() {
         opt install_to_disk && opt partuuid
         # A UEFI executable is required in order to save it.
         opt uefi_path && opt uefi
+        # Enforce the read-only setting when writing is unsupported.
+        opt squash || opt verity && opt read_only
         # The distro must be set or something went wrong.
         opt distro
 }
@@ -165,21 +167,21 @@ function save_boot_files() { : ; }
 function customize_buildroot() { : ; }
 function customize() { : ; }
 
-function create_root_image() if opt selinux || ! opt squash
+function create_root_image() if opt selinux || ! opt read_only
 then
-        local -r size=$(opt squash && echo 10 || echo 4)G
+        local -r size=$(opt read_only && echo 10 || echo 4)G
         $truncate --size="${1:-$size}" "$output/$disk"
         declare -g loop=$($losetup --show --find "$output/$disk")
         trap -- '$losetup --detach "$loop"' EXIT
 fi
 
-function mount_root() if opt selinux || ! opt squash
+function mount_root() if opt selinux || ! opt read_only
 then
         mkfs.ext4 -m 0 /dev/loop-root
         mount -o X-mount.mkdir /dev/loop-root root
 fi
 
-function unmount_root() if opt selinux || ! opt squash
+function unmount_root() if opt selinux || ! opt read_only
 then
         e4defrag root
         umount root
@@ -205,8 +207,10 @@ mount /dev/sda /sysroot
 /bin/load_policy -i
 /bin/setfiles -vFr /sysroot \
     /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
-/bin/mksquashfs /sysroot /sysroot/squash.img \
+test -x /bin/mksquashfs && /bin/mksquashfs /sysroot /sysroot/squash.img \
     -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
+test -x /bin/mkfs.erofs && /bin/mkfs.erofs -Eforce-inode-compact \
+    /sysroot/erofs.img /sysroot
 echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
 EOF
@@ -215,9 +219,12 @@ EOF
         then
                 disk=squash.img
                 echo "$disk" > "$root/ef"
-                (IFS=$'\n' ; echo "${exclude_paths[*]}" >> "$root/ef")
+                (IFS=$'\n' ; echo "${exclude_paths[*]}") >> "$root/ef"
                 cp -t "$root/bin" /usr/*bin/mksquashfs
-        else cp /bin/true "$root/bin/mksquashfs"
+        elif opt read_only
+        then
+                disk=erofs.img
+                cp -t "$root/bin" /usr/*bin/mkfs.erofs
         fi
 
         local cmd
@@ -241,17 +248,21 @@ EOF
             -kernel vmlinuz.relabel -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root
-        opt squash && mv -t . "root/$disk"
+        opt read_only && mv -t . "root/$disk"
         test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS
 fi
 
 function squash() if opt squash && ! opt selinux
 then
-        local -r IFS=$'\n' xattrs=-$(opt selinux || echo no-)xattrs
+        local -r IFS=$'\n'
         disk=squash.img
-        mksquashfs root "$disk" -noappend "$xattrs" \
+        mksquashfs root "$disk" -noappend -no-xattrs \
             -comp zstd -Xcompression-level 22 \
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
+elif opt read_only && ! opt selinux
+then
+        disk=erofs.img
+        mkfs.erofs -Eforce-inode-compact -x-1 "$disk" root
 fi
 
 function verity() if opt verity
@@ -306,6 +317,7 @@ function kernel_cmdline() if opt bootable
 then
         local dmsetup=dm-mod.create
         local root=/dev/sda
+        local type=ext4
 
         opt ramdisk && dmsetup=DVR
 
@@ -313,10 +325,13 @@ then
         opt ramdisk && root=/dev/loop0
         opt verity && root=/dev/dm-0
 
+        opt read_only && type=erofs
+        opt squash && type=squashfs
+
         echo > kernel_args.txt \
             $(opt read_only && echo ro || echo rw) \
             "root=$root" \
-            rootfstype=$(opt squash && echo squashfs || echo ext4) \
+            "rootfstype=$type" \
             $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"")
 fi
 
@@ -592,18 +607,15 @@ then
                     w
         fi | tr ' ' '\n' | fdisk disk.exe
 
-        # Create the ESP with a terrible loop device workaround.
+        # Create the ESP without mounting it.
         if opt uefi
         then
-                losetup -d /dev/loop-root
-                losetup \
-                    --offset=$(( start * bs )) --sizelimit=$(( esp * bs )) \
-                    /dev/loop-root disk.exe
-                mkfs.vfat -F32 /dev/loop-root
-                mount /dev/loop-root root
-                mkdir -p root/EFI/BOOT
-                cp -t root/EFI/BOOT BOOTX64.EFI
-                umount root
+                local -rx MTOOLS_SKIP_CHECK=1
+                truncate --size=$(( esp * bs )) esp.img
+                mkfs.vfat -F 32 -n EFI-SYSTEM esp.img
+                mmd -i esp.img ::/EFI ::/EFI/BOOT
+                mcopy -i esp.img BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
+                dd bs=$bs conv=notrunc if=esp.img of=disk.exe seek=$start
         fi
 
         # Write the root file system if not using a UEFI ramdisk.

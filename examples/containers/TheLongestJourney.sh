@@ -6,20 +6,11 @@ packages+=(
         wine-pulseaudio
 )
 
-packages_buildroot+=(dnf-plugins-core git-core jq make)
+packages_buildroot+=(innoextract jq)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
-        script << 'EOF'
-dnf --assumeyes builddep innoextract
-git clone https://github.com/dscharrer/innoextract.git
-cd innoextract
-git reset --hard 1c7fe5d9b488a0b8fecefc139745ce978366b103
-cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr .
-make -j$(nproc) all
-exec make install
-EOF
 }
 
 function customize() {

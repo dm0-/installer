@@ -10,7 +10,7 @@ function create_buildroot() {
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH-docker.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel microcode_ctl)
-        opt executable && opt uefi && packages_buildroot+=(dosfstools)
+        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)

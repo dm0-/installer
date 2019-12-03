@@ -62,15 +62,15 @@ The project may be completely revised at some point, so don't expect anything in
 
 **Maybe add a disk formatter or build a GRUB image.**  I have yet to decide if the pieces beneath the distro images should be outside the scope of this project, since they might not be worth automating.  There are two parts to consider.  First, whether to format a disk with an ESP, root partition slots, and an encrypted `/var` partition.  Second, whether to configure, build, and sign a GRUB UEFI executable to be written to an ESP as the default entry.  I also have two use cases to handle with GRUB.  In the case of a formatted disk with root partitions, it needs to have a menu allowing booting into any of the installed root partitions, but it should default to the most recently updated partition unless overridden.  In the case where I'd fill a USB drive with just an ESP and populate it with images containing bundled root file systems, GRUB needs to detect which machine booted it via SMBIOS and automatically chainload an appropriate OS for that system.
 
-**Use the list of excluded paths in ext4.**  Only squashfs is dropping the files.
+**Use the list of excluded paths in ext4 and EROFS.**  Only squashfs is dropping the files.  SELinux might be a problem with EROFS until this is fixed.
 
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
-
-**Maybe start using EROFS.**  When a read-only file system is requested without using squashfs, EROFS sounds like a better choice than mounting ext4 as read-only.  It might take a while for the distros to move to Linux 5.4 and enable the file system.  CentOS will probably be left in the dust as usual.
 
 ### Fedora
 
 **Report when the image should be updated.**  When a system saves the RPM database and has network access, it should automatically check Fedora updates for enhancements, bug fixes, and security issues so it can create a report advising when an updated immutable image should be created and applied.  I will probably implement this in a custom package in my local repo and integrate it with a real monitoring server, but I am noting it here in case I decide to add it to the base system and put a report in root's MOTD (to provide the information without assumptions about network monitoring).  The equivalent can be done for CentOS or via GLSAs, but Fedora is my priority here.
+
+**Continue pestering lazy kernel maintainers until they enable EROFS.**
 
 ### CentOS
 

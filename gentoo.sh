@@ -8,8 +8,9 @@ function create_buildroot() {
         local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
-        opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools)
+        opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
         opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio)
+        opt read_only && ! opt squash && packages_buildroot+=(sys-fs/erofs-utils)
         opt selinux && packages_buildroot+=(app-emulation/qemu)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
@@ -138,10 +139,15 @@ sys-apps/util-linux cross-ncurses.conf
 EOF
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
+dev-libs/elfutils no-lto.conf
 dev-libs/icu no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
+EOF
+        $cat << 'EOF' >> "$portage/profile/package.provided"
+# The kernel source is shared between the host and cross-compiled root.
+sys-kernel/gentoo-sources-9999
 EOF
         echo split-usr >> "$portage/profile/use.mask"
 
@@ -156,7 +162,7 @@ EOF
         # Support building the UEFI boot stub, its logo image, and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
-media-gfx/imagemagick png
+media-gfx/imagemagick svg xml
 sys-apps/systemd gnuefi
 sys-apps/pciutils -udev
 EOF
@@ -166,6 +172,16 @@ host=$1 ; shift
 
 # Update the native build root packages to the latest versions.
 emerge-webrsync
+eselect news read --quiet
+if test "x$*" != "x${*/erofs-utils}"
+then
+        mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
+        curl -L 'https://bugs.gentoo.org/attachment.cgi?id=597574' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild
+        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild | sed -n '1s/ .*//p') = x81dec7d30505c1dae482fe2bb067b3dcf6d11ad792f3fc0cb791d1e4c03eff44
+        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.0.tar.gz' > /var/cache/distfiles/erofs-utils-1.0.tar.gz
+        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.0.tar.gz | sed -n '1s/ .*//p') = x508ee818dc6a02cf986647e37cb991b76f7b3e7ea303ffc9e980772de68f3b10
+        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild manifest --force
+fi
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
     @world dev-util/debugedit sys-devel/crossdev "$@"
 
@@ -183,6 +199,8 @@ if test -d /usr/src/linux
 then
         ln -fst "/usr/$host/usr/src" ../../../../usr/src/linux
         make -C /usr/src/linux -j$(nproc) mrproper V=1
+        sed /usr/src/linux/fs/erofs/xattr.c -i \
+            -e '/erofs_listx/,/retu/s/n ret;/n (ret == -ENODATA ? 0 : ret);/'
 fi
 EOF
 
@@ -296,7 +314,9 @@ function save_boot_files() if opt bootable
 then
         test -s vmlinux || cp -p /boot/vmlinux-* vmlinux ||
         test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/gentoo/1280x1024/LarryCowBlack1280x1024.png -crop 380x324+900+700 -trim -transparent black -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        opt uefi && test ! -s logo.bmp &&
+        sed -i -e '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg &&
+        magick -background none /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 fi
 
@@ -398,7 +418,12 @@ CONFIG_SQUASHFS=y
 CONFIG_SQUASHFS_FILE_DIRECT=y
 CONFIG_SQUASHFS_DECOMP_MULTI=y
 CONFIG_SQUASHFS_XATTR=y
-CONFIG_SQUASHFS_ZSTD=y' || echo '# Ext[2-4] settings
+CONFIG_SQUASHFS_ZSTD=y' || { opt read_only && echo '# EROFS settings
+CONFIG_MISC_FILESYSTEMS=y
+CONFIG_EROFS_FS=y
+CONFIG_EROFS_FS_XATTR=y
+CONFIG_EROFS_FS_POSIX_ACL=y
+CONFIG_EROFS_FS_SECURITY=y' ; } || echo '# Ext[2-4] settings
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y

@@ -1,14 +1,14 @@
 packages=()
 packages_buildroot=()
 
-DEFAULT_RELEASE=2019.11.01
+DEFAULT_RELEASE=2019.12.01
 options[selinux]=
 
 function create_buildroot() {
         local -r image="https://mirrors.kernel.org/archlinux/iso/${options[release]:=$DEFAULT_RELEASE}/archlinux-bootstrap-${options[release]}-$DEFAULT_ARCH.tar.gz"
 
         opt bootable && packages_buildroot+=(dracut intel-ucode linux-firmware linux-hardened)
-        opt executable && opt uefi && packages_buildroot+=(dosfstools)
+        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils librsvg imagemagick) &&
         opt sb_cert && opt sb_key && packages_buildroot+=(pesign)
@@ -24,15 +24,31 @@ function create_buildroot() {
         # Use the kernel.org mirrors.
         $sed -i -e '/https.*kernel.org/s/^#*//' "$buildroot/etc/pacman.d/mirrorlist"
 
+        # Fetch EROFS utilities from AUR since they're not in community yet.
+        if opt read_only && ! opt squash
+        then
+                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-3ffbe2a97e7f6f459b8d34391d65422979debda0.tar.gz' > "$output/erofs-utils.tgz"
+                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = xe85e2c7e7d0e7b8e9c8987af7ce7d6844a9a9048e53f1c48d3a3b30b157079b6
+                $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
+                packages_buildroot+=(base-devel)
+        fi
+
         script "${packages_buildroot[@]}" "$@" << 'EOF'
 pacman-key --init
 pacman-key --populate archlinux
-pacman --noconfirm --sync --refresh{,} --sysupgrade{,} "$@"
+pacman --noconfirm --sync --needed --refresh{,} --sysupgrade{,} "$@"
 
-# Work around Arch not providing Intel firmware so dracut can find it.
-mkdir -p /lib/firmware/intel-ucode
-test ! -e /boot/intel-ucode.img ||
+# Work around Arch not providing Intel microcode so dracut can find it.
+test -e /boot/intel-ucode.img && mkdir -p /lib/firmware/intel-ucode &&
 cpio --to-stdout -i < /boot/intel-ucode.img > /lib/firmware/intel-ucode/all.img
+
+# Build and install an erofs-utils package from source.
+if test -d erofs-utils
+then
+        mv erofs-utils /home/build ; useradd build ; chown -R build /home/build
+        su -c 'exec makepkg PKGBUILD' - build
+        pacman --noconfirm --upgrade /home/build/erofs-utils-*.pkg.tar.xz
+fi
 EOF
 
         # Fix the old pesign option name.
@@ -81,9 +97,14 @@ function save_boot_files() if opt bootable
 then
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
         test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '*')"
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/pixmaps/archlinux.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        opt uefi && test ! -s logo.bmp &&
+        sed -i -e '/<svg/,/>/s,>,&<style>text{display:none}</style>,' /usr/share/pixmaps/archlinux.svg &&
+        magick -background none /usr/share/pixmaps/archlinux.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 fi
+
+# Override image generation to force EROFS xattrs until a fix is upstream.
+eval "$(declare -f squash | $sed 's/ -x-1 / /')"
 
 # Override dm-init with userspace since the Arch kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
@@ -128,6 +149,13 @@ Requires=dev-mapper-root.device dmsetup-verity-root.service"'
                 $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
                 echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
                     "install_optional_items+=\" $gendir/dmsetup-verity-root \""
+        fi
+
+        # Include the EROFS module as needed.
+        if opt read_only && ! opt squash
+        then
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    'add_drivers+=" erofs "'
         fi
 
         # Load overlayfs in the initrd in case modules aren't installed.
