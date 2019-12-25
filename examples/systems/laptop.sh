@@ -68,7 +68,7 @@ function customize_buildroot() {
 
         # Assume the build system is the target, and tune compilation for it.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize -flto=jobserver&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
             "$portage/make.conf"
         enter /usr/bin/cpuid2cpuflags |
         $sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "$portage/make.conf"
@@ -110,20 +110,16 @@ function customize_buildroot() {
 
 function customize() {
         double_display_scale
+        drop_debugging
+        drop_development
         store_home_on_var +root
 
         echo laptop > root/etc/hostname
 
-        # Drop some building and debugging paths.
+        # Drop extra unused paths.
         exclude_paths+=(
-                usr/include
-                usr/lib/.build-id
-                usr/lib/debug
                 usr/lib/firmware
-                usr/libexec/gcc
                 usr/local
-                usr/share/gcc-data
-                usr/src
         )
 
         # Support an executable VM image for quick testing.
@@ -136,6 +132,11 @@ exec qemu-kvm -nodefaults \
     "$@"
 EOF
 
+        # Start the wireless interface if it is configured.
+        mkdir -p root/usr/lib/systemd/system/network.target.wants
+        ln -fns ../wpa_supplicant-nl80211@.service \
+            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlp82s0.service
+
         # Sign the out-of-tree kernel modules due to required signatures.
         opt sb_key &&
         for module in root/lib/modules/*/video/nvidia*.ko
@@ -145,9 +146,10 @@ EOF
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
+        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia-config.conf
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
+softdep nvidia post: nvidia-uvm
 EOF
 }
 
@@ -166,6 +168,7 @@ CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
 # Support encrypted partitions.
 CONFIG_DM_CRYPT=m
+CONFIG_DM_INTEGRITY=m
 # Support running virtual machines in QEMU.
 CONFIG_HIGH_RES_TIMERS=y
 CONFIG_VIRTUALIZATION=y
@@ -274,8 +277,11 @@ CONFIG_DRM_BOCHS=m
 CONFIG_E1000=m
 ## QEMU default disk
 CONFIG_ATA=y
-CONFIG_ATA_BMDMA=y
 CONFIG_ATA_SFF=y
+CONFIG_ATA_BMDMA=y
 CONFIG_BLK_DEV_SD=y
 CONFIG_ATA_PIIX=y
+## QEMU default serial port
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
 EOF

@@ -30,10 +30,11 @@ function create_buildroot() {
         $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
-FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -selinux"
+FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
+GRUB_PLATFORMS="${options[uefi]:+efi-64}"
 INPUT_DEVICES="libinput"
 POLICY_TYPES="targeted"
-USE="\$USE ${options[selinux]:+selinux} systemd"
+USE="\$USE${options[selinux]:+ selinux} systemd"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -87,6 +88,7 @@ EOF
         echo -e '-cet\n-systemd' >> "$portage/profile/use.mask"
 
         # Write build environment modifiers for later use.
+        echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
         echo 'LDFLAGS="-lgcc_s $LDFLAGS"' >> "$portage/env/link-gcc_s.conf"
         $cat << 'EOF' >> "$portage/env/no-lto.conf"
 CFLAGS="$CFLAGS -fno-lto"
@@ -95,28 +97,36 @@ FFLAGS="$FFLAGS -fno-lto"
 FCFLAGS="$FCFLAGS -fno-lto"
 EOF
 
+        # Accept binutils-2.33.1 to fix host dependencies.
+        echo =sys-devel/binutils-2.33.1 >> "$portage/package.accept_keywords/binutils.conf"
         # Accept gettext-0.20.1 to fix host dependencies.
         echo sys-devel/gettext >> "$portage/package.accept_keywords/gettext.conf"
+        # Accept grub-2.04 for various improvements over the years.
+        echo '~sys-boot/grub-2.04' >> "$portage/package.accept_keywords/grub.conf"
+        # Accept iptables-1.8 to fix missing flags.
+        echo net-firewall/iptables >> "$portage/package.accept_keywords/iptables.conf"
+        # Accept libglvnd (since it has no stable version) over eselect-opengl.
+        echo -e 'media-libs/libglvnd\n<media-libs/mesa-19.3' >> "$portage/package.accept_keywords/libglvnd.conf"
+        # Accept man-db 2.8 to fix the missing group.
+        echo -e 'dev-libs/libpipeline\n<sys-apps/man-db-2.9' >> "$portage/package.accept_keywords/man-db.conf"
         # Accept pam-1.3.1 to fix UsrMerge compatibility.
         echo sys-libs/pam >> "$portage/package.accept_keywords/pam.conf"
-        # Accept squashfs-4.4 for zstd compression and reproducibile images.
-        echo '~sys-fs/squashfs-tools-4.4' >> "$portage/package.accept_keywords/squashfs-tools.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
-        # Fix bad policycoreutils packaging being incompatible with UsrMerge.
-        echo -e 'INSTALL_MASK="/usr/sbin/setfiles"\nPKG_INSTALL_MASK="$INSTALL_MASK"' >> "$portage/env/policycoreutils.conf"
-        echo 'sys-apps/policycoreutils policycoreutils.conf' >> "$portage/package.env/policycoreutils.conf"
+        # Accept xorg-server-1.20.6 to fix glamor compilation.
+        echo x11-base/xorg-server >> "$portage/package.accept_keywords/xorg-server.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
         $mkdir -p "${portage%/portage}"
         $cp -at "${portage%/portage}" "$buildroot/etc/portage"
         $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
-        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g&/' "$portage/make.conf"
+        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g -flto=jobserver&/' "$portage/make.conf"
         $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
 ROOT="/usr/$CHOST"
 SYSROOT="$ROOT"
 PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
 FEATURES="$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
@@ -127,6 +137,10 @@ EOF
 sys-apps/util-linux kill
 sys-process/procps -kill
 EOF
+        $cat << 'EOF' >> "$portage/package.use/portage.conf"
+# Cross-compiling portage native extensions is unsupported.
+sys-apps/portage -native-extensions
+EOF
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
         echo 'NCURSESW6_CONFIG="$SYSROOT/usr/bin/ncursesw6-config"' >> "$portage/env/cross-ncurses.conf"
@@ -134,7 +148,6 @@ EOF
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 dev-python/pypax cross-python.conf
-sys-apps/portage cross-python.conf
 sys-apps/util-linux cross-ncurses.conf
 EOF
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
@@ -149,10 +162,12 @@ EOF
 # The kernel source is shared between the host and cross-compiled root.
 sys-kernel/gentoo-sources-9999
 EOF
-        echo split-usr >> "$portage/profile/use.mask"
+        echo -e 'split-usr\n-libglvnd' >> "$portage/profile/use.mask"
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
+        # Compile GRUB modules for the target system.
+        echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Link a required library for building the SELinux labeling initrd.
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Turn off extra busybox features to make the labeling initrd smaller.
@@ -167,12 +182,29 @@ sys-apps/systemd gnuefi
 sys-apps/pciutils -udev
 EOF
 
-        script "${options[host]}" "${packages_buildroot[@]}" "$@" << 'EOF'
+        initialize_buildroot
+
+        script "$host" "${packages_buildroot[@]}" "$@" << 'EOF'
 host=$1 ; shift
 
 # Update the native build root packages to the latest versions.
 emerge-webrsync
-eselect news read --quiet
+## Support sysusers (#702624).
+curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
+test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xf749a2e2221b31613cdd28f1144cf8656457b663a7603bc82c59aa181bbcc917
+patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
+## Support fcaps properly in EAPI=7 (#700018).
+sed -i -e 's/^DEPEND=.*/B&\n[[ $EAPI == [4-6] ]] \&\& DEPEND=${BDEPEND}/' /var/db/repos/gentoo/eclass/fcaps.eclass
+## Support cross-compiler dependencies properly in EAPI=7 (#700898).
+sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/eclass/toolchain.eclass /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild
+ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild manifest
+## Support vboot-utils (#688396).
+sed -i -e /eapply/d /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild
+ebuild /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild manifest
+## Support mesa with SELinux (#703600).
+sed -i -e '/eselect-mesa/aselinux? ( sys-libs/libselinux[${MULTILIB_USEDEP}] )' /var/db/repos/gentoo/media-libs/mesa/mesa-19.2.8.ebuild
+ebuild /var/db/repos/gentoo/media-libs/mesa/mesa-19.2.8.ebuild manifest
+## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
         mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
@@ -183,7 +215,7 @@ then
         ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild manifest --force
 fi
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-    @world dev-util/debugedit sys-devel/crossdev "$@"
+    @world dev-util/debugedit sys-devel/crossdev
 
 # Create the cross-compiler toolchain in the native build root.
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
@@ -194,13 +226,14 @@ mkdir -p /usr/"$host"/usr/{bin,lib,lib64,sbin,src}
 ln -fst "/usr/$host" usr/{bin,lib,lib64,sbin}
 crossdev --stable --target "$host"
 
+# Install all requirements for building the target image.
+emerge --changed-use --jobs=4 --update --verbose "$@"
+
 # Share the clean kernel source between roots if it's installed.
 if test -d /usr/src/linux
 then
         ln -fst "/usr/$host/usr/src" ../../../../usr/src/linux
         make -C /usr/src/linux -j$(nproc) mrproper V=1
-        sed /usr/src/linux/fs/erofs/xattr.c -i \
-            -e '/erofs_listx/,/retu/s/n ret;/n (ret == -ENODATA ? 0 : ret);/'
 fi
 EOF
 
@@ -211,7 +244,7 @@ EOF
 function install_packages() {
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
 
-        opt bootable || opt networkd && packages+=(sys-apps/systemd)
+        opt bootable || opt networkd && packages+=(acct-group/mail sys-apps/systemd)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
         packages+=(sys-apps/baselayout)
 
@@ -228,7 +261,7 @@ function install_packages() {
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
-        USE='-nls -selinux' emerge --jobs=4 --verbose \
+        COLLISION_IGNORE='*' USE=-selinux emerge --jobs=4 --verbose \
             sys-devel/gcc sys-kernel/linux-headers sys-libs/glibc
         packages+=(sys-devel/gcc sys-libs/glibc)  # Install libstdc++ etc.
 
@@ -238,9 +271,8 @@ function install_packages() {
             ${options[selinux]:+sec-policy/selinux-base} \
             x11-base/x{cb,org}-proto
 
-        # Cheat systemd and PAM bootstrapping.
-        USE='-* kill' emerge --jobs=4 --verbose \
-            sys-apps/util-linux sys-libs/libcap
+        # Cheat systemd bootstrapping.
+        USE='-* kill' emerge --jobs=4 --verbose sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -256,9 +288,10 @@ function install_packages() {
         mv -t root/usr/bin root/gcc-bin/*/*
         rm -fr root/{binutils,gcc}-bin "root/usr/${options[host]}"
 
-        # If a modular kernel was configured, install the modules.
+        # If a modular kernel was configured, install the stripped modules.
         opt bootable && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
-        make -C /usr/src/linux modules_install INSTALL_MOD_PATH=/wd/root V=1 \
+        make -C /usr/src/linux modules_install V=1 \
+            INSTALL_MOD_PATH=/wd/root INSTALL_MOD_STRIP=1 \
             ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
 
         # List everything installed in the image and what was used to build it.
@@ -269,11 +302,11 @@ function install_packages() {
         # Cross-compile minimal tools for an initrd after everything is done.
         if opt ramdisk
         then
-                opt verity && FEATURES=-buildpkg USE=static-libs \
-                emerge --changed-use --jobs=4 --oneshot --verbose \
+                opt verity && USE=static-libs \
+                emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose \
                     dev-libs/libaio sys-apps/util-linux
-                FEATURES=-buildpkg USE='-* device-mapper-only static' \
-                emerge --jobs=4 --nodeps --oneshot --verbose \
+                USE='-* device-mapper-only static' \
+                emerge --buildpkg=n --jobs=4 --nodeps --oneshot --verbose \
                     sys-apps/busybox ${options[verity]:+sys-fs/lvm2}
         fi
 }
@@ -294,17 +327,21 @@ d /var/empty
 L /var/lock - - - - ../run/lock
 EOF
 
-        # Make the OpenSSH server work.
+        # Make the OpenSSH server work (#703016).
         test -s root/etc/ssh/sshd_config && ! grep sshd root/etc/passwd &&
         useradd --prefix root --home-dir=/var/empty --system --uid=22 sshd
+
+        # Conditionalize wireless interfaces on their configuration files.
+        sed -i \
+            -e '/^\[Unit]/aConditionFileNotEmpty=/etc/wpa_supplicant/wpa_supplicant-nl80211-%I.conf' \
+            root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service
 
         # The targeted policy seems more realistic to get working first.
         test -s root/etc/selinux/config &&
         sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
 
         # The targeted policy does not support a sensitivity level.
-        sed -i -e 's/t:s0/t/g' \
-            root/usr/lib/systemd/system{/*.mount,-generators/etcgo*}
+        sed -i -e 's/t:s0/t/g' root/usr/lib/systemd/system/*.mount
 
         # Magenta looks more "Gentoo" than green, as in the website and logo.
         sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
@@ -375,9 +412,12 @@ CONFIG_BINFMT_SCRIPT=y
 CONFIG_BPF_JIT_ALWAYS_ON=y
 CONFIG_FORTIFY_SOURCE=y
 CONFIG_HARDENED_USERCOPY=y
+CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY=y
 CONFIG_RANDOMIZE_BASE=y
 CONFIG_RANDOMIZE_MEMORY=y
 CONFIG_RETPOLINE=y
+CONFIG_SECURITY_LOCKDOWN_LSM=y
+CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
 CONFIG_STACKPROTECTOR=y
 CONFIG_STACKPROTECTOR_STRONG=y
 CONFIG_STRICT_KERNEL_RWX=y'
@@ -461,8 +501,8 @@ fi > "$output/config.base"
 
 function build_relabel_kernel() if opt selinux
 then
-        echo > "$output/config.relabel" '# Assume x86_64 for now.
-CONFIG_64BIT=y
+        echo > "$output/config.relabel" '# Target the native CPU.
+'$([[ $DEFAULT_ARCH =~ 64 ]] || echo '#')'CONFIG_64BIT=y
 CONFIG_MNATIVE=y
 CONFIG_SMP=y
 # Support executing programs and scripts.
@@ -635,4 +675,41 @@ function archmap_stage3() {
         local -r build=$($curl -L "$base/latest-$stage3.txt" | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
         [[ $stage3 =~ hardened ]] && stage3="hardened/$stage3"
         echo "$base/$build/$stage3-$build.tar.xz"
+}
+
+# OPTIONAL (IMAGE)
+
+function drop_debugging() {
+        exclude_paths+=(
+                usr/lib/.build-id
+                usr/lib/debug
+                usr/share/gdb
+                usr/src
+        )
+}
+
+function drop_development() {
+        exclude_paths+=(
+                etc/env.d/gcc
+                usr/include
+                'usr/lib/lib*.a'
+                usr/lib/gcc
+                usr/{lib,share}/pkgconfig
+                usr/libexec/gcc
+                usr/share/gcc-data
+        )
+
+        # Drop developer commands, then remove their dead links.
+        rm -f root/usr/*bin/"${options[host]}"-*
+        find root/usr/*bin -type l | while read
+        do
+                path=$(readlink "$REPLY")
+                if [[ $path == /* ]]
+                then test -e "root$path" || rm -f "$REPLY"
+                else test -e "${REPLY%/*}/$path" || rm -f "$REPLY"
+                fi
+        done
+
+        # Save required GCC shared libraries so /usr/lib/gcc can be dropped.
+        mv -t root/usr/lib root/usr/lib/gcc/*/*/*.so*
 }

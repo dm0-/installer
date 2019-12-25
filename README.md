@@ -68,8 +68,6 @@ The project may be completely revised at some point, so don't expect anything in
 
 ### Fedora
 
-**Report when the image should be updated.**  When a system saves the RPM database and has network access, it should automatically check Fedora updates for enhancements, bug fixes, and security issues so it can create a report advising when an updated immutable image should be created and applied.  I will probably implement this in a custom package in my local repo and integrate it with a real monitoring server, but I am noting it here in case I decide to add it to the base system and put a report in root's MOTD (to provide the information without assumptions about network monitoring).  The equivalent can be done for CentOS or via GLSAs, but Fedora is my priority here.
-
 **Continue pestering lazy kernel maintainers until they enable EROFS.**
 
 ### CentOS
@@ -77,8 +75,6 @@ The project may be completely revised at some point, so don't expect anything in
 There is nothing planned to change here at this point.  CentOS must be perfect.  All known shortcomings in the generated images are due to the status of the distro (e.g. CentOS 7 is too old to have a UEFI stub), so they will not be fixed by this script.
 
 ### Gentoo
-
-**Implement optional file filtering functions based on categories like debugging or development.**  Packages such as GCC should be filtered to install runtime components like `libstdc++` but not compilers and headers for systems that won't do development.  This could probably be implemented for all distros, but it will only be useful in Gentoo since Fedora et al. use subpackages for that functionality which can just be omitted.
 
 **Maybe support using a specific commit for the repository.**  Since Gentoo's repository is maintained in a rolling-release style, there should be a way to specify a snapshot to get the same ebuild revisions.
 

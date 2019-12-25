@@ -24,11 +24,12 @@ function create_buildroot() {
         $tar -xJOf "$output/image.tar.xz" '*/layer.tar' | $tar -C "$buildroot" -x
         $rm -f "$output/checksum" "$output/image.tar.xz"
 
-        configure_initrd_generation
-
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
         $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
+
+        configure_initrd_generation
+        initialize_buildroot
 
         enter /usr/bin/dnf --assumeyes upgrade
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
@@ -412,6 +413,79 @@ function save_rpm_db() {
         mv root/var/lib/rpm root/usr/lib/rpm-db
         echo > root/usr/lib/tmpfiles.d/rpm-db.conf \
             'L /var/lib/rpm - - - - ../../usr/lib/rpm-db'
+
+        # Define a service and timer to check when updates are available.
+        test -x root/usr/bin/dnf || return 0
+        cat << 'EOF' > root/usr/lib/systemd/system/image-update-check.service
+[Unit]
+Description=Write the MOTD with the system update status
+After=network.target network-online.target
+#Before=display-manager.service sshd.service  # Don't delay booting.
+[Service]
+ExecStart=/bin/bash -eo pipefail -c 'declare -A total=() ; \
+for retry in 1 2 3 4 5 ; do while read -rs count type extra ; \
+do [[ $$count =~ [0-9]+ ]] && total[$$type]=$$count || \
+{ test "x$$count" = xError: && break ; } ; \
+done < <(exec /usr/bin/dnf --quiet updateinfo summary --available 2>&1) ; \
+test -n "$$count" && /usr/bin/sleep 10 || break ; done ; \
+test -n "$$count" && exit 1 ; unset "total["{New,Moderate,Low}"]" ; \
+/usr/bin/mkdir -pZ /run/motd.d ; exec > /run/motd.d/image-update-check ; \
+test $${#total[@]} -gt 0 || exit 0 ; \
+{ (( total[Critical] + total[Important] )) && echo -n UPDATES REQUIRED ; } || \
+{ (( total[Security] )) && echo -n Security updates are available ; } || \
+{ (( total[Bugfix] )) && echo -n Bug fixes are available ; } || \
+echo -n Updates are available ; sec=" (" ; \
+(( total[Critical] )) && sec+="$${total[Critical]} critical)" ; \
+test $${#sec} -gt 2 && sec="$${sec/%?/, }" ; \
+(( total[Important] )) && sec+="$${total[Important]} important)" ; \
+echo -n $${total[Security]:+, $${total[Security]} security$$sec} ; \
+echo -n $${total[Bugfix]:+, $${total[Bugfix]} bugfix} ; \
+echo -n $${total[Enhancement]:+, $${total[Enhancement]} enhancement} ; \
+echo -n $${total[other]:+, $${total[other]} other}'
+ExecStartPost=-/bin/bash -euo pipefail -c 'test -x /usr/bin/dconf || exit 0 ; \
+test -s /etc/dconf/db/gdm.d/01-banner -a -s /run/motd.d/image-update-check && \
+echo -e > /etc/dconf/db/gdm.d/02-banner "[org/gnome/login-screen]\n\
+banner-message-text=\'$(</run/motd.d/image-update-check)\'" || \
+/usr/bin/rm -f /etc/dconf/db/gdm.d/02-banner ; \
+exec /usr/bin/dconf update'
+TimeoutStartSec=5m
+Type=oneshot
+[Install]
+WantedBy=multi-user.target
+EOF
+        cat << 'EOF' > root/usr/lib/systemd/system/image-update-check.timer
+[Unit]
+Description=Check for system update notifications twice daily
+[Timer]
+AccuracySec=1h
+OnUnitInactiveSec=12h
+[Install]
+WantedBy=timers.target
+EOF
+
+        # Show the status message on GDM if it exists.
+        if test -x root/usr/sbin/gdm
+        then
+                mkdir -p root/etc/dconf/db/gdm.d root/etc/dconf/profile
+                cat << 'EOF' > root/etc/dconf/db/gdm.d/01-banner
+[org/gnome/login-screen]
+banner-message-enable=true
+EOF
+                cat << 'EOF' > root/etc/dconf/profile/gdm
+user-db:user
+system-db:gdm
+file-db:/usr/share/gdm/greeter-dconf-defaults
+EOF
+        fi
+
+        # Only enable the units if explicitly requested.
+        if test "x$*" = x+updates
+        then
+                ln -fst root/usr/lib/systemd/system/timers.target.wants \
+                    ../image-update-check.timer
+                ln -fst root/usr/lib/systemd/system/multi-user.target.wants \
+                    ../image-update-check.service
+        fi
 }
 
 function drop_package() while read -rs

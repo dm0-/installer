@@ -102,12 +102,18 @@ packages+=(
         vlc
 )
 
+# Install the akmod package to build the proprietary NVIDIA drivers.
+function initialize_buildroot() {
+        enable_rpmfusion +nonfree
+        $mkdir -p  "$buildroot/usr/lib/modprobe.d"
+        echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
+        packages_buildroot+=(akmod-nvidia)
+}
+
 # Install packages for building bare kernel modules.
 packages_buildroot+=(bc make gcc git-core kernel-devel)
 
 function customize_buildroot() {
-        enable_rpmfusion
-
         # Build a USB WiFi device's out-of-tree driver.
         script << 'EOF'
 git clone --branch=v5.3.4 https://github.com/aircrack-ng/rtl8812au.git
@@ -116,20 +122,16 @@ exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '*'
 EOF
 
         # Build the proprietary NVIDIA drivers using akmods.
-        enable_rpmfusion +nonfree
         script << 'EOF'
-kernel=$(cd /lib/modules ; compgen -G '*')
-echo 'blacklist nouveau' > /usr/lib/modprobe.d/nvidia.conf
-dracut --force initrd.img "$kernel"  # Block nouveau in the initrd.
-dnf --assumeyes install akmod-nvidia
-su --login --session-command="exec akmodsbuild --kernels $kernel --verbose /usr/src/akmods/nvidia-kmod.latest" --shell=/bin/sh akmods
+echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
+su --login --session-command="exec $(</dev/stdin)" --shell=/bin/sh akmods
 rpm2cpio /var/cache/akmods/kmod-nvidia-*.rpm | cpio -idD /
 EOF
         packages+=(/$(cd "$buildroot" ; compgen -G 'var/cache/akmods/kmod-nvidia-*.rpm'))
 }
 
 function customize() {
-        save_rpm_db
+        save_rpm_db +updates
         store_home_on_var +root
 
         echo desktop-fedora > root/etc/hostname

@@ -70,6 +70,9 @@ UseDomains=yes
 UseMTU=yes
 EOF
 
-        # Point DNS configuration at resolved's DHCP settings (not the stub).
+        # Disable the DNS stub listener by default.
+        sed -i \
+            -e '/^#*DNSStubListener=/{s/#*//;s/=.*/=no/;}' \
+            root/etc/systemd/resolved.conf
         ln -fst root/etc ../run/systemd/resolve/resolv.conf
 fi

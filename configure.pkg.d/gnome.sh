@@ -2,8 +2,8 @@
 test -s root/etc/gdm/custom.conf &&
 sed -i -e '/WaylandEnable=false$/s/^[# ]*//' root/etc/gdm/custom.conf
 
-# Fix GNOME 3.34 as best as possible.
-test ! -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml ||
+# Fix GNOME 3 as best as possible.
+test -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml &&
 cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
 [org.gnome.calculator]
 angle-units='radians'
@@ -98,3 +98,15 @@ scrollbar-policy='never'
 use-transparent-background=true
 use-theme-colors=false
 EOF
+
+# Rewind changes for older versions.
+local -i minor=$(sed -n 's,.*<minor>\([0-9]*\)</minor>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
+if test "$minor" -gt 0 -a -s root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
+then
+        test "$minor" -le 32 && sed -i \
+            -e 's/desktop.peripherals.keyboard/settings-daemon.peripherals.keyboard/' \
+            -e "/^numlock-state=/s/=true/='on'/" \
+            -e '/^on-screen-keyboard=/{s/=[[]/=/;s/[],].*//;}' \
+            root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
+        :  # Older versions included in supported distros need to be added.
+fi

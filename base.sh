@@ -164,6 +164,7 @@ function distro_tweaks() { : ; }
 function save_boot_files() { : ; }
 
 # Systems should override these functions.
+function initialize_buildroot() { : ; }
 function customize_buildroot() { : ; }
 function customize() { : ; }
 
@@ -261,6 +262,10 @@ then
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
 elif opt read_only && ! opt selinux
 then
+        local path
+        for path in "${exclude_paths[@]}"
+        do compgen -G "root/$path" || :
+        done | xargs --delimiter='\n' -- rm -fr
         disk=erofs.img
         mkfs.erofs -Eforce-inode-compact -x-1 "$disk" root
 fi
@@ -457,7 +462,7 @@ fi"
 ExecStart=/usr/bin/git worktree add --force -B master ../../../run/etcgo/overlay master
 ExecStartPost=-/usr/sbin/restorecon -vFR /run/etcgo/overlay
 RemainAfterExit=yes
-RuntimeDirectory=etcgo/overlay etcgo/wd
+RuntimeDirectory=etcgo etcgo/overlay etcgo/wd
 RuntimeDirectoryPreserve=yes
 StateDirectory=etcgo
 StateDirectoryMode=0700

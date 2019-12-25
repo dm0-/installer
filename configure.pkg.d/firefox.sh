@@ -1,6 +1,9 @@
 local dir
 if dir=$(compgen -G 'root/usr/lib*/firefox/browser/defaults/preferences')
 then
+        test -h "$dir" -a "x${dir/\/browser}" = "xroot$(readlink "$dir")" &&
+        ln -fns ../../defaults/preferences "$dir"
+
         # Disable things that store and send your confidential information.
         cat << 'EOF' > "${dir%%$'\n'*}/privacy.js"
 // Opt out of allowing Mozilla to install random studies.

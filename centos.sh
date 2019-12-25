@@ -22,10 +22,11 @@ function create_buildroot() {
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
         $rm -f "$output/image.tar.xz"
 
-        configure_initrd_generation
-
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
+
+        configure_initrd_generation
+        initialize_buildroot
 
         opt uefi && enable_epel  # EPEL is required for ImageMagick.
         enter /usr/bin/dnf --assumeyes upgrade
@@ -118,9 +119,9 @@ EOF
         then
                 disk=squash.img
                 echo "$disk" > "$root/ef"
-                (IFS=$'\n' ; echo "${exclude_paths[*]}" >> "$root/ef")
+                (IFS=$'\n' ; echo "${exclude_paths[*]}") >> "$root/ef"
                 cp -t "$root/bin" /usr/sbin/mksquashfs
-        else cp /bin/true "$root/bin/mksquashfs"
+        else sed -i -e '/^mksquashfs /d' "$root/init"
         fi
 
         cp -t "$root/bin" \
@@ -326,6 +327,11 @@ rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
 }
+
+# OPTIONAL (IMAGE)
+
+# Override update notifications since /run/motd.d is unsupported.
+eval "$(declare -f save_rpm_db | $sed s,/run/motd.d,/etc/motd.d,g)"
 
 # WORKAROUNDS
 

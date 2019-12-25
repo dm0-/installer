@@ -106,7 +106,7 @@ function customize() {
         exclude_paths+=(
                 usr/include
                 usr/{lib,share}/pkgconfig
-                'usr/lib/*.a'
+                'usr/lib/lib*.a'
         )
 
         # Install unpackaged NVIDIA drivers into the image.
@@ -127,5 +127,6 @@ function customize() {
 blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
+softdep nvidia post: nvidia-uvm
 EOF
 }

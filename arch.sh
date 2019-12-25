@@ -19,8 +19,6 @@ function create_buildroot() {
         $tar --strip-components=1 -C "$buildroot" -xzf "$output/image.tgz"
         $rm -f "$output/image.tgz"
 
-        configure_initrd_generation
-
         # Use the kernel.org mirrors.
         $sed -i -e '/https.*kernel.org/s/^#*//' "$buildroot/etc/pacman.d/mirrorlist"
 
@@ -32,6 +30,9 @@ function create_buildroot() {
                 $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
                 packages_buildroot+=(base-devel)
         fi
+
+        configure_initrd_generation
+        initialize_buildroot
 
         script "${packages_buildroot[@]}" "$@" << 'EOF'
 pacman-key --init
@@ -103,9 +104,6 @@ then
         test -s os-release || cp -pt . root/etc/os-release
 fi
 
-# Override image generation to force EROFS xattrs until a fix is upstream.
-eval "$(declare -f squash | $sed 's/ -x-1 / /')"
-
 # Override dm-init with userspace since the Arch kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
 
@@ -149,13 +147,6 @@ Requires=dev-mapper-root.device dmsetup-verity-root.service"'
                 $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
                 echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
                     "install_optional_items+=\" $gendir/dmsetup-verity-root \""
-        fi
-
-        # Include the EROFS module as needed.
-        if opt read_only && ! opt squash
-        then
-                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
-                    'add_drivers+=" erofs "'
         fi
 
         # Load overlayfs in the initrd in case modules aren't installed.

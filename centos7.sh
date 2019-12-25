@@ -25,6 +25,7 @@ function create_buildroot() {
         $rm -f "$output/image.tar.xz"
 
         configure_initrd_generation
+        initialize_buildroot
 
         enter /usr/bin/yum --assumeyes upgrade
         enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
