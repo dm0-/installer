@@ -187,7 +187,7 @@ then
         e4defrag root
         umount root
         opt read_only && tune2fs -O read-only /dev/loop-root
-        e2fsck -Dfy /dev/loop-root || [ "$?" -eq 1 ]
+        e2fsck -Dfy /dev/loop-root || [ 1 -eq "$?" ]
 fi
 
 function relabel() if opt selinux

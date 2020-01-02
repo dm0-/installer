@@ -1,0 +1,186 @@
+packages=(aaa_base branding-openSUSE openSUSE-release)
+packages_buildroot=()
+
+options[selinux]=
+
+function create_buildroot() {
+        local -r image="https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.$DEFAULT_ARCH-lxc.tar.xz"
+
+        opt bootable && packages_buildroot+=(kernel-default ucode-{amd,intel})
+        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
+        opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86)
+        opt squash && packages_buildroot+=(squashfs)
+        opt verity && packages_buildroot+=(cryptsetup device-mapper)
+        opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick) &&
+        opt sb_cert && opt sb_key && packages_buildroot+=(mozilla-nss-tools pesign)
+        packages_buildroot+=(e2fsprogs)
+
+        $mkdir -p "$buildroot"
+        $curl -L "$image.sha256" > "$output/checksum"
+        $curl -L "$image" > "$output/image.tar.xz"
+        verify_distro "$output/checksum" "$output/image.tar.xz"
+        $tar -C "$buildroot" -xJf "$output/image.tar.xz"
+        $rm -f "$output/checksum" "$output/image.tar.xz"
+
+        # Disable non-OSS packages by default.
+        $sed -i -e '/^enabled=/s/=.*/=0/' "$buildroot/etc/zypp/repos.d/repo-non-oss.repo"
+
+        configure_initrd_generation
+        initialize_buildroot
+
+        enter /usr/bin/zypper --non-interactive update
+        enter /usr/bin/zypper --non-interactive install "${packages_buildroot[@]}" "$@"
+
+        # Let the configuration decide if the system should have documentation.
+        $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
+}
+
+function install_packages() {
+        opt bootable || opt networkd && packages+=(systemd)
+
+        opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
+        zypper --non-interactive --installroot="$PWD/root" \
+            install "${packages[@]:-filesystem}" "$@" || [ 107 -eq "$?" ]
+
+        # Define basic users and groups prior to configuring other stuff.
+        grep -qs '^wheel:' root/etc/group ||
+        groupadd --prefix root --system --gid=10 wheel
+
+        # List everything installed in the image and what was used to build it.
+        rpm -qa | sort > packages-buildroot.txt
+        rpm --root="$PWD/root" -qa | sort > packages.txt
+}
+
+function distro_tweaks() {
+        rm -fr root/etc/init.d root/etc/modprobe.d/60-blacklist_fs-erofs.conf
+
+        mv -t root/usr/lib/systemd/system root/usr/share/systemd/tmp.mount
+
+        test -s root/etc/zypp/repos.d/repo-non-oss.repo &&
+        sed -i -e '/^enabled=/s/=.*/=0/' root/etc/zypp/repos.d/repo-non-oss.repo
+
+        test -s root/usr/share/glib-2.0/schemas/openSUSE-branding.gschema.override &&
+        mv root/usr/share/glib-2.0/schemas/{,50_}openSUSE-branding.gschema.override
+
+        test -s root/usr/lib/systemd/system/polkit.service &&
+        sed -i -e '/^Type=/iStateDirectory=polkit' root/usr/lib/systemd/system/polkit.service
+
+        test -s root/etc/pam.d/common-auth &&
+        sed -i -e 's/try_first_pass/& nullok/' root/etc/pam.d/common-auth
+
+        sed -i -e '1,/ PS1=/s/ PS1="/&$? /' root/etc/bash.bashrc
+        echo "alias ll='ls -l'" >> root/etc/skel/.alias
+        rmdir root/etc/skel/bin
+}
+
+function save_boot_files() if opt bootable
+then
+        test -s vmlinuz || cp -pt . /boot/vmlinuz
+        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
+        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
+        opt uefi && test ! -s logo.bmp &&
+        sed -i -e '/<svg/,/>/s,>,&<style>#g885{display:none}</style>,' /usr/share/pixmaps/distribution-logos/light-dual-branding.svg &&
+        magick -background none -size 720x320 /usr/share/pixmaps/distribution-logos/light-dual-branding.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
+        test -s os-release || cp -pt . root/etc/os-release
+fi
+
+# Override squashfs creation since openSUSE doesn't support zstd.
+eval "$(declare -f relabel squash | $sed 's/ zstd .* 22 / xz /')"
+
+# Override dm-init with userspace since the openSUSE kernel doesn't enable it.
+eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
+
+# Override the PAM session file path to automatically create home directories.
+eval "$(declare -f tmpfs_home | $sed s/system-auth/common-session/g)"
+
+function configure_initrd_generation() if opt bootable
+then
+        # Don't expect that the build system is the target system.
+        $mkdir -p "$buildroot/etc/dracut.conf.d"
+        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+
+        # Create a generator to handle verity since dm-init isn't enabled.
+        if opt verity
+        then
+                local -r gendir=/usr/lib/systemd/system-generators
+                $mkdir -p "$buildroot$gendir"
+                echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
+read -rs cmdline < /proc/cmdline
+test "x${cmdline}" != "x${cmdline%%DVR=\"*\"*}" || exit 0
+concise=${cmdline##*DVR=\"} concise=${concise%%\"*}
+device=${concise#* * * * } device=${device%% *}
+if [[ $device =~ ^[A-Z]+= ]]
+then
+        tag=${device%%=*} tag=${tag,,}
+        device=${device#*=}
+        [ $tag = partuuid ] && device=${device,,}
+        device="/dev/disk/by-$tag/$device"
+fi
+device=$(systemd-escape --path "$device").device
+rundir=/run/systemd/system
+mkdir -p "$rundir/sysroot.mount.d"
+echo > "$rundir/dmsetup-verity-root.service" "[Unit]
+DefaultDependencies=no
+After=$device
+Requires=$device
+[Service]
+ExecStart=/usr/sbin/dmsetup create --concise \"$concise\"
+RemainAfterExit=yes
+Type=oneshot"
+echo > "$rundir/sysroot.mount.d/verity-root.conf" "[Unit]
+After=dev-mapper-root.device dmsetup-verity-root.service
+Requires=dev-mapper-root.device dmsetup-verity-root.service"'
+                $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    "install_optional_items+=\" $gendir/dmsetup-verity-root \""
+        fi
+
+        # Include the EROFS module as needed.
+        if opt read_only && ! opt squash
+        then
+                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
+                    'add_drivers+=" erofs "'
+        fi
+
+        # Load overlayfs in the initrd in case modules aren't installed.
+        if opt read_only
+        then
+                $mkdir -p "$buildroot/usr/lib/modules-load.d"
+                echo overlay > "$buildroot/usr/lib/modules-load.d/overlay.conf"
+        fi
+fi
+
+function verify_distro() {
+        local -rx GNUPGHOME="$output/gnupg"
+        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
+        $mkdir -pm 0700 "$GNUPGHOME"
+        $gpg --import << 'EOF'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQENBEkUTD8BCADWLy5d5IpJedHQQSXkC1VK/oAZlJEeBVpSZjMCn8LiHaI9Wq3G
+3Vp6wvsP1b3kssJGzVFNctdXt5tjvOLxvrEfRJuGfqHTKILByqLzkeyWawbFNfSQ
+93/8OunfSTXC1Sx3hgsNXQuOrNVKrDAQUqT620/jj94xNIg09bLSxsjN6EeTvyiO
+mtE9H1J03o9tY6meNL/gcQhxBvwuo205np0JojYBP0pOfN8l9hnIOLkA0yu4ZXig
+oKOVmf4iTjX4NImIWldT+UaWTO18NWcCrujtgHueytwYLBNV5N0oJIP2VYuLZfSD
+VYuPllv7c6O2UEOXJsdbQaVuzU1HLocDyipnABEBAAG0NG9wZW5TVVNFIFByb2pl
+Y3QgU2lnbmluZyBLZXkgPG9wZW5zdXNlQG9wZW5zdXNlLm9yZz6JATwEEwECACYC
+GwMGCwkIBwMCBBUCCAMEFgIDAQIeAQIXgAUCU2dN1AUJHR8ElQAKCRC4iy/UPb3C
+hGQrB/9teCZ3Nt8vHE0SC5NmYMAE1Spcjkzx6M4r4C70AVTMEQh/8BvgmwkKP/qI
+CWo2vC1hMXRgLg/TnTtFDq7kW+mHsCXmf5OLh2qOWCKi55Vitlf6bmH7n+h34Sha
+Ei8gAObSpZSF8BzPGl6v0QmEaGKM3O1oUbbB3Z8i6w21CTg7dbU5vGR8Yhi9rNtr
+hqrPS+q2yftjNbsODagaOUb85ESfQGx/LqoMePD+7MqGpAXjKMZqsEDP0TbxTwSk
+4UKnF4zFCYHPLK3y/hSH5SEJwwPY11l6JGdC1Ue8Zzaj7f//axUs/hTC0UZaEE+a
+5v4gbqOcigKaFs9Lc3Bj8b/lE10Y
+=i2TA
+-----END PGP PUBLIC KEY BLOCK-----
+EOF
+        $gpg --verify "$1"
+        test x$($sed -n 's/  .*//p' "$1") = x$($sha256sum "$2" | $sed -n '1s/ .*//p')
+}
+
+# OPTIONAL (IMAGE)
+
+function drop_package() while read -rs
+do exclude_paths+=("${REPLY#/}")
+done < <(rpm --root="$PWD/root" -qal "$@")

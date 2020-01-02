@@ -18,7 +18,7 @@ rm -f root/etc/vconsole.conf
 compgen -G 'root/usr/share/kbd/consolefonts/eurlatgr.*' ||
 compgen -G 'root/???/*/consolefonts/eurlatgr.*' &&
 echo 'FONT="eurlatgr"' >> root/etc/vconsole.conf
-compgen -G 'root/lib/kbd/keymaps/legacy/i386/qwerty/emacs2.*' ||
+compgen -G 'root/usr/*/kbd/keymaps/legacy/i386/qwerty/emacs2.*' ||
 compgen -G 'root/usr/share/kbd/keymaps/i386/qwerty/emacs2.*' ||
 compgen -G 'root/usr/share/keymaps/i386/qwerty/emacs2.*' &&
 echo 'KEYMAP="emacs2"' >> root/etc/vconsole.conf

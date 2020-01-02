@@ -6,11 +6,12 @@
 # dkms to build kernel modules for an immutable image.
 
 options+=(
-        [distro]=arch  # Use Arch Linux for this image.
-        [networkd]=    # Disable networkd so the desktop can use NetworkManager.
-        [squash]=1     # Use a highly compressed file system to save space.
-        [uefi]=1       # Create a UEFI executable that boots into this image.
-        [verity]=1     # Prevent the file system from being modified.
+        [distro]=arch
+        [executable]=1  # Generate a VM image for fast testing.
+        [networkd]=     # Disable networkd so GNOME can use NetworkManager.
+        [squash]=1      # Use a highly compressed file system to save space.
+        [uefi]=1        # Create a UEFI executable that boots into this image.
+        [verity]=1      # Prevent the file system from being modified.
 )
 
 packages+=(
@@ -100,7 +101,7 @@ packages+=(nvidia-utils)
 function customize() {
         store_home_on_var +root
 
-        echo desktop-arch > root/etc/hostname
+        echo "desktop-${options[distro]}" > root/etc/hostname
 
         # Drop development stuff.
         exclude_paths+=(
@@ -128,5 +129,15 @@ blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
 softdep nvidia post: nvidia-uvm
+EOF
+
+        # Support an executable VM image for quick testing.
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/sh -eu
+exec qemu-kvm -nodefaults \
+    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    -cpu host -m 8G -vga std -nic user \
+    -drive file="${IMAGE:-disk.exe}",format=raw,media=disk \
+    "$@"
 EOF
 }

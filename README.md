@@ -47,12 +47,13 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Status / Notes / To Do
 
-The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Four distros are supported to varying degrees:
+The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Five distros are supported to varying degrees:
 
-  - Fedora supports all features, but only Fedora 30 and 31 (the default) can be used.  Fedora 30 is the last version to support i686.
-  - CentOS 8 should support everything.  CentOS 7 systemd is too old to support building a UEFI image and persistently tracking the `/etc` overlay with Git.
+  - Fedora supports everything besides EROFS, but only Fedora 30 and 31 (the default) can be used.  Fedora 30 is the last version to support i686.
+  - CentOS 8 should support everything Fedora supports.  CentOS 7 systemd is too old to support building a UEFI image and the persistent `/etc` Git overlay.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
-  - Arch supports everything besides SELinux, since AUR is not yet enabled during the build.  Only x86_64 is supported by the distro.
+  - Arch supports everything besides SELinux, since AUR is not yet usable during the build.  Systems can theoretically force SELinux with custom scripts.
+  - openSUSE supports everything besides SELinux, since there is no policy packaged in the distro.  It is the only modern binary disto with i686 support.
 
 ### General
 
@@ -65,6 +66,8 @@ The project may be completely revised at some point, so don't expect anything in
 **Use the list of excluded paths in ext4 and EROFS.**  Only squashfs is dropping the files.  SELinux might be a problem with EROFS until this is fixed.
 
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
+
+**Fix the logind/DRM race.**  It looks like systemd-logind can try to start before the DRM module is ready (at least on QEMU), which prevents GDM from starting.  Restart systemd-logind to get it working.
 
 ### Fedora
 
@@ -83,6 +86,12 @@ There is nothing planned to change here at this point.  CentOS must be perfect. 
 **Support SELinux.**  This probably entails adding a function to enable AUR packages during the build like RPM Fusion in Fedora.  There might be some ugly manual steps since AUR has separate packages built with SELinux support that replace both optional and core packages.
 
 **Fix the udev delay when ramdisk is enabled.**  Transitioning from the initrd to the real root is blocked for thirty seconds on udev shutdown when running in RAM.
+
+### openSUSE
+
+**Support SELinux.**  Only the policy is missing; all of the packages support it.
+
+**Maybe support Leap releases.**  Currently only Tumbleweed is available, so this is a rolling release distro like Gentoo and Arch.
 
 ### Example Systems
 

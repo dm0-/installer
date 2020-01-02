@@ -22,6 +22,8 @@ then
 ; Place
 (setq line-number-mode t)
 (setq column-number-mode t)
+(when (and (version<= "26.0.50" emacs-version) (<= 100 (window-total-width)))
+ (global-display-line-numbers-mode))
 EOF
 
         # If Emacs was installed, assume it is the desired default editor.

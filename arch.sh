@@ -1,11 +1,12 @@
 packages=()
 packages_buildroot=()
 
-DEFAULT_RELEASE=2019.12.01
 options[selinux]=
 
 function create_buildroot() {
-        local -r image="https://mirrors.kernel.org/archlinux/iso/${options[release]:=$DEFAULT_RELEASE}/archlinux-bootstrap-${options[release]}-$DEFAULT_ARCH.tar.gz"
+        local -r dir="https://mirrors.kernel.org/archlinux/iso/latest"
+        local -r release=$($curl -L "$dir/md5sums.txt" | $sed -n 's/.*-bootstrap-\([0-9.]*\)-.*/\1/p')
+        local -r image="$dir/archlinux-bootstrap-$release-$DEFAULT_ARCH.tar.gz"
 
         opt bootable && packages_buildroot+=(dracut intel-ucode linux-firmware linux-hardened)
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)

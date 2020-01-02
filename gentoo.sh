@@ -27,7 +27,7 @@ function create_buildroot() {
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
         $ln -fns "../../var/db/repos/gentoo/profiles/$(archmap_profile)" "$portage/make.profile"
-        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,unmask,use},profile,repos.conf}
+        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile,repos.conf}
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
@@ -59,6 +59,12 @@ gnome-base/*
 gnome-extra/*
 sys-apps/gentoo-systemd-integration
 sys-apps/systemd
+EOF
+        $cat << 'EOF' >> "$portage/package.use/cryptsetup.conf"
+# Choose nettle as the crypto backend and LUKS2 as the default LUKS version.
+sys-fs/cryptsetup nettle -gcrypt -kernel -luks1_default -openssl
+# Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
+sys-fs/lvm2 device-mapper-only -thin
 EOF
         $cat << 'EOF' >> "$portage/package.use/kmod.conf"
 # Support installing kernels configured with compressed modules.
@@ -154,6 +160,7 @@ EOF
 # Turn off LTO for broken packages.
 dev-libs/elfutils no-lto.conf
 dev-libs/icu no-lto.conf
+sys-fs/fuse no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf

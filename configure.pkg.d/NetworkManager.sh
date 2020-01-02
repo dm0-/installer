@@ -9,4 +9,7 @@ then
         mkdir -p root/usr/lib/systemd/system/network-online.target.wants
         ln -fst root/usr/lib/systemd/system/network-online.target.wants \
             ../NetworkManager-wait-online.service
+
+        # Use NetworkManager's DNS settings.
+        ln -fst root/etc ../run/NetworkManager/resolv.conf
 fi

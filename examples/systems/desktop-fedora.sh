@@ -8,11 +8,12 @@
 # the resulting immutable image.
 
 options+=(
-        [networkd]=   # Disable networkd so the desktop can use NetworkManager.
-        [selinux]=1   # Enforce a targeted SELinux policy.
-        [squash]=1    # Use a highly compressed file system to save space.
-        [uefi]=1      # Create a UEFI executable that boots into this image.
-        [verity]=1    # Prevent the file system from being modified.
+        [executable]=1  # Generate a VM image for fast testing.
+        [networkd]=     # Disable networkd so GNOME can use NetworkManager.
+        [selinux]=1     # Enforce a targeted SELinux policy.
+        [squash]=1      # Use a highly compressed file system to save space.
+        [uefi]=1        # Create a UEFI executable that boots into this image.
+        [verity]=1      # Prevent the file system from being modified.
 )
 
 packages+=(
@@ -97,7 +98,7 @@ packages+=(
         mozilla-{https-everywhere,noscript,ublock-origin}
 
         # VLC
-        lib{aacs,bdplus,bluray-bdj}
+        lib{aacs,bdplus}
         libdvdcss
         vlc
 )
@@ -116,14 +117,14 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         script << 'EOF'
-git clone --branch=v5.3.4 https://github.com/aircrack-ng/rtl8812au.git
-git -C rtl8812au reset --hard 2c3ce7095f446c412ac8146b88b854b6c684a03e
-exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '*')" V=1
+git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
+git -C rtl8812au reset --hard 5a1399b547e692bbe8f4efaf7a3ebcb522f46ec6
+exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 EOF
 
         # Build the proprietary NVIDIA drivers using akmods.
         script << 'EOF'
-echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
+echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '[0-9]*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
 su --login --session-command="exec $(</dev/stdin)" --shell=/bin/sh akmods
 rpm2cpio /var/cache/akmods/kmod-nvidia-*.rpm | cpio -idD /
 EOF
@@ -134,7 +135,7 @@ function customize() {
         save_rpm_db +updates
         store_home_on_var +root
 
-        echo desktop-fedora > root/etc/hostname
+        echo "desktop-${options[distro]}" > root/etc/hostname
 
         # Never start on Wayland, and don't show a non-GNOME application icon.
         exclude_paths+=(
@@ -165,5 +166,15 @@ function customize() {
 blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
+EOF
+
+        # Support an executable VM image for quick testing.
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/sh -eu
+exec qemu-kvm -nodefaults \
+    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    -cpu host -m 8G -vga std -nic user \
+    -drive file="${IMAGE:-disk.exe}",format=raw,media=disk \
+    "$@"
 EOF
 }

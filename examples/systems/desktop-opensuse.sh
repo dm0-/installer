@@ -1,0 +1,190 @@
+# This is a standalone openSUSE workstation image that aims to demonstrate an
+# alternative to the Fedora workstation example.  It should be approximately
+# equivalent so that they are interchangeable.
+#
+# The proprietary NVIDIA drivers are installed here to demonstrate how to use
+# the vendor's repository and install the modules in an immutable image without
+# development packages.
+
+options+=(
+        [distro]=opensuse
+        [executable]=1  # Generate a VM image for fast testing.
+        [networkd]=     # Disable networkd so GNOME can use NetworkManager.
+        [squash]=1      # Use a highly compressed file system to save space.
+        [uefi]=1        # Create a UEFI executable that boots into this image.
+        [verity]=1      # Prevent the file system from being modified.
+)
+
+packages+=(
+        distribution-logos-openSUSE-Tumbleweed kernel-default
+
+        # Utilities
+        binutils
+        emacs-nox
+        file
+        findutils
+        git-core
+        grep
+        gzip
+        kbd
+        lsof
+        man{,-pages}
+        procps
+        sed
+        strace
+        systemd-sysvinit
+        tar
+        unzip
+        which
+        ## Accounts
+        cracklib-dict-small
+        shadow
+        sudo
+        ## Hardware
+        pciutils
+        usbutils
+        ## Network
+        iproute2
+        iptables
+        iputils
+        net-tools
+        openssh
+        tcpdump
+        traceroute
+        wget
+
+        # Disks
+        cryptsetup
+        dosfstools
+        e2fsprogs
+        hdparm
+        lvm2
+        mdadm
+        squashfs
+        sshfs
+
+        # Host
+        qemu-{kvm,ovmf-x86_64}
+        systemd-container
+
+        # GNOME
+        bolt
+        colord
+        eog
+        evince{,-plugin-{djvu,pdf,tiff,xps}document}
+        gdm-systemd
+        gnome-backgrounds
+        gnome-calculator
+        gnome-control-center
+        gnome-clocks
+        gnome-screenshot
+        gnome-shell
+        gnome-terminal
+        gtk3-branding-openSUSE
+        gucharmap
+        NetworkManager-branding-openSUSE
+        upower
+
+        # Graphics
+        Mesa-{dri{,-nouveau},lib{d3d,OpenCL,va}}
+        libva-vdpau-driver libvdpau_{nouveau,r{3,6}00,radeonsi}
+        libvulkan_{intel,radeon}
+        libXvMC_{nouveau,r600}
+        xf86-{input-libinput,video-{amdgpu,intel,nouveau}}
+
+        # Fonts
+        adobe-sourcecodepro-fonts
+        dejavu-fonts
+        liberation-fonts
+        'stix-*-fonts'
+
+        # Browser
+        MozillaFirefox MozillaFirefox-branding-openSUSE
+
+        # VLC
+        vlc-vdpau
+)
+
+# Build the proprietary NVIDIA drivers from the vendor repository.
+function initialize_buildroot() {
+        local -r repo='https://download.nvidia.com/opensuse/tumbleweed'
+        $curl -L "$repo/repodata/repomd.xml.key" > "$output/nvidia.key"
+        test x$($sha256sum "$output/nvidia.key" | $sed -n '1s/ .*//p') = \
+            x599aa39edfa43fb81e5bf5743396137c93639ce47738f9a2ae8b9a5732c91762
+        enter /usr/bin/rpmkeys --import nvidia.key
+        $rm -f nvidia.key
+        echo -e > "$buildroot/etc/zypp/repos.d/nvidia.repo" \
+            "[nvidia]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
+        $sed -i -e 's/^[# ]*\(autoAgreeWithLicenses\) *=.*/\1 = yes/' \
+            "$buildroot/etc/zypp/zypper.conf"
+        echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
+        packages_buildroot+=(nvidia-gfxG05-kmp-default)
+}
+
+# Package the bare NVIDIA modules to satisfy bad development dependencies.
+packages_buildroot+=(createrepo_c rpm-build)
+function customize_buildroot() {
+        script << 'EOF'
+name=nvidia-gfxG05-kmp
+version=$(rpm -q --qf '%{VERSION}' "$name-default") version=${version%%_*}
+kernel=$(compgen -G '/lib/modules/*/updates/nvidia.ko') kernel=${kernel:13:-18}
+rpmbuild -ba /dev/stdin << EOS
+Name: $name
+Version: $version
+Release: 1
+Summary: Prebuilt NVIDIA modules
+License: SUSE-NonFree
+%description
+%{summary}.
+%install
+mkdir -p %{buildroot}/lib/modules/$kernel %{buildroot}/etc/modprobe.d
+cp -at %{buildroot}/lib/modules/$kernel /lib/modules/$kernel/updates
+cp -at %{buildroot}/etc/modprobe.d /etc/modprobe.d/50-nvidia-default.conf
+%files
+%config(noreplace) /etc/modprobe.d/50-nvidia-default.conf
+/lib/modules/$kernel/updates
+EOS
+rm -fr "/lib/modules/$kernel/updates" ; depmod "$kernel"  # Skip the initrd.
+createrepo_c /usr/src/packages/RPMS
+exec zypper addrepo --no-gpgcheck /usr/src/packages/RPMS local
+EOF
+        packages+=(nvidia-gfxG05-kmp nvidia-glG05 x11-video-nvidiaG05)
+}
+
+function customize() {
+        store_home_on_var +root
+
+        echo "desktop-${options[distro]}" > root/etc/hostname
+
+        # Drop development stuff.
+        exclude_paths+=(
+                usr/include
+                usr/{'lib*',share}/pkgconfig
+        )
+
+        # Sign the out-of-tree kernel modules to be usable with Secure Boot.
+        opt sb_key &&
+        for module in root/lib/modules/*/updates/nvidia*.ko
+        do
+                /lib/modules/*/build/scripts/sign-file \
+                    sha256 "$keydir/sign.key" "$keydir/sign.crt" "$module"
+        done
+
+        # Make NVIDIA use kernel mode setting and the page attribute table.
+        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
+blacklist nouveau
+options nvidia NVreg_UsePageAttributeTable=1
+options nvidia-drm modeset=1
+softdep nvidia post: nvidia-uvm
+EOF
+
+        # Support an executable VM image for quick testing.
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/sh -eu
+exec qemu-kvm -nodefaults \
+    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    -cpu host -m 8G -vga std -nic user \
+    -drive file="${IMAGE:-disk.exe}",format=raw,media=disk \
+    "$@"
+EOF
+}

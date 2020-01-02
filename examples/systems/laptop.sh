@@ -46,6 +46,11 @@ packages+=(
         net-wireless/wpa_supplicant
         sys-apps/iproute2
 
+        # Disks
+        net-fs/sshfs
+        sys-fs/cryptsetup
+        sys-fs/e2fsprogs
+
         # Graphics
         x11-apps/xrandr
         x11-base/xorg-server
@@ -87,8 +92,8 @@ function customize_buildroot() {
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
-            acpi dri kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth pulseaudio X xcb xinerama xkb xorg \
+            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
+            cairo gtk3 pango plymouth pulseaudio X xa xcb xinerama xkb xorg xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete wide-int \
             -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
@@ -122,16 +127,6 @@ function customize() {
                 usr/local
         )
 
-        # Support an executable VM image for quick testing.
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
-#!/bin/sh -eu
-exec qemu-kvm -nodefaults \
-    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user \
-    -drive file="${IMAGE:-disk.exe}",format=raw,media=disk \
-    "$@"
-EOF
-
         # Start the wireless interface if it is configured.
         mkdir -p root/usr/lib/systemd/system/network.target.wants
         ln -fns ../wpa_supplicant-nl80211@.service \
@@ -151,6 +146,16 @@ options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
 softdep nvidia post: nvidia-uvm
 EOF
+
+        # Support an executable VM image for quick testing.
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/sh -eu
+exec qemu-kvm -nodefaults \
+    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    -cpu host -m 8G -vga std -nic user \
+    -drive file="${IMAGE:-disk.exe}",format=raw,media=disk \
+    "$@"
+EOF
 }
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
@@ -169,6 +174,8 @@ CONFIG_EXT4_USE_FOR_EXT2=y
 # Support encrypted partitions.
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
+# Support FUSE.
+CONFIG_FUSE_FS=m
 # Support running virtual machines in QEMU.
 CONFIG_HIGH_RES_TIMERS=y
 CONFIG_VIRTUALIZATION=y
