@@ -52,12 +52,14 @@ The project may be completely revised at some point, so don't expect anything in
   - Fedora supports everything besides EROFS, but only Fedora 30 and 31 (the default) can be used.  Fedora 30 is the last version to support i686.
   - CentOS 8 should support everything Fedora supports.  CentOS 7 systemd is too old to support building a UEFI image and the persistent `/etc` Git overlay.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
-  - Arch supports everything besides SELinux, since AUR is not yet usable during the build.  Systems can theoretically force SELinux with custom scripts.
-  - openSUSE supports everything besides SELinux, since there is no policy packaged in the distro.  It is the only modern binary disto with i686 support.
+  - Arch supports everything besides SELinux, since AUR is not yet integrated with the build.  Systems can theoretically force SELinux with custom scripts.
+  - openSUSE supports all features, but its SELinux policy is experimental and broken, so it runs in permissive mode.  It is the only modern binary disto with i686 support.
 
 ### General
 
 **Support configuring systemd with the etc Git overlay.**  The `/etc` directory contains the read-only default configuration files with a writable overlay, and if Git is installed, the modified files in the overlay are tracked in a repository.  The repository database is saved in `/var` so the changes can be stored persistently.  At the moment, the Git overlay is mounted by a systemd unit in the root file system, which happens too late to configure systemd behavior.  It needs to be set up by an initrd before pivoting to the real root file system.
+
+**Support cross-building bootable images from binary distros.**  Gentoo can currently be used to build any image types for any architecture, but binary distros can only create bootable images with the same architecture as the build system (or containers with a compatible architecture, like i686 on x86_64).  The problem is that a bootable image needs a kernel and initrd for the target architecture.  This can be fixed with a QEMU binfmt handler and running dracut in a chroot.  Maybe the kernel/initrd files could be installed in an overlay over the target image root to reduce redundant base package installations.
 
 **Implement content whitelisting.**  (There is a prototype in *TheBindingOfIsaac.sh*.)  The images currently include all installed files with an option to blacklist paths using an exclude list.  The opposite should be supported for minimal systems, where individual files, directories, entire packages, and ELF binaries (as a shortcut for all linked libraries) can be listed for inclusion and everything else is dropped.
 
@@ -88,8 +90,6 @@ There is nothing planned to change here at this point.  CentOS must be perfect. 
 **Fix the udev delay when ramdisk is enabled.**  Transitioning from the initrd to the real root is blocked for thirty seconds on udev shutdown when running in RAM.
 
 ### openSUSE
-
-**Support SELinux.**  Only the policy is missing; all of the packages support it.
 
 **Maybe support Leap releases.**  Currently only Tumbleweed is available, so this is a rolling release distro like Gentoo and Arch.
 

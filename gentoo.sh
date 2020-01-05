@@ -208,9 +208,6 @@ ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild manifest
 ## Support vboot-utils (#688396).
 sed -i -e /eapply/d /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild
 ebuild /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild manifest
-## Support mesa with SELinux (#703600).
-sed -i -e '/eselect-mesa/aselinux? ( sys-libs/libselinux[${MULTILIB_USEDEP}] )' /var/db/repos/gentoo/media-libs/mesa/mesa-19.2.8.ebuild
-ebuild /var/db/repos/gentoo/media-libs/mesa/mesa-19.2.8.ebuild manifest
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then

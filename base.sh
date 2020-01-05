@@ -206,8 +206,9 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount /dev/sda /sysroot
 /bin/load_policy -i
+policy=$(sed -n 's/^SELINUXTYPE=//p' /etc/selinux/config)
 /bin/setfiles -vFr /sysroot \
-    /sysroot/etc/selinux/targeted/contexts/files/file_contexts /sysroot
+    "/sysroot/etc/selinux/$policy/contexts/files/file_contexts" /sysroot
 test -x /bin/mksquashfs && /bin/mksquashfs /sysroot /sysroot/squash.img \
     -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
 test -x /bin/mkfs.erofs && /bin/mkfs.erofs -Eforce-inode-compact \
@@ -229,8 +230,13 @@ EOF
         fi
 
         local cmd
-        cp -t "$root/bin" /*bin/busybox /usr/sbin/{load_policy,setfiles}
-        for cmd in ash echo mount poweroff sleep umount
+        for cmd in busybox load_policy setfiles
+        do
+                for cmd in {,/usr}/{,s}bin/"$cmd"
+                do cp -t "$root/bin" "$cmd" && break || continue
+                done
+        done
+        for cmd in ash echo mount poweroff sed sleep umount
         do ln -fns busybox "$root/bin/$cmd"
         done
 
@@ -306,7 +312,7 @@ DefaultDependencies=no
 After=systemd-tmpfiles-setup-dev.service
 Requires=systemd-tmpfiles-setup-dev.service
 [Service]
-ExecStart=/usr/sbin/losetup --find $(opt read_only && echo --read-only) /sysroot/root.img
+ExecStart=/usr/sbin/losetup --find${options[read_only]:+ --read-only} /sysroot/root.img
 RemainAfterExit=yes
 Type=oneshot
 EOF
@@ -442,7 +448,10 @@ EOF
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../etc.mount
 
-        opt selinux && echo /run/etcgo/overlay /etc >> root/etc/selinux/targeted/contexts/files/file_contexts.subs
+        opt selinux && local policy &&
+        for policy in root/etc/selinux/*/contexts/files
+        do echo /run/etcgo/overlay /etc >> "$policy/file_contexts.subs"
+        done
 
         if test -x root/usr/bin/git
         then
@@ -658,18 +667,21 @@ EOF
 }
 
 function store_home_on_var() {
-        opt selinux && (cd root/etc/selinux/targeted/contexts/files
-                grep -qs ^/var/home file_contexts.subs_dist ||
-                echo /var/home /home >> file_contexts.subs
-        )
+        opt selinux && local policy &&
+        for policy in root/etc/selinux/*/contexts/files
+        do
+                grep -qs ^/var/home "$policy/file_contexts.subs_dist" ||
+                echo /var/home /home >> "$policy/file_contexts.subs"
+        done
         mv root/home root/var/home ; ln -fns var/home root/home
         echo 'Q /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf
         if test "x$*" = x+root
         then
-                opt selinux && (cd root/etc/selinux/targeted/contexts/files
-                        grep -qs ^/var/roothome file_contexts.subs_dist ||
-                        echo /var/roothome /root >> file_contexts.subs
-                )
+                opt selinux && for policy in root/etc/selinux/*/contexts/files
+                do
+                        grep -qs ^/var/roothome "$policy/file_contexts.subs_dist" ||
+                        echo /var/roothome /root >> "$policy/file_contexts.subs"
+                done
                 mv root/root root/var/roothome ; ln -fns var/roothome root/root
                 cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
 C /var/roothome 0700 root root - /etc/skel

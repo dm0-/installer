@@ -1,8 +1,6 @@
 packages=(aaa_base branding-openSUSE openSUSE-release)
 packages_buildroot=()
 
-options[selinux]=
-
 function create_buildroot() {
         local -r image="https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.$DEFAULT_ARCH-lxc.tar.xz"
 
@@ -27,6 +25,7 @@ function create_buildroot() {
         $sed -i -e '/^enabled=/s/=.*/=0/' "$buildroot/etc/zypp/repos.d/repo-non-oss.repo"
 
         configure_initrd_generation
+        enable_selinux_repo
         initialize_buildroot
 
         enter /usr/bin/zypper --non-interactive update
@@ -38,6 +37,7 @@ function create_buildroot() {
 
 function install_packages() {
         opt bootable || opt networkd && packages+=(systemd)
+        opt selinux && packages+=(selinux-policy-targeted)
 
         opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
         zypper --non-interactive --installroot="$PWD/root" \
@@ -69,6 +69,13 @@ function distro_tweaks() {
         test -s root/etc/pam.d/common-auth &&
         sed -i -e 's/try_first_pass/& nullok/' root/etc/pam.d/common-auth
 
+        test -s root/etc/sysconfig/selinux-policy &&
+        ln -fns ../sysconfig/selinux-policy root/etc/selinux/config &&
+        sed -i \
+            -e '/^SELINUX=/s/=.*/=permissive/' \
+            -e '/^SELINUXTYPE=/s/=.*/=targeted/' \
+            root/etc/selinux/config
+
         sed -i -e '1,/ PS1=/s/ PS1="/&$? /' root/etc/bash.bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.alias
         rmdir root/etc/skel/bin
@@ -84,6 +91,19 @@ then
         magick -background none -size 720x320 /usr/share/pixmaps/distribution-logos/light-dual-branding.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
         test -s os-release || cp -pt . root/etc/os-release
 fi
+
+# Override relabeling to add the missing disk driver and fix pthread_cancel.
+eval "$(declare -f relabel | $sed \
+    -e '/ldd/iopt squash && cp -t "$root/lib" /lib*/libgcc_s.so.1' \
+    -e '/find/iln -fns busybox "$root/bin/insmod"\
+xz -cd /lib/modules/*/*/drivers/ata/ata_piix.ko.xz > "$root/lib/ata_piix.ko"\
+sed -i -e "/sda/iinsmod /lib/ata_piix.ko" "$root/init"')"
+
+# Override kernel arguments to use SELinux instead of AppArmor.
+eval "$(
+declare -f relabel | $sed 's/ -append /&security=selinux" "/'
+declare -f kernel_cmdline | $sed 's/^ *echo /&${options[selinux]:+security=selinux} /'
+)"
 
 # Override squashfs creation since openSUSE doesn't support zstd.
 eval "$(declare -f relabel squash | $sed 's/ zstd .* 22 / xz /')"
@@ -149,6 +169,18 @@ Requires=dev-mapper-root.device dmsetup-verity-root.service"'
                 $mkdir -p "$buildroot/usr/lib/modules-load.d"
                 echo overlay > "$buildroot/usr/lib/modules-load.d/overlay.conf"
         fi
+fi
+
+function enable_selinux_repo() if opt selinux
+then
+        local -r repo='https://download.opensuse.org/repositories/security:/SELinux/openSUSE_Factory'
+        $curl -L "$repo/repodata/repomd.xml.key" > "$output/selinux.key"
+        test x$($sha256sum "$output/selinux.key" | $sed -n '1s/ .*//p') = \
+            x32af8322c657e308ab97aea20dc7c57a37a20b2e0ce5bf83b9945028ceb1e172
+        enter /usr/bin/rpmkeys --import selinux.key
+        $rm -f "$output/selinux.key"
+        echo -e > "$buildroot/etc/zypp/repos.d/selinux.repo" \
+            "[selinux]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
 fi
 
 function verify_distro() {
