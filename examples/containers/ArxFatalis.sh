@@ -1,4 +1,4 @@
-options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=30 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=31 [squash]=1)
 
 packages+=(
         freetype
@@ -17,14 +17,12 @@ packages_buildroot+=(findutils innoextract)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
         $cp "${1:-setup_arx_fatalis_1.21_(21994).exe}" "$output/install.exe"
-
         script << 'EOF'
 git clone --branch=master https://github.com/arx/ArxLibertatis.git
-mkdir ArxLibertatis/build
-cd ArxLibertatis/build
-git reset --hard 85d293a69d486466e0c51de3ebf92f70941dc4f0
+mkdir ArxLibertatis/build ; cd ArxLibertatis/build
+git reset --hard 691e2107acde1b31a464875eea44f3a3b7a2b26b
 cmake -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
-make -j$(nproc) all
+exec make -j$(nproc) all
 EOF
 }
 

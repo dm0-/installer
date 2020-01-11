@@ -117,6 +117,8 @@ EOF
         echo -e 'dev-libs/libpipeline\n<sys-apps/man-db-2.9' >> "$portage/package.accept_keywords/man-db.conf"
         # Accept pam-1.3.1 to fix UsrMerge compatibility.
         echo sys-libs/pam >> "$portage/package.accept_keywords/pam.conf"
+        # Accept pango-1.44.7 to fix host dependencies.
+        echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
         # Accept xorg-server-1.20.6 to fix glamor compilation.
@@ -149,12 +151,10 @@ sys-apps/portage -native-extensions
 EOF
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
-        echo 'NCURSESW6_CONFIG="$SYSROOT/usr/bin/ncursesw6-config"' >> "$portage/env/cross-ncurses.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 dev-python/pypax cross-python.conf
-sys-apps/util-linux cross-ncurses.conf
 EOF
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
@@ -208,6 +208,14 @@ ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild manifest
 ## Support vboot-utils (#688396).
 sed -i -e /eapply/d /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild
 ebuild /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild manifest
+## Support EAPI=7 for cairo (#705130).
+sed -i -e 's/EAPI=6/EAPI=7/;/^DEPEND="/,/"/{/l\//{H;d;};/"$/{s/$/\nBDEPEND="/;G;s/$/"/;};}' /var/db/repos/gentoo/x11-libs/cairo/cairo-1.16.0-r3.ebuild
+ebuild /var/db/repos/gentoo/x11-libs/cairo/cairo-1.16.0-r3.ebuild manifest
+## Support newer pango to fix cross-compilation and for EAPI=7 (#698922).
+curl -L 'https://github.com/gentoo/gentoo/commit/fd5d7f3a84037a856eda2e14239684ec109d2a54.patch' > pango.patch
+test x$(sha256sum pango.patch | sed -n '1s/ .*//p') = x396f51fa538638a00f0d410df01712c897921f04de3ebc57bb8427fb9ffda60d
+patch -d /var/db/repos/gentoo -p1 < pango.patch ; rm -f pango.patch
+ebuild /var/db/repos/gentoo/x11-libs/pango/pango-1.44.7.ebuild manifest
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then

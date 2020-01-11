@@ -16,7 +16,7 @@ The primary goal here is interchangeable immutable disk images that are verified
 
  3. All boot-related functionality is omitted, so a file system image is created that can be used as a container.
 
-    Example installation: `bash -x install.sh -S app.sh`
+    Example installation: `bash -x install.sh examples/containers/VVVVVV.sh`
 
 The installer can produce an executable disk image for testing each of these configurations if a command to launch a container or virtual machine is specified.
 

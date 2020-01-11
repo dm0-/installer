@@ -1,17 +1,25 @@
 options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=31 [squash]=1)
 
 packages+=(
-        alsa-plugins-pulseaudio
-        libGL
-        libGLU
         mesa-dri-drivers
-        which
+        pulseaudio-libs
+        SDL2_mixer
 )
 
-packages_buildroot+=(tar)
+packages_buildroot+=(cmake gcc-c++ git-core ninja-build p7zip SDL2_mixer-devel)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
-        $cp "${1:-FTL.1.5.4.tar.gz}" "$output/FTL.tgz"
+        script << 'EOF'
+curl -L 'http://www.flibitijibibo.com/vvvvvv-mp-11192019-bin' > vvvvvv-mp.bin
+test x$(sha256sum vvvvvv-mp.bin | sed -n '1s/ .*//p') = \
+    x9f7307e111b4f8e19c02d6a0fbf4b43b93a17f341468993fa4fa0c4eae42fc4a
+7za -ovvvvvv-mp x vvvvvv-mp.bin
+git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
+mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
+git reset --hard 901de4166e22d2795ead941de7d40a3e2444c2df
+cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
+exec ninja -j$(nproc) all
+EOF
 }
 
 function customize() {
@@ -24,28 +32,27 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        local -r drop=$(test "x${options[arch]}" = xi686 && echo amd64)
-        tar --exclude="${drop:-x86}" -xf FTL.tgz -C root
-        rm -f FTL.tgz
+        cp -pt root VVVVVV/desktop_version/build/VVVVVV
+        cp -pt root vvvvvv-mp/data/data.zip
 
-        sed "${drop:+s/-64//}" << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
-[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||
-mkdir -p "$XDG_DATA_HOME/FasterThanLight"
+[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/VVVVVV" ] ||
+mkdir -p "$XDG_DATA_HOME/VVVVVV"
 
 exec sudo systemd-nspawn \
-    --bind="$XDG_DATA_HOME/FasterThanLight:/tmp/save" \
+    --bind="$XDG_DATA_HOME/VVVVVV:/home/$USER/.local/share/VVVVVV" \
     --bind=/dev/dri \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
-    --chdir=/FTL \
-    --hostname=FasterThanLight \
-    --image="${IMAGE:-FasterThanLight.img}" \
+    --chdir=/ \
+    --hostname=VVVVVV \
+    --image="${IMAGE:-VVVVVV.img}" \
     --link-journal=no \
-    --machine="FasterThanLight-$USER" \
+    --machine="VVVVVV-$USER" \
     --personality=x86-64 \
     --private-network \
     --read-only \
@@ -55,10 +62,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-mkdir -p "$HOME/.local/share"
-ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
-exec ./FTL "$@"
+    /VVVVVV "$@"
 EOF
-EOG
 }

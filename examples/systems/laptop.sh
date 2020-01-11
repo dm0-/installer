@@ -93,7 +93,7 @@ function customize_buildroot() {
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth pulseaudio X xa xcb xinerama xkb xorg xvmc \
+            cairo gtk3 pango plymouth pulseaudio X xa xcb xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete wide-int \
             -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
