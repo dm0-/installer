@@ -8,7 +8,7 @@ The primary goal here is interchangeable immutable disk images that are verified
 
  1. A system's bootable hard drive is GPT-partitioned with an ESP, several (maybe three to five) partitions of five or ten gigabytes reserved to store root file system images, and the rest of the disk used as an encrypted `/var` partition for persistent storage.  A signed UEFI executable corresponding to each active root file system partition is written to the ESP so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
 
-    Example installation: `bash -x install.sh -VZE /boot/EFI/BOOT/BOOTX64.EFI -IP e08ede5f-56d4-4d6d-b8d9-abf7ef5be608 workstation.sh`
+    Example installation: `bash -x install.sh -E /boot/EFI/BOOT/BOOTX64.EFI -IP e08ede5f-56d4-4d6d-b8d9-abf7ef5be608 examples/systems/desktop-fedora.sh`
 
  2. The installer produces a single UEFI executable that has the entire root file system image bundled into it.  Such a file can be booted on any machine from a USB key, via PXE, or just from a regular hard drive's ESP as a rescue system.
 
@@ -50,7 +50,7 @@ The majority of the code in this repository is just writing configuration files,
 The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Five distros are supported to varying degrees:
 
   - Fedora supports everything besides EROFS, but only Fedora 30 and 31 (the default) can be used.  Fedora 30 is the last version to support i686.
-  - CentOS 8 should support everything Fedora supports.  CentOS 7 systemd is too old to support building a UEFI image and the persistent `/etc` Git overlay.
+  - CentOS is too old to support EROFS.  CentOS 7 systemd is too old to support building a UEFI image and the persistent `/etc` Git overlay.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
   - Arch supports everything besides SELinux, since AUR is not yet integrated with the build.  Systems can theoretically force SELinux with custom scripts.
   - openSUSE supports all features, but its SELinux policy is experimental and broken, so it runs in permissive mode.  It is the only modern binary disto with i686 support.
@@ -73,7 +73,7 @@ The project may be completely revised at some point, so don't expect anything in
 
 ### Fedora
 
-**Continue pestering lazy kernel maintainers until they enable EROFS.**
+**Sit and wait until EROFS kernel support is in a release.**
 
 ### CentOS
 
@@ -81,7 +81,7 @@ There is nothing planned to change here at this point.  CentOS must be perfect. 
 
 ### Gentoo
 
-**Maybe support using a specific commit for the repository.**  Since Gentoo's repository is maintained in a rolling-release style, there should be a way to specify a snapshot to get the same ebuild revisions.
+No major changes are planned for Gentoo in this script.  Work will continue upstream to properly fix workarounds and make everything more efficient.
 
 ### Arch
 
@@ -91,14 +91,10 @@ There is nothing planned to change here at this point.  CentOS must be perfect. 
 
 ### openSUSE
 
-**Maybe support Leap releases.**  Currently only Tumbleweed is available, so this is a rolling release distro like Gentoo and Arch.
+No changes are planned for openSUSE.  Leap releases might be supported one day for a more stable target, but it is only needed as a rolling release distro right now.
 
 ### Example Systems
 
 **Prepopulate a Wine prefix for the game containers.**  I need to figure out what Wine needs so it can initialize itself in a chroot instead of a full container.  The games currently generate the Wine prefix (and its `C:` drive) every run as a workaround.  By installing a prebuilt `C:` drive and Wine prefix with the GOG registry changes applied, runtime memory will be reduced by potentially hundreds of megabytes and startup times will improve by several seconds.
 
-**Maybe support the proprietary NVIDIA driver with an option in the game containers.**  The proprietary driver apparently doesn't implement any of the interfaces used by everything else, so systems unfortunate enough to not have Nouveau support are unable to run the games included here.  An option could be added to bind the NVIDIA devices and install the libraries from RPM Fusion to use them, but it's probably not worth making all of the examples uglier to support proprietary nonsense.
-
 **Provide servers.**  The only bootable system examples right now are simple standalone workstations.  I should try to generalize some of my server configurations, or set up a network workstation example with LDAP/Kerberos/NFS integration.  Also, something should demonstrate persistent encrypted storage, which servers are going to require.  (Just add one line to `/etc/crypttab` and `/etc/fstab` to mount `/var`.)
-
-**Add cross-compiling examples.**  I've been using the build system on x86_64 to create images for a handful of weird architectures for a few weeks now, so those configurations should be cleaned and added to the example systems.  Until then, all you need to do is set the `arch` option when using Gentoo, and everything magically works (at least for the targets I have).  Of course, tune your portage profile and kernel config for the specific target system for best results.

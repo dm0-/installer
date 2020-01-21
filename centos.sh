@@ -3,7 +3,8 @@
 DEFAULT_RELEASE=8
 
 function create_buildroot() {
-        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-container.tar.xz"
+        local -r build=8.1.1911-20200113.3
+        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${build%%-*}-$DEFAULT_ARCH/docker/CentOS-${options[release]:=$DEFAULT_RELEASE}-Container-$build-layer.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
@@ -330,8 +331,8 @@ EOF
 
 # OPTIONAL (IMAGE)
 
-# Override update notifications since /run/motd.d is unsupported.
-eval "$(declare -f save_rpm_db | $sed s,/run/motd.d,/etc/motd.d,g)"
+# Override RPMDB saving to drop update reports.  CentOS doesn't give the info.
+eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
 
 # WORKAROUNDS
 

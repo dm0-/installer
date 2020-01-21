@@ -1,7 +1,6 @@
 options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=31 [squash]=1)
 
 packages+=(
-        mesa-dri-drivers
         pulseaudio-libs
         SDL2_mixer
 )
@@ -16,7 +15,7 @@ test x$(sha256sum vvvvvv-mp.bin | sed -n '1s/ .*//p') = \
 7za -ovvvvvv-mp x vvvvvv-mp.bin
 git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
 mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
-git reset --hard 901de4166e22d2795ead941de7d40a3e2444c2df
+git reset --hard b6ca9ea039a47027b6e59d087e89e242583833ad
 cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec ninja -j$(nproc) all
 EOF

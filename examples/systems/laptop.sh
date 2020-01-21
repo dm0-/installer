@@ -52,6 +52,7 @@ packages+=(
         sys-fs/e2fsprogs
 
         # Graphics
+        x11-apps/xev
         x11-apps/xrandr
         x11-base/xorg-server
         x11-terms/xterm

@@ -55,6 +55,7 @@ function install_packages() {
 function distro_tweaks() {
         rm -fr root/etc/init.d root/etc/modprobe.d/60-blacklist_fs-erofs.conf
 
+        test -s root/usr/share/systemd/tmp.mount &&
         mv -t root/usr/lib/systemd/system root/usr/share/systemd/tmp.mount
 
         test -s root/etc/zypp/repos.d/repo-non-oss.repo &&
@@ -154,13 +155,6 @@ Requires=dev-mapper-root.device dmsetup-verity-root.service"'
                 $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
                 echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
                     "install_optional_items+=\" $gendir/dmsetup-verity-root \""
-        fi
-
-        # Include the EROFS module as needed.
-        if opt read_only && ! opt squash
-        then
-                echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
-                    'add_drivers+=" erofs "'
         fi
 
         # Load overlayfs in the initrd in case modules aren't installed.

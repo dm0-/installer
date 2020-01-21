@@ -118,7 +118,7 @@ function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         script << 'EOF'
 git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-git -C rtl8812au reset --hard 34d9a185d4e3810d6088a3b7b47afd83375c0d72
+git -C rtl8812au reset --hard f9291c2bd40677b5feae597a0b01b28ad7e1da2f
 exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 EOF
 

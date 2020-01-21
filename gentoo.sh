@@ -105,24 +105,16 @@ EOF
 
         # Accept binutils-2.33.1 to fix host dependencies.
         echo =sys-devel/binutils-2.33.1 >> "$portage/package.accept_keywords/binutils.conf"
-        # Accept gettext-0.20.1 to fix host dependencies.
-        echo sys-devel/gettext >> "$portage/package.accept_keywords/gettext.conf"
-        # Accept grub-2.04 for various improvements over the years.
-        echo '~sys-boot/grub-2.04' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
         echo net-firewall/iptables >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libglvnd (since it has no stable version) over eselect-opengl.
-        echo -e 'media-libs/libglvnd\n<media-libs/mesa-19.3' >> "$portage/package.accept_keywords/libglvnd.conf"
+        echo media-libs/libglvnd >> "$portage/package.accept_keywords/libglvnd.conf"
         # Accept man-db 2.8 to fix the missing group.
         echo -e 'dev-libs/libpipeline\n<sys-apps/man-db-2.9' >> "$portage/package.accept_keywords/man-db.conf"
-        # Accept pam-1.3.1 to fix UsrMerge compatibility.
-        echo sys-libs/pam >> "$portage/package.accept_keywords/pam.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
-        # Accept xorg-server-1.20.6 to fix glamor compilation.
-        echo x11-base/xorg-server >> "$portage/package.accept_keywords/xorg-server.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -180,7 +172,7 @@ EOF
         # Turn off extra busybox features to make the labeling initrd smaller.
         echo 'sys-apps/busybox -* static' >> "$portage/package.use/busybox.conf"
         # Work around bad dependencies requiring this on the host.
-        echo 'dev-libs/libpcre2 jit' >> "$portage/package.use/pcre2.conf"
+        echo 'x11-libs/cairo X' >> "$portage/package.use/cairo.conf"
         # Support building the UEFI boot stub, its logo image, and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
@@ -205,12 +197,6 @@ sed -i -e 's/^DEPEND=.*/B&\n[[ $EAPI == [4-6] ]] \&\& DEPEND=${BDEPEND}/' /var/d
 ## Support cross-compiler dependencies properly in EAPI=7 (#700898).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/eclass/toolchain.eclass /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild
 ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild manifest
-## Support vboot-utils (#688396).
-sed -i -e /eapply/d /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild
-ebuild /var/db/repos/gentoo/sys-boot/vboot-utils/vboot-utils-72_p20181229-r1.ebuild manifest
-## Support EAPI=7 for cairo (#705130).
-sed -i -e 's/EAPI=6/EAPI=7/;/^DEPEND="/,/"/{/l\//{H;d;};/"$/{s/$/\nBDEPEND="/;G;s/$/"/;};}' /var/db/repos/gentoo/x11-libs/cairo/cairo-1.16.0-r3.ebuild
-ebuild /var/db/repos/gentoo/x11-libs/cairo/cairo-1.16.0-r3.ebuild manifest
 ## Support newer pango to fix cross-compilation and for EAPI=7 (#698922).
 curl -L 'https://github.com/gentoo/gentoo/commit/fd5d7f3a84037a856eda2e14239684ec109d2a54.patch' > pango.patch
 test x$(sha256sum pango.patch | sed -n '1s/ .*//p') = x396f51fa538638a00f0d410df01712c897921f04de3ebc57bb8427fb9ffda60d
@@ -297,8 +283,7 @@ function install_packages() {
         (cd root ; exec ln -fst . usr/*)
         ln -fns .. "root/usr/${options[host]}"  # Lazily work around bad packaging.
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
-        mv -t root/usr/bin root/gcc-bin/*/*
-        rm -fr root/{binutils,gcc}-bin "root/usr/${options[host]}"
+        mv -t root/usr/bin root/gcc-bin/*/* ; rm -fr root/{binutils,gcc}-bin
 
         # If a modular kernel was configured, install the stripped modules.
         opt bootable && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
@@ -423,6 +408,7 @@ CONFIG_BINFMT_SCRIPT=y
 # Security settings
 CONFIG_BPF_JIT_ALWAYS_ON=y
 CONFIG_FORTIFY_SOURCE=y
+CONFIG_HARDEN_BRANCH_PREDICTOR=y
 CONFIG_HARDENED_USERCOPY=y
 CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY=y
 CONFIG_RANDOMIZE_BASE=y
