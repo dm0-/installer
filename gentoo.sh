@@ -115,6 +115,8 @@ EOF
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
+        # Accept util-linux-2.34 for EAPI=7 and to fix build ordering.
+        echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"

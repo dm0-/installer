@@ -5,14 +5,13 @@ packages+=(
         SDL2_mixer
 )
 
-packages_buildroot+=(cmake gcc-c++ git-core ninja-build p7zip SDL2_mixer-devel)
+packages_buildroot+=(cmake gcc-c++ git-core ninja-build SDL2_mixer-devel)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
         script << 'EOF'
-curl -L 'http://www.flibitijibibo.com/vvvvvv-mp-11192019-bin' > vvvvvv-mp.bin
-test x$(sha256sum vvvvvv-mp.bin | sed -n '1s/ .*//p') = \
-    x9f7307e111b4f8e19c02d6a0fbf4b43b93a17f341468993fa4fa0c4eae42fc4a
-7za -ovvvvvv-mp x vvvvvv-mp.bin
+curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
+test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
+    x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
 git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
 mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
 git reset --hard b6ca9ea039a47027b6e59d087e89e242583833ad
@@ -32,7 +31,7 @@ function customize() {
         )
 
         cp -pt root VVVVVV/desktop_version/build/VVVVVV
-        cp -pt root vvvvvv-mp/data/data.zip
+        cp -pt root data.zip
 
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu

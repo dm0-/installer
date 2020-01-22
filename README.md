@@ -87,8 +87,6 @@ No major changes are planned for Gentoo in this script.  Work will continue upst
 
 **Support SELinux.**  This probably entails adding a function to enable AUR packages during the build like RPM Fusion in Fedora.  There might be some ugly manual steps since AUR has separate packages built with SELinux support that replace both optional and core packages.
 
-**Fix the udev delay when ramdisk is enabled.**  Transitioning from the initrd to the real root is blocked for thirty seconds on udev shutdown when running in RAM.
-
 ### openSUSE
 
 No changes are planned for openSUSE.  Leap releases might be supported one day for a more stable target, but it is only needed as a rolling release distro right now.

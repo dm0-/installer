@@ -434,10 +434,10 @@ test $${#total[@]} -gt 0 || exit 0 ; \
 { (( total[Critical] + total[Important] )) && echo -n UPDATES REQUIRED ; } || \
 { (( total[Security] )) && echo -n Security updates are available ; } || \
 { (( total[Bugfix] )) && echo -n Bug fixes are available ; } || \
-echo -n Updates are available ; sec=" (" ; \
-(( total[Critical] )) && sec+="$${total[Critical]} critical)" ; \
-test $${#sec} -gt 2 && sec="$${sec/%?/, }" ; \
-(( total[Important] )) && sec+="$${total[Important]} important)" ; \
+echo -n Updates are available ; sec= ; \
+(( total[Critical] )) && sec+=" ($${total[Critical]} critical)" ; \
+(( total[Important] )) && { sec="$${sec/%?/, }" ; \
+sec="${sec:- (}$${total[Important]} important)" ; } ; \
 echo -n $${total[Security]:+, $${total[Security]} security$$sec} ; \
 echo -n $${total[Bugfix]:+, $${total[Bugfix]} bugfix} ; \
 echo -n $${total[Enhancement]:+, $${total[Enhancement]} enhancement} ; \

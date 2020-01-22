@@ -68,4 +68,50 @@ pref("pdfjs.spreadModeOnLoad", 1);
 // Make widgets on web pages match the rest of the desktop.
 pref("widget.content.allow-gtk-dark-theme", true);
 EOF
+
+        # Install a search engine for startpage.com by default.
+        dir="${dir%%/browser/*}/distribution/searchplugins/common"
+        mkdir -p "$dir"
+        curl -L 'https://www.startpage.com/en/opensearch.xml' > "$dir/startpage.xml"
+        test x$(sha256sum "$dir/startpage.xml" | sed -n '1s/ .*//p') = \
+            x50c2b828d22f13dde32662db8796fb670d389651ad27a8946e30363fd5beecc7
+
+        # Mozilla is weird about some settings.  Write a policy file for them.
+        cat << 'EOF' > "${dir%/searchplugins/common}/policies.json"
+{
+  "policies": {
+    "DisableAppUpdate": true,
+    "DisableFirefoxStudies": true,
+    "DisablePocket": true,
+    "DisableTelemetry": true,
+    "DisplayBookmarksToolbar": false,
+    "DisplayMenuBar": false,
+    "DontCheckDefaultBrowser": true,
+    "EnableTrackingProtection": {
+      "Cryptomining": true,
+      "Fingerprinting": true,
+      "Value": true,
+      "Locked": false
+    },
+    "FirefoxHome": {
+      "Highlights": false,
+      "Pocket": false,
+      "Search": false,
+      "Snippets": false,
+      "TopSites": false,
+      "Locked": false
+    },
+    "Homepage": {
+      "StartPage": "previous-session",
+      "URL": "about:blank",
+      "Locked": false
+    },
+    "NewTabPage": false,
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "SearchBar": "separate",
+    "SearchSuggestEnabled": false
+  }
+}
+EOF
 fi
