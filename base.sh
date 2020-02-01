@@ -434,6 +434,7 @@ EOF
 Description=Mount a writable overlay over /etc
 ConditionPathIsMountPoint=!/etc
 After=etc-overlay-setup.service
+Before=local-fs.target
 Requires=etc-overlay-setup.service
 
 [Mount]
@@ -542,6 +543,10 @@ EOF
 
 function finalize_packages() {
         local dir
+
+        # Update portage environment configuration.
+        test -x /usr/sbin/env-update -a -d root/etc/env.d &&
+        ROOT=root env-update --no-ldconfig
 
         # Regenerate gsettings defaults.
         test -d root/usr/share/glib-2.0/schemas &&

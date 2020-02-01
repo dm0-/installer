@@ -22,6 +22,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
         sys-apps/gawk
@@ -31,6 +32,7 @@ packages+=(
         sys-apps/man-pages
         sys-apps/sed
         sys-apps/which
+        sys-devel/patch
         sys-process/lsof
         sys-process/procps
         ## Accounts
@@ -63,6 +65,9 @@ packages_buildroot+=(
         # Automatically generate the supported instruction set flags.
         app-portage/cpuid2cpuflags
 
+        # Work around the bad Emacs build system's unexec step.
+        media-libs/alsa-lib
+
         # The target hardware requires firmware.
         net-wireless/wireless-regdb
         sys-firmware/intel-microcode
@@ -85,23 +90,28 @@ function customize_buildroot() {
         echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
+        # Fix the Linux 5.5 build.
+        $mkdir -p "$portage/patches/x11-drivers/nvidia-drivers"
+        $curl -L 'https://gitlab.com/snippets/1923197/raw' > "$portage/patches/x11-drivers/nvidia-drivers/update.patch"
+        test x$($sha256sum "$portage/patches/x11-drivers/nvidia-drivers/update.patch" | $sed -n '1s/ .*//p') = x7dcd609e85720cb812d7b41320d845931d8ea3e8529c700231372e0da66e5804
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
             curl gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
             icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            alsa libsamplerate ogg pulseaudio sndfile sound speex \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
-            acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
+            acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth pulseaudio X xa xcb xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 pango plymouth X xa xcb xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete wide-int \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
+            dynamic-loading hwaccel postproc secure-delete startup-notification wide-int \
+            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala -X'"'
 
         # Install Emacs as a terminal application.
         packages+=(app-editors/emacs)
@@ -204,9 +214,6 @@ CONFIG_IP_NF_FILTER=y
 CONFIG_IP6_NF_IPTABLES=y
 CONFIG_IP6_NF_FILTER=y
 # Support some optional systemd functionality.
-CONFIG_BPF_JIT=y
-CONFIG_BPF_SYSCALL=y
-CONFIG_CGROUP_BPF=y
 CONFIG_COREDUMP=y
 CONFIG_MAGIC_SYSRQ=y
 CONFIG_NET_SCHED=y

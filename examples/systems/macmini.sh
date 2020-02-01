@@ -27,6 +27,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
         sys-apps/gawk
@@ -36,6 +37,7 @@ packages+=(
         sys-apps/man-pages
         sys-apps/sed
         sys-apps/which
+        sys-devel/patch
         sys-process/lsof
         sys-process/procps
         ## Accounts
@@ -60,11 +62,12 @@ packages+=(
         sys-fs/mac-fdisk
 
         # Graphics
+        media-sound/pulseaudio
         x11-apps/xev
         x11-apps/xrandr
         x11-base/xorg-server
         x11-terms/xterm
-        x11-wm/twm
+        x11-wm/windowmaker
 )
 
 packages_buildroot+=(
@@ -86,32 +89,34 @@ function customize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=7450 -maltivec -mabi=altivec -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo -e 'CPU_FLAGS_PPC="altivec"\nUSE="$USE ppcsha1"' >> "$portage/make.conf"
+        echo -e 'CPU_FLAGS_PPC="altivec"\nUSE="$USE altivec ppcsha1"' >> "$portage/make.conf"
 
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
-        echo 'VIDEO_CARDS="fbdev radeon r200"' >> "$portage/make.conf"
+        echo 'VIDEO_CARDS="radeon r200"' >> "$portage/make.conf"
 
         # Enable general system settings.
-        echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+        echo >> "$portage/make.conf" 'USE="$USE' \
+            curl dbus gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
             icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            alsa libsamplerate ogg pulseaudio sndfile sound speex \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
-            acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
+            acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth pulseaudio X xa xcb xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 pango plymouth X xa xcb xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete wide-int \
-            -cups -debug -emacs -fortran -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
+            dynamic-loading hwaccel postproc secure-delete startup-notification wide-int \
+            -cups -debug -emacs -fortran -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
+            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala -X'"'
 
         # Accept the sshfs version that is stable everywhere else.
         echo 'net-fs/sshfs amd64' >> "$portage/package.accept_keywords/sshfs.conf"
 
         # Configure the kernel by only enabling this system's settings.
+        sed -i -e $'/^.BUG()/a\treturn 0;' "$buildroot/usr/src/linux/arch/powerpc/kvm/book3s_pr.c"
         write_minimal_system_kernel_configuration > "$output/config"
         enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=powerpc \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
@@ -129,6 +134,22 @@ function customize() {
                 usr/lib/firmware
                 usr/local
         )
+
+        # Have PulseAudio default to ALSA output, and don't suspend devices.
+        sed -i \
+            -e '/load-module module-alsa-sink/s/^[# ]*//' \
+            -e 's/^load-module .*suspend/#&/' \
+            root/etc/pulse/default.pa
+        cat << 'EOF' > root/etc/asound.conf
+pcm.!default {
+ type hw
+ card 0
+}
+ctl.!default {
+ type hw
+ card 0
+}
+EOF
 
         # Define how to mount the bootstrap partition, but leave it unmounted.
         mkdir root/boot ; echo >> root/etc/fstab PARTLABEL=bootstrap \
@@ -247,6 +268,8 @@ CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
 # Support FUSE.
 CONFIG_FUSE_FS=m
+# Support running virtual machines in QEMU.
+CONFIG_VIRTUALIZATION=y
 # Support running containers in nspawn.
 CONFIG_PID_NS=y
 CONFIG_USER_NS=y
@@ -268,9 +291,6 @@ CONFIG_IP_NF_FILTER=y
 CONFIG_IP6_NF_IPTABLES=y
 CONFIG_IP6_NF_FILTER=y
 # Support some optional systemd functionality.
-CONFIG_BPF_JIT=y
-CONFIG_BPF_SYSCALL=y
-CONFIG_CGROUP_BPF=y
 CONFIG_COREDUMP=y
 CONFIG_MAGIC_SYSRQ=y
 CONFIG_NET_SCHED=y
@@ -287,6 +307,7 @@ CONFIG_PPC_BOOK3S_32=y
 CONFIG_PPC_PMAC=y
 CONFIG_G4_CPU=y
 CONFIG_TAU=y
+CONFIG_KVM_BOOK3S_32=y
 ## 1GiB RAM
 CONFIG_HIGHMEM=y
 ## PMU
@@ -299,11 +320,24 @@ CONFIG_ATA=y
 CONFIG_ATA_SFF=y
 CONFIG_ATA_BMDMA=y
 CONFIG_PATA_MACIO=y
+## UJ-835-C DVD drive (with CD FS)
+CONFIG_BLK_DEV=y
+CONFIG_BLK_DEV_SR=y
+CONFIG_ISO9660_FS=y
+CONFIG_JOLIET=y
 ## ATI Radeon 9200
 CONFIG_AGP=y
 CONFIG_AGP_UNINORTH=y
 CONFIG_DRM=y
 CONFIG_DRM_RADEON=y
+## Toonie audio
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_AOA=y
+CONFIG_SND_AOA_FABRIC_LAYOUT=y
+CONFIG_SND_AOA_TOONIE=y
+CONFIG_HIGH_RES_TIMERS=y
+CONFIG_SND_HRTIMER=y
 ## USB support
 CONFIG_USB_SUPPORT=y
 CONFIG_USB=y

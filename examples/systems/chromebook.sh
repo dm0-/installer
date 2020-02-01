@@ -22,6 +22,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
         sys-apps/gawk
@@ -31,6 +32,7 @@ packages+=(
         sys-apps/man-pages
         sys-apps/sed
         sys-apps/which
+        sys-devel/patch
         sys-process/lsof
         sys-process/procps
         ## Accounts
@@ -76,7 +78,7 @@ function customize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv7ve+simd -mtune=cortex-a17 -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo 'CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"' >> "$portage/make.conf"
+        echo -e 'CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"\nUSE="$USE neon"' >> "$portage/make.conf"
 
         # Use the Panfrost driver for the ARM Mali-T760 MP4 GPU.
         echo 'VIDEO_CARDS="panfrost"' >> "$portage/make.conf"
@@ -84,20 +86,21 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            curl dbus gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
             icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            alsa libsamplerate ogg pulseaudio sndfile sound speex \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
-            acl caps cracklib fprint pam seccomp smartcard xattr xcsecurity \
+            acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth pulseaudio X xa xcb xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 pango plymouth X xa xcb xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete wide-int \
-            -cups -debug -emacs -fortran -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala'"'
+            dynamic-loading hwaccel postproc secure-delete startup-notification wide-int \
+            -cups -debug -emacs -fortran -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala -X'"'
 
         # Fix the dumb libgpg-error build process for this target.
         $mkdir -p "$portage/patches/dev-libs/libgpg-error"
@@ -246,6 +249,12 @@ CONFIG_IP_NF_IPTABLES=y
 CONFIG_IP_NF_FILTER=y
 CONFIG_IP6_NF_IPTABLES=y
 CONFIG_IP6_NF_FILTER=y
+# Support some optional systemd functionality.
+CONFIG_COREDUMP=y
+CONFIG_MAGIC_SYSRQ=y
+CONFIG_NET_SCHED=y
+CONFIG_NET_SCH_DEFAULT=y
+CONFIG_NET_SCH_FQ_CODEL=y
 # TARGET HARDWARE: ASUS Chromebook Flip C100P
 CONFIG_AEABI=y
 ## Bundle firmware

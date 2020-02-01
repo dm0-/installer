@@ -70,6 +70,10 @@ EOF
 # Support installing kernels configured with compressed modules.
 sys-apps/kmod lzma
 EOF
+        $cat << 'EOF' >> "$portage/package.use/policycoreutils.conf"
+# Block bad dependencies for restorecond, which is pretty useless these days.
+sys-apps/policycoreutils -dbus
+EOF
         $cat << 'EOF' >> "$portage/package.use/squashfs-tools.conf"
 # Support zstd squashfs compression.
 sys-fs/squashfs-tools zstd
@@ -118,6 +122,11 @@ EOF
         # Accept util-linux-2.34 for EAPI=7 and to fix build ordering.
         echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
 
+        # Patch sysusers for proper GLEP 81 support.
+        $mkdir -p "$portage/patches/sys-apps/systemd"
+        $curl -L 'https://github.com/systemd/systemd/commit/348da6e547f59acadff48a650778044ac9eb2afe.patch' > "$portage/patches/sys-apps/systemd/sysusers.patch"
+        test x$($sha256sum "$portage/patches/sys-apps/systemd/sysusers.patch" | $sed -n '1s/ .*//p') = xb96a798fe0de32f860cbd7ab693d603b3f32ce05c701f0ef8824089d1a04e5d3
+
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
         $mkdir -p "${portage%/portage}"
@@ -127,7 +136,6 @@ EOF
         $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
 ROOT="/usr/$CHOST"
 SYSROOT="$ROOT"
-PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
 PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
@@ -143,17 +151,19 @@ EOF
 # Cross-compiling portage native extensions is unsupported.
 sys-apps/portage -native-extensions
 EOF
-        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
+        echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
-app-crypt/gnupg cross-libusb.conf
 dev-python/pypax cross-python.conf
+x11-wm/windowmaker cross-windowmaker.conf
 EOF
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
 dev-libs/elfutils no-lto.conf
 dev-libs/icu no-lto.conf
+media-libs/alsa-lib no-lto.conf
+media-sound/pulseaudio no-lto.conf
 sys-fs/fuse no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
@@ -193,6 +203,7 @@ emerge-webrsync
 ## Support sysusers (#702624).
 curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
 test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xf749a2e2221b31613cdd28f1144cf8656457b663a7603bc82c59aa181bbcc917
+sed -i -e 's/.*USER_ID.*}/&:${ACCT_USER_GROUPS[0]}/;s/printf "m/test ${#ACCT_USER_GROUPS[*]} -lt 2 || &/;s/.*GROUPS.@]/&:1/' sysusers.patch
 patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support fcaps properly in EAPI=7 (#700018).
 sed -i -e 's/^DEPEND=.*/B&\n[[ $EAPI == [4-6] ]] \&\& DEPEND=${BDEPEND}/' /var/db/repos/gentoo/eclass/fcaps.eclass
@@ -342,6 +353,25 @@ EOF
         # The targeted policy does not support a sensitivity level.
         sed -i -e 's/t:s0/t/g' root/usr/lib/systemd/system/*.mount
 
+        # Perform case-insensitive searches in less by default.
+        test -s root/etc/env.d/70less &&
+        sed -i -e '/^LESS=/s/[" ]*$/ -i&/' root/etc/env.d/70less
+
+        # Set some sensible key behaviors for a bare X session.
+        test -x root/usr/bin/startx &&
+        mkdir -p  root/etc/X11/xorg.conf.d &&
+        cat << 'EOF' > root/etc/X11/xorg.conf.d/00-keyboard.conf
+Section "InputClass"
+        Identifier "system-keyboard"
+        MatchIsKeyboard "on"
+        Option "XkbOptions" "ctrl:nocaps,terminate:ctrl_alt_bksp"
+EndSection
+EOF
+
+        # Select a default desktop environment for startx, or default to twm.
+        test -s root/etc/X11/Sessions/wmaker &&
+        echo XSESSION=wmaker > root/etc/env.d/90xsession
+
         # Magenta looks more "Gentoo" than green, as in the website and logo.
         sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
 }
@@ -372,12 +402,12 @@ export PATH=/bin
 mount -nt devtmpfs devtmpfs /dev
 mount -nt proc proc /proc
 mount -nt sysfs sysfs /sys
-losetup $(opt read_only && echo -r) /dev/loop0 /sysroot/root.img
+losetup ${options[read_only]:+-r }/dev/loop0 /sysroot/root.img
 $(opt verity && cat << EOG ||
 dmsetup create --concise '$(<dmsetup.txt)'
 mount -no ro /dev/mapper/root /sysroot
 EOG
-echo "mount -n$(opt read_only && echo o ro) /dev/loop0 /sysroot")
+echo "mount -n${options[read_only]:+o ro} /dev/loop0 /sysroot")
 exec switch_root /sysroot /sbin/init
 EOF
         ln -fn final.img "$root/sysroot/root.img"
@@ -408,6 +438,7 @@ CONFIG_TMPFS_POSIX_ACL=y
 CONFIG_BINFMT_ELF=y
 CONFIG_BINFMT_SCRIPT=y
 # Security settings
+CONFIG_BPF_JIT=y
 CONFIG_BPF_JIT_ALWAYS_ON=y
 CONFIG_FORTIFY_SOURCE=y
 CONFIG_HARDEN_BRANCH_PREDICTOR=y
@@ -486,6 +517,7 @@ CONFIG_DM_INIT=y
 CONFIG_DM_VERITY=y
 CONFIG_CRYPTO_SHA256=y'
         echo '# Settings for systemd as decided by Gentoo, plus some missing
+CONFIG_COMPAT_32BIT_TIME=y
 CONFIG_DMI=y
 CONFIG_NAMESPACES=y
 CONFIG_GENTOO_LINUX=y
@@ -648,9 +680,10 @@ function archmap_profile() {
         local -r selinux=${options[selinux]:+/selinux}
         case "$native" in
             aarch64)  echo default/linux/arm64/17.0/systemd ;;
+            armv5tel) echo default/linux/arm/17.0/armv5te ;;
             armv7a)   echo default/linux/arm/17.0/armv7a ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
-            powerpc)  echo default/linux/powerpc/ppc32/17.0 ;;
+            powerpc)  echo default/linux/ppc/17.0 ;;
             x86_64)   echo default/linux/amd64/17.1$nomulti/hardened$selinux ;;
             *) return 1 ;;
         esac
@@ -664,11 +697,12 @@ function archmap_stage3() {
 
         local stage3
         case "$native" in
-            armv7a)  stage3=stage3-armv7a_hardfp ;;
-            i[45]86) stage3=stage3-i486 ;;
-            i686)    stage3=stage3-i686-hardened ;;
-            powerpc) stage3=stage3-ppc ;;
-            x86_64)  stage3=stage3-amd64-hardened$selinux$nomulti ;;
+            armv5tel) stage3=stage3-armv5tel ;;
+            armv7a)   stage3=stage3-armv7a_hardfp ;;
+            i[45]86)  stage3=stage3-i486 ;;
+            i686)     stage3=stage3-i686-hardened ;;
+            powerpc)  stage3=stage3-ppc ;;
+            x86_64)   stage3=stage3-amd64-hardened$selinux$nomulti ;;
             *) return 1 ;;
         esac
 
