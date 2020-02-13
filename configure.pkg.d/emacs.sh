@@ -26,6 +26,28 @@ then
  (global-display-line-numbers-mode))
 EOF
 
+        # Generate the portable dump file on boot if it wasn't packaged.
+        compgen -G "root/usr/libexec/emacs/2[7-9].*/*/" &&  # Only Emacs >= 27
+        if ! compgen -G "root/usr/libexec/emacs/*/*/emacs.pdmp"
+        then
+                ln -fst root/usr/libexec/emacs/*/* \
+                    ../../../../../var/cache/emacs/emacs.pdmp
+                mkdir -p root/usr/lib/systemd/system/multi-user.target.wants
+                cat << 'EOF' > root/usr/lib/systemd/system/emacs-pdmp.service
+[Unit]
+Description=Create a cached portable dump file for faster Emacs startup
+ConditionPathExists=!/var/cache/emacs/emacs.pdmp
+[Service]
+CacheDirectory=emacs
+ExecStart=/usr/bin/emacs --batch --eval='(dump-emacs-portable "/var/cache/emacs/emacs.pdmp")'
+Type=oneshot
+[Install]
+WantedBy=multi-user.target
+EOF
+                ln -fst root/usr/lib/systemd/system/multi-user.target.wants \
+                    ../emacs-pdmp.service
+        fi
+
         # If Emacs was installed, assume it is the desired default editor.
         echo 'export EDITOR=emacs' >> root/etc/skel/.bash_profile
 fi

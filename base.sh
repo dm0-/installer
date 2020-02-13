@@ -490,21 +490,6 @@ $($cat configure.pkg.d/[!.]*.sh 0<&-)
 
 function configure_system() {
         sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
-        opt adduser && (IFS=$'\n'
-                for spec in ${options[adduser]}
-                do
-                        spec+=::::
-                        name=${spec%%:*}
-                        uid=${spec#*:} uid=${uid%%:*}
-                        groups=${spec#*:*:} groups=${groups%%:*}
-                        gecos=${spec#*:*:*:} gecos=${gecos%%:*}
-                        useradd --prefix root \
-                            ${gecos:+--comment="$gecos"} \
-                            ${groups:+--groups="$groups"} \
-                            ${uid:+--uid="$uid"} \
-                            --password= "$name"
-                done
-        )
 
         test -s root/etc/sudoers &&
         sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[# ]*//;}' root/etc/sudoers
@@ -562,6 +547,23 @@ function finalize_packages() {
 
         # Create users now so it doesn't need to happen during boot.
         systemd-sysusers --root=root
+
+        # Create users from options after system groups were created.
+        ! opt adduser || (IFS=$'\n'
+                for spec in ${options[adduser]}
+                do
+                        spec+=::::
+                        name=${spec%%:*}
+                        uid=${spec#*:} uid=${uid%%:*}
+                        groups=${spec#*:*:} groups=${groups%%:*}
+                        gecos=${spec#*:*:*:} gecos=${gecos%%:*}
+                        useradd --prefix root \
+                            ${gecos:+--comment="$gecos"} \
+                            ${groups:+--groups="$groups"} \
+                            ${uid:+--uid="$uid"} \
+                            --password= "$name"
+                done
+        )
 }
 
 function produce_uefi_exe() if opt uefi

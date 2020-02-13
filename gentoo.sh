@@ -95,7 +95,7 @@ EOF
 
         # Permit selectively toggling important features.
         echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
-        echo -e '-cet\n-systemd' >> "$portage/profile/use.mask"
+        echo -e '-cet\n-system-llvm\n-systemd' >> "$portage/profile/use.mask"
 
         # Write build environment modifiers for later use.
         echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
@@ -117,15 +117,13 @@ EOF
         echo -e 'dev-libs/libpipeline\n<sys-apps/man-db-2.9' >> "$portage/package.accept_keywords/man-db.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
+        echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
+        # Accept systemd-245 to fix sysusers for GLEP 81.
+        echo sys-apps/systemd >> "$portage/package.accept_keywords/systemd.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
         # Accept util-linux-2.34 for EAPI=7 and to fix build ordering.
         echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
-
-        # Patch sysusers for proper GLEP 81 support.
-        $mkdir -p "$portage/patches/sys-apps/systemd"
-        $curl -L 'https://github.com/systemd/systemd/commit/348da6e547f59acadff48a650778044ac9eb2afe.patch' > "$portage/patches/sys-apps/systemd/sysusers.patch"
-        test x$($sha256sum "$portage/patches/sys-apps/systemd/sysusers.patch" | $sed -n '1s/ .*//p') = xb96a798fe0de32f860cbd7ab693d603b3f32ce05c701f0ef8824089d1a04e5d3
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -135,11 +133,11 @@ EOF
         $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g -flto=jobserver&/' "$portage/make.conf"
         $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
 ROOT="/usr/$CHOST"
-SYSROOT="$ROOT"
+FEATURES="$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
 PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
-FEATURES="$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
+SYSROOT="$ROOT"
 USE="$USE -kmod -multiarch -static -static-libs"
 EOF
         $cat << 'EOF' >> "$portage/package.use/kill.conf"
@@ -151,19 +149,27 @@ EOF
 # Cross-compiling portage native extensions is unsupported.
 sys-apps/portage -native-extensions
 EOF
+        echo 'EXTRA_ECONF="--with-dbus-binding-tool=dbus-binding-tool"' >> "$portage/env/cross-dbus-glib.conf"
+        echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib.conf"
+        echo 'PKG_CONFIG="$CHOST-pkg-config"' >> "$portage/env/cross-pkgconfig.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
+dev-libs/dbus-glib cross-dbus-glib.conf
 dev-python/pypax cross-python.conf
+sys-apps/dtc cross-pkgconfig.conf
+x11-libs/gtk+ cross-glib.conf
 x11-wm/windowmaker cross-windowmaker.conf
 EOF
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
 dev-libs/elfutils no-lto.conf
 dev-libs/icu no-lto.conf
+dev-libs/libaio no-lto.conf
 media-libs/alsa-lib no-lto.conf
 media-sound/pulseaudio no-lto.conf
+net-libs/webkit-gtk no-lto.conf
 sys-fs/fuse no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
@@ -189,8 +195,8 @@ EOF
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
 media-gfx/imagemagick svg xml
-sys-apps/systemd gnuefi
 sys-apps/pciutils -udev
+sys-apps/systemd gnuefi
 EOF
 
         initialize_buildroot
@@ -198,7 +204,7 @@ EOF
         script "$host" "${packages_buildroot[@]}" "$@" << 'EOF'
 host=$1 ; shift
 
-# Update the native build root packages to the latest versions.
+# Fetch the latest package definitions, and fix them.
 emerge-webrsync
 ## Support sysusers (#702624).
 curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
@@ -210,11 +216,9 @@ sed -i -e 's/^DEPEND=.*/B&\n[[ $EAPI == [4-6] ]] \&\& DEPEND=${BDEPEND}/' /var/d
 ## Support cross-compiler dependencies properly in EAPI=7 (#700898).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/eclass/toolchain.eclass /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild
 ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild manifest
-## Support newer pango to fix cross-compilation and for EAPI=7 (#698922).
-curl -L 'https://github.com/gentoo/gentoo/commit/fd5d7f3a84037a856eda2e14239684ec109d2a54.patch' > pango.patch
-test x$(sha256sum pango.patch | sed -n '1s/ .*//p') = x396f51fa538638a00f0d410df01712c897921f04de3ebc57bb8427fb9ffda60d
-patch -d /var/db/repos/gentoo -p1 < pango.patch ; rm -f pango.patch
-ebuild /var/db/repos/gentoo/x11-libs/pango/pango-1.44.7.ebuild manifest
+## Support cross-compiling hyphen without rebuilding Perl (#708258).
+sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
+ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -225,6 +229,8 @@ then
         test x$(sha256sum /var/cache/distfiles/erofs-utils-1.0.tar.gz | sed -n '1s/ .*//p') = x508ee818dc6a02cf986647e37cb991b76f7b3e7ea303ffc9e980772de68f3b10
         ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild manifest --force
 fi
+
+# Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
     @world dev-util/debugedit sys-devel/crossdev
 
@@ -294,7 +300,7 @@ function install_packages() {
         mkdir -pm 0700 root/root
         [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
         (cd root ; exec ln -fst . usr/*)
-        ln -fns .. "root/usr/${options[host]}"  # Lazily work around bad packaging.
+        ln -fns .. "root$ROOT"  # Lazily work around bad packaging.
         emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
         mv -t root/usr/bin root/gcc-bin/*/* ; rm -fr root/{binutils,gcc}-bin
 
@@ -337,10 +343,6 @@ d /var/empty
 L /var/lock - - - - ../run/lock
 EOF
 
-        # Make the OpenSSH server work (#703016).
-        test -s root/etc/ssh/sshd_config && ! grep sshd root/etc/passwd &&
-        useradd --prefix root --home-dir=/var/empty --system --uid=22 sshd
-
         # Conditionalize wireless interfaces on their configuration files.
         sed -i \
             -e '/^\[Unit]/aConditionFileNotEmpty=/etc/wpa_supplicant/wpa_supplicant-nl80211-%I.conf' \
@@ -357,6 +359,10 @@ EOF
         test -s root/etc/env.d/70less &&
         sed -i -e '/^LESS=/s/[" ]*$/ -i&/' root/etc/env.d/70less
 
+        # Link BIOS files where QEMU expects to find them.
+        test -d root/usr/share/qemu -a -d root/usr/share/seavgabios &&
+        (cd root/usr/share/qemu ; exec ln -fst . ../sea{,vga}bios/*)
+
         # Set some sensible key behaviors for a bare X session.
         test -x root/usr/bin/startx &&
         mkdir -p  root/etc/X11/xorg.conf.d &&
@@ -364,7 +370,7 @@ EOF
 Section "InputClass"
         Identifier "system-keyboard"
         MatchIsKeyboard "on"
-        Option "XkbOptions" "ctrl:nocaps,terminate:ctrl_alt_bksp"
+        Option "XkbOptions" "ctrl:nocaps"
 EndSection
 EOF
 
@@ -470,7 +476,8 @@ CONFIG_RD_XZ=y
 # Loop settings
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
-CONFIG_BLK_DEV_LOOP_MIN_COUNT=1'
+CONFIG_BLK_DEV_LOOP_MIN_COUNT=1' || echo '# Loop settings
+CONFIG_BLK_DEV_LOOP_MIN_COUNT=0'
         opt sb_key && opt sb_cert && echo '# Signing settings
 CONFIG_MODULE_SIG=y
 CONFIG_MODULE_SIG_ALL=y

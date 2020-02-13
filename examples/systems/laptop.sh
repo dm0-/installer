@@ -90,32 +90,28 @@ function customize_buildroot() {
         echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
-        # Fix the Linux 5.5 build.
-        $mkdir -p "$portage/patches/x11-drivers/nvidia-drivers"
-        $curl -L 'https://gitlab.com/snippets/1923197/raw' > "$portage/patches/x11-drivers/nvidia-drivers/update.patch"
-        test x$($sha256sum "$portage/patches/x11-drivers/nvidia-drivers/update.patch" | $sed -n '1s/ .*//p') = x7dcd609e85720cb812d7b41320d845931d8ea3e8529c700231372e0da66e5804
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
-            icu idn libidn2 nls unicode \
+            curl gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            fribidi icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
-            alsa libsamplerate ogg pulseaudio sndfile sound speex \
+            alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth X xa xcb xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete startup-notification wide-int \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala'"'
+            dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
+            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Install Emacs as a terminal application.
         packages+=(app-editors/emacs)
-        echo 'USE="$USE emacs"' >> "$portage/make.conf"
+        echo 'USE="$USE emacs gzip-el"' >> "$portage/make.conf"
         echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
 
         # Configure the kernel by only enabling this system's settings.
@@ -192,9 +188,16 @@ CONFIG_HIGH_RES_TIMERS=y
 CONFIG_VIRTUALIZATION=y
 CONFIG_KVM=y
 # Support running containers in nspawn.
+CONFIG_POSIX_MQUEUE=y
+CONFIG_SYSVIPC=y
+CONFIG_IPC_NS=y
+CONFIG_NET_NS=y
 CONFIG_PID_NS=y
 CONFIG_USER_NS=y
 CONFIG_UTS_NS=y
+# Support mounting disk images.
+CONFIG_BLK_DEV=y
+CONFIG_BLK_DEV_LOOP=y
 # Provide a fancy framebuffer console.
 CONFIG_FB=y
 CONFIG_FB_EFI=y

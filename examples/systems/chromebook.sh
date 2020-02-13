@@ -86,21 +86,21 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
-            icu idn libidn2 nls unicode \
+            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            fribidi icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
-            alsa libsamplerate ogg pulseaudio sndfile sound speex \
+            alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth X xa xcb xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete startup-notification wide-int \
-            -cups -debug -emacs -fortran -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala'"'
+            dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
+            -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Fix the dumb libgpg-error build process for this target.
         $mkdir -p "$portage/patches/dev-libs/libgpg-error"
@@ -230,9 +230,16 @@ CONFIG_DM_INTEGRITY=m
 # Support FUSE.
 CONFIG_FUSE_FS=m
 # Support running containers in nspawn.
+CONFIG_POSIX_MQUEUE=y
+CONFIG_SYSVIPC=y
+CONFIG_IPC_NS=y
+CONFIG_NET_NS=y
 CONFIG_PID_NS=y
 CONFIG_USER_NS=y
 CONFIG_UTS_NS=y
+# Support mounting disk images.
+CONFIG_BLK_DEV=y
+CONFIG_BLK_DEV_LOOP=y
 # Provide a fancy framebuffer console.
 CONFIG_FB=y
 CONFIG_TTY=y

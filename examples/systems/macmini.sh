@@ -17,6 +17,7 @@ options+=(
         [bootable]=1     # Build a kernel for this system.
         [networkd]=1     # Let systemd manage the network configuration.
         [read_only]=1    # Use an efficient packed read-only file system.
+        [squash]=1       # Compress the image while experimenting.
         [uefi]=          # This platform does not support UEFI.
 )
 
@@ -72,7 +73,6 @@ packages+=(
 
 packages_buildroot+=(
         # The target hardware requires firmware.
-        net-wireless/wireless-regdb
         sys-kernel/linux-firmware
 )
 
@@ -90,33 +90,110 @@ function customize_buildroot() {
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=7450 -maltivec -mabi=altivec -ftree-vectorize&/' \
             "$portage/make.conf"
         echo -e 'CPU_FLAGS_PPC="altivec"\nUSE="$USE altivec ppcsha1"' >> "$portage/make.conf"
+        ## The ffmpeg cross-compilation needs hand-holding here.
+        echo -e 'EXTRA_FFMPEG_CONF="--cpu=g4"\nbigendian="yes"' >> "$portage/env/ffmpeg.conf"
+        echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
 
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
         echo 'VIDEO_CARDS="radeon r200"' >> "$portage/make.conf"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
-            icu idn libidn2 nls unicode \
+            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            fribidi icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
-            alsa libsamplerate ogg pulseaudio sndfile sound speex \
+            alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
-            cairo gtk3 pango plymouth X xa xcb xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete startup-notification wide-int \
-            -cups -debug -emacs -fortran -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala'"'
+            dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
+            -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -gtk -gtk2 -introspection -llvm -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Accept the sshfs version that is stable everywhere else.
         echo 'net-fs/sshfs amd64' >> "$portage/package.accept_keywords/sshfs.conf"
 
+        # Install QEMU for running graphical virtual machines and WINE games.
+        packages+=(app-emulation/qemu sys-firmware/seabios)
+        echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/env/qemu.conf"
+        echo 'app-emulation/qemu qemu.conf' >> "$portage/package.env/qemu.conf"
+        $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
+app-emulation/qemu
+sys-apps/dtc
+sys-firmware/seabios
+virtual/libusb
+EOF
+        $cat << 'EOF' >> "$portage/package.use/qemu.conf"
+app-emulation/qemu gtk static-user
+dev-libs/glib static-libs
+dev-libs/libpcre static-libs
+sys-apps/attr static-libs
+sys-libs/zlib static-libs
+EOF
+
+        # Prototype cross-compiling Emacs 27 with ugly dependency fixes.
+        packages+=(app-editors/emacs)
+        echo 'USE="$USE emacs gzip-el xwidgets"' >> "$portage/make.conf"
+        echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
+        echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
+        $cat << 'EOF' >> "$portage/package.use/emacs.conf"
+app-editors/emacs gtk
+dev-util/desktop-file-utils -emacs
+dev-vcs/git -emacs
+EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
+<app-editors/emacs-28 **
+media-libs/woff2
+net-libs/webkit-gtk amd64
+sys-apps/bubblewrap
+sys-apps/xdg-dbus-proxy amd64
+EOF
+        echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/emacs.conf"
+        patch -d "$buildroot/var/db/repos/gentoo" -p0 << 'EOF'
+--- app-editors/emacs/emacs-27.0.9999-r1.ebuild
++++ app-editors/emacs/emacs-27.0.9999-r1.ebuild
+@@ -250,6 +250,11 @@
+ 		myconf+=" --without-x --without-ns"
+ 	fi
+ 
++	CFLAGS= CPPFLAGS= LDFLAGS= ./configure --without-all
++	make -j$(nproc) lisp {C,CPP,LD}FLAGS=
++	make -C lib-src -j$(nproc) blessmail {C,CPP,LD}FLAGS=
++	mv lib-src/make-docfile{,.save} ; mv lib-src/make-fingerprint{,.save}
++	make clean
+ 	econf \
+ 		--program-suffix="-${EMACS_SUFFIX}" \
+ 		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
+@@ -259,7 +264,7 @@
+ 		--without-compress-install \
+ 		--without-hesiod \
+ 		--without-pop \
+-		--with-dumping=pdumper \
++		--with-dumping=none --with-pdumper \
+ 		--with-file-notification=$(usev inotify || usev gfile || echo no) \
+ 		$(use_enable acl) \
+ 		$(use_with dbus) \
+@@ -279,6 +284,9 @@
+ 		$(use_with wide-int) \
+ 		$(use_with zlib) \
+ 		${myconf}
++	emake -C lib all
++	mv lib-src/make-docfile{.save,} ; mv lib-src/make-fingerprint{.save,}
++	touch lib-src/make-{docfile,fingerprint}
+ }
+ 
+ #src_compile() {
+EOF
+        enter /usr/bin/ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.9999-r1.ebuild manifest
+        $sed -i -e s/gnome2_giomodule_cache_update/:/g "$buildroot/var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild"
+        enter /usr/bin/ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild manifest
+
         # Configure the kernel by only enabling this system's settings.
-        sed -i -e $'/^.BUG()/a\treturn 0;' "$buildroot/usr/src/linux/arch/powerpc/kvm/book3s_pr.c"
         write_minimal_system_kernel_configuration > "$output/config"
         enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=powerpc \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
@@ -134,6 +211,12 @@ function customize() {
                 usr/lib/firmware
                 usr/local
         )
+
+        # Support running Intel containers.
+        echo > root/usr/lib/binfmt.d/qemu-i386.conf \
+            ':qemu-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-i386:'
+        echo > root/usr/lib/binfmt.d/qemu-i486.conf \
+            ':qemu-i486:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x06\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-i386:'
 
         # Have PulseAudio default to ALSA output, and don't suspend devices.
         sed -i \
@@ -261,7 +344,7 @@ CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
 # Support HFS for kernel/bootloader updates.
 CONFIG_MISC_FILESYSTEMS=y
-CONFIG_HFS_FS=y
+CONFIG_HFS_FS=m
 # Support encrypted partitions.
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
@@ -270,10 +353,19 @@ CONFIG_DM_INTEGRITY=m
 CONFIG_FUSE_FS=m
 # Support running virtual machines in QEMU.
 CONFIG_VIRTUALIZATION=y
+# Support registering handlers for other architectures.
+CONFIG_BINFMT_MISC=y
 # Support running containers in nspawn.
+CONFIG_POSIX_MQUEUE=y
+CONFIG_SYSVIPC=y
+CONFIG_IPC_NS=y
+CONFIG_NET_NS=y
 CONFIG_PID_NS=y
 CONFIG_USER_NS=y
 CONFIG_UTS_NS=y
+# Support mounting disk images.
+CONFIG_BLK_DEV=y
+CONFIG_BLK_DEV_LOOP=y
 # Provide a fancy framebuffer console.
 CONFIG_FB=y
 CONFIG_TTY=y
@@ -306,7 +398,6 @@ CONFIG_EXTRA_FIRMWARE="radeon/R200_cp.bin"
 CONFIG_PPC_BOOK3S_32=y
 CONFIG_PPC_PMAC=y
 CONFIG_G4_CPU=y
-CONFIG_TAU=y
 CONFIG_KVM_BOOK3S_32=y
 ## 1GiB RAM
 CONFIG_HIGHMEM=y
@@ -321,9 +412,8 @@ CONFIG_ATA_SFF=y
 CONFIG_ATA_BMDMA=y
 CONFIG_PATA_MACIO=y
 ## UJ-835-C DVD drive (with CD FS)
-CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_SR=y
-CONFIG_ISO9660_FS=y
+CONFIG_ISO9660_FS=m
 CONFIG_JOLIET=y
 ## ATI Radeon 9200
 CONFIG_AGP=y
