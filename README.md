@@ -49,11 +49,11 @@ The majority of the code in this repository is just writing configuration files,
 
 The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Five distros are supported to varying degrees:
 
-  - Fedora supports everything besides EROFS, but only Fedora 30 and 31 (the default) can be used.  Fedora 30 is the last version to support i686.
+  - Fedora supports everything, but only Fedora 30 and 31 (the default) can be used.
   - CentOS is too old to support EROFS.  CentOS 7 systemd is too old to support building a UEFI image and the persistent `/etc` Git overlay.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
-  - Arch supports everything besides SELinux, since AUR is not yet integrated with the build.  Systems can theoretically force SELinux with custom scripts.
-  - openSUSE supports all features, but its SELinux policy is experimental and broken, so it runs in permissive mode.  It is the only modern binary disto with i686 support.
+  - Arch supports everything besides SELinux, since AUR is not yet integrated with the build.
+  - openSUSE supports all features, but its SELinux policy is experimental and broken, so it runs in permissive mode.
 
 ## To Do
 

@@ -90,6 +90,13 @@ elif opt selinux
 then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
 fi
 
+# Override image generation to drop EROFS support since it's not enabled.
+eval "$(
+declare -f create_root_image {,un}mount_root | $sed '/[^ ].opt/s/read_only/squash/'
+declare -f squash | $sed s/read_only/squash/
+declare -f kernel_cmdline | $sed /type=erofs/d
+)"
+
 # Override SELinux labeling to work with the CentOS kernel (and no busybox).
 function relabel() if opt selinux
 then

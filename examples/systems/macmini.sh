@@ -147,16 +147,17 @@ dev-util/desktop-file-utils -emacs
 dev-vcs/git -emacs
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
-<app-editors/emacs-28 **
+<app-editors/emacs-28
 media-libs/woff2
 net-libs/webkit-gtk amd64
 sys-apps/bubblewrap
 sys-apps/xdg-dbus-proxy amd64
 EOF
         echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/emacs.conf"
+        echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
         patch -d "$buildroot/var/db/repos/gentoo" -p0 << 'EOF'
---- app-editors/emacs/emacs-27.0.9999-r1.ebuild
-+++ app-editors/emacs/emacs-27.0.9999-r1.ebuild
+--- app-editors/emacs/emacs-27.0.50_pre20191223.ebuild
++++ app-editors/emacs/emacs-27.0.50_pre20191223.ebuild
 @@ -250,6 +250,11 @@
  		myconf+=" --without-x --without-ns"
  	fi
@@ -189,7 +190,7 @@ EOF
  
  #src_compile() {
 EOF
-        enter /usr/bin/ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.9999-r1.ebuild manifest
+        enter /usr/bin/ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.50_pre20191223.ebuild manifest
         $sed -i -e s/gnome2_giomodule_cache_update/:/g "$buildroot/var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild"
         enter /usr/bin/ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild manifest
 
@@ -428,6 +429,9 @@ CONFIG_SND_AOA_FABRIC_LAYOUT=y
 CONFIG_SND_AOA_TOONIE=y
 CONFIG_HIGH_RES_TIMERS=y
 CONFIG_SND_HRTIMER=y
+## Firewire support
+CONFIG_FIREWIRE=y
+CONFIG_FIREWIRE_OHCI=y
 ## USB support
 CONFIG_USB_SUPPORT=y
 CONFIG_USB=y

@@ -211,8 +211,9 @@ policy=$(sed -n 's/^SELINUXTYPE=//p' /etc/selinux/config)
     "/sysroot/etc/selinux/$policy/contexts/files/file_contexts" /sysroot
 test -x /bin/mksquashfs && /bin/mksquashfs /sysroot /sysroot/squash.img \
     -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
-test -x /bin/mkfs.erofs && /bin/mkfs.erofs -Eforce-inode-compact \
-    /sysroot/erofs.img /sysroot
+test -x /bin/mkfs.erofs && IFS=$'\n' && /bin/mkfs.erofs \
+    $(while read ; do echo "$REPLY" ; done < /ef) \
+    -Eforce-inode-compact /sysroot/erofs.img /sysroot
 echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
 EOF
@@ -226,6 +227,12 @@ EOF
         elif opt read_only
         then
                 disk=erofs.img
+                grep -q exclude-regex <(mkfs.erofs --help 2>&1) > "$root/ef" &&
+                for path in "$disk" "${exclude_paths[@]//\*/[^/]*}"
+                do
+                        path=${path//+/\\+} ; path=${path//./\\.}
+                        echo "--exclude-regex=^${path//\?/[^/]}$"
+                done > "$root/ef"
                 cp -t "$root/bin" /usr/*bin/mkfs.erofs
         fi
 
@@ -268,12 +275,21 @@ then
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
 elif opt read_only && ! opt selinux
 then
-        local path
-        for path in "${exclude_paths[@]}"
-        do compgen -G "root/$path" || :
-        done | xargs --delimiter='\n' -- rm -fr
+        local -a args ; local path
         disk=erofs.img
-        mkfs.erofs -Eforce-inode-compact -x-1 "$disk" root
+        if grep -q exclude-regex <(mkfs.erofs --help 2>&1)
+        then
+                for path in "${exclude_paths[@]//\*/[^/]*}"
+                do
+                        path=${path//+/\\+} ; path=${path//./\\.}
+                        args+=("--exclude-regex=^${path//\?/[^/]}$")
+                done
+        else
+                for path in "${exclude_paths[@]}"
+                do compgen -G "root/$path" || continue
+                done | xargs --delimiter='\n' -- rm -fr
+        fi
+        mkfs.erofs "${args[@]}" -Eforce-inode-compact -x-1 "$disk" root
 fi
 
 function verity() if opt verity

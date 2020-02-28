@@ -10,6 +10,7 @@ function create_buildroot() {
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
@@ -84,13 +85,6 @@ then
 elif opt selinux
 then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
 fi
-
-# Override image generation to drop EROFS support since it's not enabled.
-eval "$(
-declare -f create_root_image {,un}mount_root | $sed '/[^ ].opt/s/read_only/squash/'
-declare -f relabel squash | $sed s/read_only/squash/
-declare -f kernel_cmdline | $sed /type=erofs/d
-)"
 
 function configure_initrd_generation() if opt bootable
 then

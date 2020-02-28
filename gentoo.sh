@@ -33,8 +33,9 @@ function create_buildroot() {
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
 GRUB_PLATFORMS="${options[uefi]:+efi-64}"
 INPUT_DEVICES="libinput"
+LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE${options[selinux]:+ selinux} systemd"
+USE="\$USE${options[selinux]:+ selinux} system-llvm systemd"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -268,7 +269,7 @@ function install_packages() {
         # Build the final kernel.
         if opt bootable
         then
-                local -r kernel_arch="$(archmap_kernel ${options[arch]})"
+                local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
                 test -s /usr/src/linux/.config
                 opt sb_key && sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=\".*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
                 make -C /usr/src/linux -j$(nproc) V=1 \
@@ -678,6 +679,15 @@ function archmap_kernel() case "${*:-$DEFAULT_ARCH}" in
     i[3-6]86) echo x86 ;;
     powerpc)  echo powerpc ;;
     x86_64)   echo x86 ;;
+    *) return 1 ;;
+esac
+
+function archmap_llvm() case "${*:-$DEFAULT_ARCH}" in
+    aarch64)  echo AArch64 ;;
+    arm*)     echo ARM ;;
+    i[3-6]86) echo X86 ;;
+    powerpc)  echo PowerPC ;;
+    x86_64)   echo X86 ;;
     *) return 1 ;;
 esac
 
