@@ -5,7 +5,7 @@ function create_buildroot() {
         local -r arch=${options[arch]:=$DEFAULT_ARCH}
         local -r profile=${options[profile]:-$(archmap_profile "$arch")}
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
-        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)}
+        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)$([[ $arch == armv7* ]] && echo hf)}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
@@ -108,14 +108,12 @@ FFLAGS="$FFLAGS -fno-lto"
 FCFLAGS="$FCFLAGS -fno-lto"
 EOF
 
-        # Accept binutils-2.33.1 to fix host dependencies.
-        echo =sys-devel/binutils-2.33.1 >> "$portage/package.accept_keywords/binutils.conf"
+        # Accept ffmpeg-4.2 to fix host dependencies.
+        echo '<media-video/ffmpeg-4.3' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept iptables-1.8 to fix missing flags.
         echo net-firewall/iptables >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libglvnd (since it has no stable version) over eselect-opengl.
         echo media-libs/libglvnd >> "$portage/package.accept_keywords/libglvnd.conf"
-        # Accept man-db 2.8 to fix the missing group.
-        echo -e 'dev-libs/libpipeline\n<sys-apps/man-db-2.9' >> "$portage/package.accept_keywords/man-db.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
@@ -215,11 +213,13 @@ patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support fcaps properly in EAPI=7 (#700018).
 sed -i -e 's/^DEPEND=.*/B&\n[[ $EAPI == [4-6] ]] \&\& DEPEND=${BDEPEND}/' /var/db/repos/gentoo/eclass/fcaps.eclass
 ## Support cross-compiler dependencies properly in EAPI=7 (#700898).
-sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/eclass/toolchain.eclass /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild
-ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1.ebuild manifest
+sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/eclass/toolchain.eclass /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1-r1.ebuild
+ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1-r1.ebuild manifest
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
+## Support old autoconf argument ordering (#710792).
+sed -i -e '/set/s/\( [^ ]*\)\( [^ ]*m4sysdir[^ ]*\)/\2\1/' /var/db/repos/gentoo/eclass/autotools.eclass
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -230,6 +230,9 @@ then
         test x$(sha256sum /var/cache/distfiles/erofs-utils-1.0.tar.gz | sed -n '1s/ .*//p') = x508ee818dc6a02cf986647e37cb991b76f7b3e7ea303ffc9e980772de68f3b10
         ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild manifest --force
 fi
+
+# Temporarily work around some weird corrupted dependencies.
+emerge --rage-clean net-misc/openssh
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -726,6 +729,175 @@ function archmap_stage3() {
         local -r build=$($curl -L "$base/latest-$stage3.txt" | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
         [[ $stage3 =~ hardened ]] && stage3="hardened/$stage3"
         echo "$base/$build/$stage3-$build.tar.xz"
+}
+
+# OPTIONAL (BUILDROOT)
+
+function fix_package() {
+        local -r portage="$buildroot/usr/${options[host]}/etc/portage"
+        case "$*" in
+            emacs)
+                echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/emacs.conf"
+                echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
+                echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
+                $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
+<app-editors/emacs-28
+media-libs/woff2
+net-libs/webkit-gtk amd64
+sys-apps/bubblewrap
+sys-apps/xdg-dbus-proxy amd64
+EOF
+                echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
+                script << 'EOF'
+patch -d /var/db/repos/gentoo -p0 << 'EOP'
+--- app-editors/emacs/emacs-27.0.90.ebuild
++++ app-editors/emacs/emacs-27.0.90.ebuild
+@@ -250,6 +250,11 @@ src_configure() {
+ 		myconf+=" --without-x --without-ns"
+ 	fi
+ 
++	CFLAGS= CPPFLAGS= LDFLAGS= ./configure --without-all
++	make -j$(nproc) lisp {C,CPP,LD}FLAGS=
++	make -C lib-src -j$(nproc) blessmail {C,CPP,LD}FLAGS=
++	mv lib-src/make-docfile{,.save} ; mv lib-src/make-fingerprint{,.save}
++	make clean
+ 	econf \
+ 		--program-suffix="-${EMACS_SUFFIX}" \
+ 		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
+@@ -259,7 +264,7 @@ src_configure() {
+ 		--without-compress-install \
+ 		--without-hesiod \
+ 		--without-pop \
+-		--with-dumping=pdumper \
++		--with-dumping=none --with-pdumper \
+ 		--with-file-notification=$(usev inotify || usev gfile || echo no) \
+ 		$(use_enable acl) \
+ 		$(use_with dbus) \
+@@ -279,6 +284,9 @@ src_configure() {
+ 		$(use_with wide-int) \
+ 		$(use_with zlib) \
+ 		${myconf}
++	emake -C lib all
++	mv lib-src/make-docfile{.save,} ; mv lib-src/make-fingerprint{.save,}
++	touch lib-src/make-{docfile,fingerprint}
+ }
+ 
+ #src_compile() {
+EOP
+sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild
+ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.90.ebuild manifest
+ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild manifest
+EOF
+                ;;
+            firefox)
+                $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
+=dev-lang/rust-1.41.1
+dev-libs/nspr
+dev-libs/nss
+=virtual/rust-1.41.1
+EOF
+                echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
+                $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
+dev-db/sqlite secure-delete
+dev-lang/python sqlite
+media-libs/libepoxy X
+media-libs/libpng apng
+media-libs/libvpx postproc
+media-libs/mesa X
+media-plugins/alsa-plugins pulseaudio
+sys-devel/clang default-libcxx
+x11-libs/gtk+ X
+EOF
+                test "x$DEFAULT_ARCH" = "x${options[host]%%-*}" ||
+                echo 'BINDGEN_EXTRA_CLANG_ARGS="-I$SYSROOT/usr/include"' >> "$portage/env/bindgen.conf"
+                echo 'EGIT_OVERRIDE_COMMIT_AOM="c92d48a356114a3ce871c348865850d44f6477b0"' >> "$portage/env/libaom.conf"
+                $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
+dev-libs/nspr
+dev-libs/nss
+media-libs/dav1d
+media-libs/libaom **
+www-client/firefox **
+EOF
+                $cat << 'EOF' >> "$portage/package.env/firefox.conf"
+media-libs/libaom libaom.conf
+www-client/firefox bindgen.conf
+EOF
+                $mkdir -p "$portage/patches/media-video/ffmpeg"
+                $cat << 'EOF' > "$portage/patches/media-video/ffmpeg/cross-native.patch"
+--- a/configure
++++ b/configure
+@@ -4733,6 +4733,7 @@
+ fi
+ 
+ if test "$cpu" = host; then
++    false &&
+     enabled cross_compile &&
+         true "--cpu=host makes no sense when cross-compiling."
+ 
+EOF
+                script << 'EOG'
+patch -d /var/db/repos/gentoo -p0 << 'EOP'
+--- dev-lang/rust/rust-1.41.1.ebuild
++++ dev-lang/rust/rust-1.41.1.ebuild
+@@ -162,16 +162,19 @@ src_prepare() {
+ }
+ 
+ src_configure() {
+-	local rust_target="" rust_targets="" arch_cflags
++	local -A rust_targets
++	local rust_target="" arch_cflags
+ 
+ 	# Collect rust target names to compile standard libs for all ABIs.
+ 	for v in $(multilib_get_enabled_abi_pairs); do
+-		rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}))\""
++		rust_targets+=([$(rust_abi $(get_abi_CHOST ${v##*.}))]=1)
+ 	done
+ 	if use wasm; then
+-		rust_targets="${rust_targets},\"wasm32-unknown-unknown\""
++		rust_targets+=([wasm32-unknown-unknown]=1)
++	fi
++	if [[ ${CTARGET:-${CHOST}} != ${CHOST} ]]; then
++		rust_targets+=([$(rust_abi ${CTARGET})]=1)
+ 	fi
+-	rust_targets="${rust_targets#,}"
+ 
+ 	local extended="true" tools="\"cargo\","
+ 	if use clippy; then
+@@ -204,7 +207,7 @@ src_configure() {
+ 		[build]
+ 		build = "${rust_target}"
+ 		host = ["${rust_target}"]
+-		target = [${rust_targets}]
++		target = [$(printf -v t ',"%s"' "${!rust_targets[@]}" ; echo ${t#,})]
+ 		cargo = "${rust_stage0_root}/bin/cargo"
+ 		rustc = "${rust_stage0_root}/bin/rustc"
+ 		docs = $(toml_usex doc)
+@@ -269,6 +272,18 @@ src_configure() {
+ 			linker = "$(usex system-llvm lld rust-lld)"
+ 		EOF
+ 	fi
++
++	if [[ ${CTARGET:-${CHOST}} != ${CHOST} ]]; then
++		rust_target=$(rust_abi ${CTARGET})
++		grep -Fqx "[target.${rust_target}]" "${S}"/config.toml ||
++		cat <<- EOF >> "${S}"/config.toml
++			[target.${rust_target}]
++			cc = "$(tc-getCC "${CTARGET}")"
++			cxx = "$(tc-getCXX "${CTARGET}")"
++			linker = "$(tc-getCC "${CTARGET}")"
++			ar = "$(tc-getAR "${CTARGET}")"
++		EOF
++	fi
+ }
+ 
+ src_compile() {
+EOP
+sed -i -e 's/.*lto.*gold/#&/;/backtrace/ased -i -e s/arm_target.thumb2/False/g "${S}"/build/moz.configure/rust.configure' /var/db/repos/gentoo/www-client/firefox/firefox-73.0.1.ebuild
+ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.41.1.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-73.0.1.ebuild manifest
+EOG
+                ;;
+        esac
 }
 
 # OPTIONAL (IMAGE)

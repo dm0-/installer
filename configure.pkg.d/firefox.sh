@@ -1,11 +1,13 @@
 local dir
-if dir=$(compgen -G 'root/usr/lib*/firefox/browser/defaults/preferences')
+if dir=$(compgen -G 'root/usr/lib*/firefox/browser')
 then
+        dir="${dir%%$'\n'*}/defaults/preferences"
         test -h "$dir" -a "x${dir/\/browser}" = "xroot$(readlink "$dir")" &&
         ln -fns ../../defaults/preferences "$dir"
+        mkdir -p "$dir"
 
         # Disable things that store and send your confidential information.
-        cat << 'EOF' > "${dir%%$'\n'*}/privacy.js"
+        cat << 'EOF' > "$dir/privacy.js"
 // Opt out of allowing Mozilla to install random studies.
 pref("app.shield.optoutstudies.enabled", false);
 // Disable the beacon API for analytical trash.
@@ -32,7 +34,7 @@ pref("signon.rememberSignons", false);
 EOF
 
         # Try to fix many UI "improvements" and be more usable in general.
-        cat << 'EOF' > "${dir%%$'\n'*}/usability.js"
+        cat << 'EOF' > "$dir/usability.js"
 // Fix the Ctrl+Tab behavior.
 pref("browser.ctrlTab.recentlyUsedOrder", false);
 // Never open more browser windows.

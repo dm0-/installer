@@ -65,9 +65,6 @@ packages_buildroot+=(
         # Automatically generate the supported instruction set flags.
         app-portage/cpuid2cpuflags
 
-        # Work around the bad Emacs build system's unexec step.
-        media-libs/alsa-lib
-
         # The target hardware requires firmware.
         net-wireless/wireless-regdb
         sys-firmware/intel-microcode
@@ -99,7 +96,7 @@ function customize_buildroot() {
             alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
-            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
+            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
@@ -109,10 +106,19 @@ function customize_buildroot() {
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
+        # Install Firefox.  This isn't real cross-compiling, so it works.
+        fix_package firefox
+        packages+=(www-client/firefox)
+
         # Install Emacs as a terminal application.
+        fix_package emacs
         packages+=(app-editors/emacs)
         echo 'USE="$USE emacs gzip-el"' >> "$portage/make.conf"
-        echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
+        $cat << 'EOF' >> "$portage/package.use/emacs.conf"
+app-editors/emacs -X
+dev-util/desktop-file-utils -emacs
+dev-vcs/git -emacs
+EOF
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"

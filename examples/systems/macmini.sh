@@ -105,7 +105,7 @@ function customize_buildroot() {
             alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
-            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
+            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
@@ -136,63 +136,15 @@ sys-apps/attr static-libs
 sys-libs/zlib static-libs
 EOF
 
-        # Prototype cross-compiling Emacs 27 with ugly dependency fixes.
+        # Include a graphical Emacs.
+        fix_package emacs
         packages+=(app-editors/emacs)
         echo 'USE="$USE emacs gzip-el xwidgets"' >> "$portage/make.conf"
-        echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
-        echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
         $cat << 'EOF' >> "$portage/package.use/emacs.conf"
 app-editors/emacs gtk
 dev-util/desktop-file-utils -emacs
 dev-vcs/git -emacs
 EOF
-        $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
-<app-editors/emacs-28
-media-libs/woff2
-net-libs/webkit-gtk amd64
-sys-apps/bubblewrap
-sys-apps/xdg-dbus-proxy amd64
-EOF
-        echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/emacs.conf"
-        echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
-        patch -d "$buildroot/var/db/repos/gentoo" -p0 << 'EOF'
---- app-editors/emacs/emacs-27.0.50_pre20191223.ebuild
-+++ app-editors/emacs/emacs-27.0.50_pre20191223.ebuild
-@@ -250,6 +250,11 @@
- 		myconf+=" --without-x --without-ns"
- 	fi
- 
-+	CFLAGS= CPPFLAGS= LDFLAGS= ./configure --without-all
-+	make -j$(nproc) lisp {C,CPP,LD}FLAGS=
-+	make -C lib-src -j$(nproc) blessmail {C,CPP,LD}FLAGS=
-+	mv lib-src/make-docfile{,.save} ; mv lib-src/make-fingerprint{,.save}
-+	make clean
- 	econf \
- 		--program-suffix="-${EMACS_SUFFIX}" \
- 		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
-@@ -259,7 +264,7 @@
- 		--without-compress-install \
- 		--without-hesiod \
- 		--without-pop \
--		--with-dumping=pdumper \
-+		--with-dumping=none --with-pdumper \
- 		--with-file-notification=$(usev inotify || usev gfile || echo no) \
- 		$(use_enable acl) \
- 		$(use_with dbus) \
-@@ -279,6 +284,9 @@
- 		$(use_with wide-int) \
- 		$(use_with zlib) \
- 		${myconf}
-+	emake -C lib all
-+	mv lib-src/make-docfile{.save,} ; mv lib-src/make-fingerprint{.save,}
-+	touch lib-src/make-{docfile,fingerprint}
- }
- 
- #src_compile() {
-EOF
-        enter /usr/bin/ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.50_pre20191223.ebuild manifest
-        $sed -i -e s/gnome2_giomodule_cache_update/:/g "$buildroot/var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild"
-        enter /usr/bin/ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild manifest
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"

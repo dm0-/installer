@@ -76,7 +76,7 @@ function customize_buildroot() {
 
         # Tune compilation for the ARM Cortex-A17.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv7ve+simd -mtune=cortex-a17 -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv7ve+simd -mtune=cortex-a17 -mfpu=neon-vfpv4 -ftree-vectorize&/' \
             "$portage/make.conf"
         echo -e 'CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"\nUSE="$USE neon"' >> "$portage/make.conf"
 
@@ -92,7 +92,7 @@ function customize_buildroot() {
             alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
-            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wifi wps \
+            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
@@ -102,17 +102,10 @@ function customize_buildroot() {
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
-        # Fix the dumb libgpg-error build process for this target.
-        $mkdir -p "$portage/patches/dev-libs/libgpg-error"
-        $cat << 'EOF' > "$portage/patches/dev-libs/libgpg-error/cross.patch"
-diff --git a/src/syscfg/lock-obj-pub.armv7a-unknown-linux-gnueabi.h b/src/syscfg/lock-obj-pub.armv7a-unknown-linux-gnueabi.h
-new file mode 120000
-index 0000000..71a9292
---- /dev/null
-+++ b/src/syscfg/lock-obj-pub.armv7a-unknown-linux-gnueabi.h
-@@ -0,0 +1 @@
-+lock-obj-pub.arm-unknown-linux-gnueabi.h
-\ No newline at end of file
+        # Disable LTO for packages broken with this architecture/ABI.
+        $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
+media-libs/freetype no-lto.conf
+media-libs/libvpx no-lto.conf
 EOF
 
         # Download an NVRAM file for the wireless driver.
@@ -123,6 +116,16 @@ tmp=$(mktemp)
 curl -L "https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/$commit$file?format=TEXT" > "$tmp"
 test x$(sha256sum "$tmp" | sed -n '1s/ .*//p') = x24a7cdfe790e0cb067b11fd7f13205684bcd4368cfb00ee81574fe983618f906
 exec base64 -d < "$tmp" > /lib/firmware/brcm/brcmfmac4354-sdio.txt
+EOF
+
+        # Install Emacs as a terminal application.
+        fix_package emacs
+        packages+=(app-editors/emacs)
+        echo 'USE="$USE emacs gzip-el"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/package.use/emacs.conf"
+app-editors/emacs -X
+dev-util/desktop-file-utils -emacs
+dev-vcs/git -emacs
 EOF
 
         # Configure the kernel by only enabling this system's settings.
