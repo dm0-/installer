@@ -106,7 +106,7 @@ function customize_buildroot() {
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
-        # Install Firefox.  This isn't real cross-compiling, so it works.
+        # Install Firefox.
         fix_package firefox
         packages+=(www-client/firefox)
 

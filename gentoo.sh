@@ -108,20 +108,26 @@ FFLAGS="$FFLAGS -fno-lto"
 FCFLAGS="$FCFLAGS -fno-lto"
 EOF
 
+        # Accept binutils-2.34 to fix host dependencies.
+        echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept ffmpeg-4.2 to fix host dependencies.
         echo '<media-video/ffmpeg-4.3' >> "$portage/package.accept_keywords/ffmpeg.conf"
+        # Accept grub-2.06 to fix file modification time support on ESPs.
+        echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
         echo net-firewall/iptables >> "$portage/package.accept_keywords/iptables.conf"
-        # Accept libglvnd (since it has no stable version) over eselect-opengl.
-        echo media-libs/libglvnd >> "$portage/package.accept_keywords/libglvnd.conf"
+        # Accept libcap-2.33 to fix build ordering with EAPI=7.
+        echo '<sys-libs/libcap-2.34' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libxcb-1.14 to fix root dependencies with EAPI=7.
+        echo -e 'x11-base/xcb-proto\nx11-libs/libxcb' >> "$portage/package.accept_keywords/xcb.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
-        echo sys-apps/systemd >> "$portage/package.accept_keywords/systemd.conf"
+        echo '<sys-apps/systemd-246' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
-        # Accept util-linux-2.34 for EAPI=7 and to fix build ordering.
+        # Accept util-linux-2.34 to fix build ordering with EAPI=7.
         echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
 
         # Create the target portage profile based on the native root's.
@@ -150,11 +156,13 @@ sys-apps/portage -native-extensions
 EOF
         echo 'EXTRA_ECONF="--with-dbus-binding-tool=dbus-binding-tool"' >> "$portage/env/cross-dbus-glib.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib.conf"
+        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'PKG_CONFIG="$CHOST-pkg-config"' >> "$portage/env/cross-pkgconfig.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
+app-crypt/gnupg cross-libusb.conf
 dev-libs/dbus-glib cross-dbus-glib.conf
 dev-python/pypax cross-python.conf
 sys-apps/dtc cross-pkgconfig.conf
@@ -178,7 +186,7 @@ EOF
 # The kernel source is shared between the host and cross-compiled root.
 sys-kernel/gentoo-sources-9999
 EOF
-        echo -e 'split-usr\n-libglvnd' >> "$portage/profile/use.mask"
+        echo split-usr >> "$portage/profile/use.mask"
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
@@ -190,6 +198,7 @@ EOF
         echo 'sys-apps/busybox -* static' >> "$portage/package.use/busybox.conf"
         # Work around bad dependencies requiring this on the host.
         echo 'x11-libs/cairo X' >> "$portage/package.use/cairo.conf"
+        echo 'media-libs/libglvnd X' >> "$portage/package.use/libglvnd.conf"
         # Support building the UEFI boot stub, its logo image, and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
@@ -210,16 +219,9 @@ curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
 test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xf749a2e2221b31613cdd28f1144cf8656457b663a7603bc82c59aa181bbcc917
 sed -i -e 's/.*USER_ID.*}/&:${ACCT_USER_GROUPS[0]}/;s/printf "m/test ${#ACCT_USER_GROUPS[*]} -lt 2 || &/;s/.*GROUPS.@]/&:1/' sysusers.patch
 patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
-## Support fcaps properly in EAPI=7 (#700018).
-sed -i -e 's/^DEPEND=.*/B&\n[[ $EAPI == [4-6] ]] \&\& DEPEND=${BDEPEND}/' /var/db/repos/gentoo/eclass/fcaps.eclass
-## Support cross-compiler dependencies properly in EAPI=7 (#700898).
-sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/eclass/toolchain.eclass /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1-r1.ebuild
-ebuild /var/db/repos/gentoo/sys-devel/binutils/binutils-2.33.1-r1.ebuild manifest
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
-## Support old autoconf argument ordering (#710792).
-sed -i -e '/set/s/\( [^ ]*\)\( [^ ]*m4sysdir[^ ]*\)/\2\1/' /var/db/repos/gentoo/eclass/autotools.eclass
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -230,9 +232,6 @@ then
         test x$(sha256sum /var/cache/distfiles/erofs-utils-1.0.tar.gz | sed -n '1s/ .*//p') = x508ee818dc6a02cf986647e37cb991b76f7b3e7ea303ffc9e980772de68f3b10
         ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild manifest --force
 fi
-
-# Temporarily work around some weird corrupted dependencies.
-emerge --rage-clean net-misc/openssh
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -462,9 +461,9 @@ CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
 CONFIG_STACKPROTECTOR=y
 CONFIG_STACKPROTECTOR_STRONG=y
 CONFIG_STRICT_KERNEL_RWX=y'
-        test "x${options[arch]}" = xx86_64 && echo '# Architecture settings
-CONFIG_64BIT=y
-CONFIG_SMP=y
+        [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
+CONFIG_64BIT=y'
+        test "x${options[arch]}" = xx86_64 && echo 'CONFIG_SMP=y
 CONFIG_X86_LOCAL_APIC=y'
         opt networkd && echo '# Network settings
 CONFIG_NET=y
@@ -672,6 +671,7 @@ function archmap() case "${*:-$DEFAULT_ARCH}" in
     arm*)     echo arm ;;
     i[3-6]86) echo x86 ;;
     powerpc)  echo ppc ;;
+    riscv64)  echo riscv ;;
     x86_64)   echo amd64 ;;
     *) return 1 ;;
 esac
@@ -681,6 +681,7 @@ function archmap_kernel() case "${*:-$DEFAULT_ARCH}" in
     arm*)     echo arm ;;
     i[3-6]86) echo x86 ;;
     powerpc)  echo powerpc ;;
+    riscv64)  echo riscv ;;
     x86_64)   echo x86 ;;
     *) return 1 ;;
 esac
@@ -690,6 +691,7 @@ function archmap_llvm() case "${*:-$DEFAULT_ARCH}" in
     arm*)     echo ARM ;;
     i[3-6]86) echo X86 ;;
     powerpc)  echo PowerPC ;;
+    riscv64)  echo RISCV ;;
     x86_64)   echo X86 ;;
     *) return 1 ;;
 esac
@@ -704,6 +706,7 @@ function archmap_profile() {
             armv7a)   echo default/linux/arm/17.0/armv7a ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
             powerpc)  echo default/linux/ppc/17.0 ;;
+            riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d ;;
             x86_64)   echo default/linux/amd64/17.1$nomulti/hardened$selinux ;;
             *) return 1 ;;
         esac
@@ -790,12 +793,16 @@ ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebui
 EOF
                 ;;
             firefox)
+                echo 'CPU_FLAGS_X86=""' >> "$buildroot/etc/portage/env/no-cpu-flags.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
 =dev-lang/rust-1.41.1
 dev-libs/nspr
 dev-libs/nss
+media-libs/libvpx
+media-libs/libwebp
 =virtual/rust-1.41.1
 EOF
+                echo 'media-libs/libaom no-cpu-flags.conf' >> "$buildroot/etc/portage/package.env/firefox.conf"
                 echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
 dev-db/sqlite secure-delete
@@ -808,20 +815,23 @@ media-plugins/alsa-plugins pulseaudio
 sys-devel/clang default-libcxx
 x11-libs/gtk+ X
 EOF
-                test "x$DEFAULT_ARCH" = "x${options[host]%%-*}" ||
-                echo 'BINDGEN_EXTRA_CLANG_ARGS="-I$SYSROOT/usr/include"' >> "$portage/env/bindgen.conf"
-                echo 'EGIT_OVERRIDE_COMMIT_AOM="c92d48a356114a3ce871c348865850d44f6477b0"' >> "$portage/env/libaom.conf"
+                echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/bindgen.conf"
+                echo 'EGIT_OVERRIDE_COMMIT_AOM="01c7a66021087cb65d33bc73812d89dd0ecac644"' >> "$portage/env/libaom.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
+dev-db/sqlite
 dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
 media-libs/libaom **
+media-libs/libvpx
+media-libs/libwebp
 www-client/firefox **
 EOF
                 $cat << 'EOF' >> "$portage/package.env/firefox.conf"
 media-libs/libaom libaom.conf
 www-client/firefox bindgen.conf
 EOF
+                echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
                 $mkdir -p "$portage/patches/media-video/ffmpeg"
                 $cat << 'EOF' > "$portage/patches/media-video/ffmpeg/cross-native.patch"
 --- a/configure
@@ -834,6 +844,86 @@ EOF
      enabled cross_compile &&
          true "--cpu=host makes no sense when cross-compiling."
  
+EOF
+                $mkdir -p "$portage/patches/www-client/firefox"
+                test "x${options[arch]}" = xpowerpc &&
+                $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
+diff --git a/third_party/rust/authenticator/src/linux/ioctl_powerpcbe.rs b/third_party/rust/authenticator/src/linux/ioctl_powerpcbe.rs
+new file mode 120000
+index 0000000000..0a99c953b2
+--- /dev/null
++++ b/third_party/rust/authenticator/src/linux/ioctl_powerpcbe.rs
+@@ -0,0 +1 @@
++ioctl_powerpc64le.rs
+\ No newline at end of file
+--- a/gfx/wr/webrender/src/resource_cache.rs
++++ b/gfx/wr/webrender/src/resource_cache.rs
+@@ -44,7 +44,7 @@
+ #[cfg(any(feature = "capture", feature = "replay"))]
+ use std::path::PathBuf;
+ use std::sync::{Arc, RwLock};
+-use std::sync::atomic::{AtomicU64, Ordering};
++use std::sync::atomic::{AtomicU32, Ordering};
+ use std::time::SystemTime;
+ use std::u32;
+ use crate::texture_cache::{TextureCache, TextureCacheHandle, Eviction};
+@@ -53,7 +53,7 @@
+ const DEFAULT_TILE_SIZE: TileSize = 512;
+ 
+ // Counter for generating unique native surface ids
+-static NEXT_NATIVE_SURFACE_ID: AtomicU64 = AtomicU64::new(0);
++static NEXT_NATIVE_SURFACE_ID: AtomicU32 = AtomicU32::new(0);
+ 
+ #[cfg_attr(feature = "capture", derive(Serialize))]
+ #[cfg_attr(feature = "replay", derive(Deserialize))]
+@@ -1786,7 +1786,7 @@
+         tile_size: DeviceIntSize,
+         is_opaque: bool,
+     ) -> NativeSurfaceId {
+-        let id = NativeSurfaceId(NEXT_NATIVE_SURFACE_ID.fetch_add(1, Ordering::Relaxed));
++        let id = NativeSurfaceId(NEXT_NATIVE_SURFACE_ID.fetch_add(1, Ordering::Relaxed).into());
+ 
+         self.pending_native_surface_updates.push(
+             NativeSurfaceOperation {
+--- a/js/src/jit/none/MacroAssembler-none.h
++++ b/js/src/jit/none/MacroAssembler-none.h
+@@ -99,7 +99,7 @@
+ static constexpr Register WasmJitEntryReturnScratch{Registers::invalid_reg};
+ 
+ static constexpr uint32_t ABIStackAlignment = 4;
+-static constexpr uint32_t CodeAlignment = sizeof(void*);
++static constexpr uint32_t CodeAlignment = 8;
+ static constexpr uint32_t JitStackAlignment = 8;
+ static constexpr uint32_t JitStackValueAlignment =
+     JitStackAlignment / sizeof(Value);
+--- a/xpcom/reflect/xptcall/xptcall.h
++++ b/xpcom/reflect/xptcall/xptcall.h
+@@ -71,6 +71,11 @@
+     ExtendedVal ext;
+   };
+ 
++#if defined(__powerpc__) && !defined(__powerpc64__)
++  // this field is still necessary on ppc32, as an address
++  // to it is taken certain places in xptcall
++  void *ptr;
++#endif
+   nsXPTType type;
+   uint8_t flags;
+ 
+@@ -91,7 +96,12 @@
+   };
+ 
+   void ClearFlags() { flags = 0; }
++#if defined(__powerpc__) && !defined(__powerpc64__)
++  void SetIndirect() { ptr = &val; flags |= IS_INDIRECT; }
++  bool IsPtrData() const { return IsIndirect(); }
++#else
+   void SetIndirect() { flags |= IS_INDIRECT; }
++#endif
+ 
+   bool IsIndirect() const { return 0 != (flags & IS_INDIRECT); }
+ 
+
 EOF
                 script << 'EOG'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
@@ -892,9 +982,11 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  src_compile() {
 EOP
-sed -i -e 's/.*lto.*gold/#&/;/backtrace/ased -i -e s/arm_target.thumb2/False/g "${S}"/build/moz.configure/rust.configure' /var/db/repos/gentoo/www-client/firefox/firefox-73.0.1.ebuild
+sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild
+compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
+sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.41.1.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-73.0.1.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild manifest
 EOG
                 ;;
         esac

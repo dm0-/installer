@@ -118,10 +118,9 @@ function customize_buildroot() {
         # Accept the sshfs version that is stable everywhere else.
         echo 'net-fs/sshfs amd64' >> "$portage/package.accept_keywords/sshfs.conf"
 
-        # Install QEMU for running graphical virtual machines and WINE games.
+        # Install QEMU to run graphical virtual machines and Intel programs.
         packages+=(app-emulation/qemu sys-firmware/seabios)
-        echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/env/qemu.conf"
-        echo 'app-emulation/qemu qemu.conf' >> "$portage/package.env/qemu.conf"
+        echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu
 sys-apps/dtc
@@ -280,7 +279,7 @@ EOF
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-system-ppc \
-    -machine mac99,via=pmu -cpu g4 -m 1G -vga std -nic user,model=e1000 \
+    -machine mac99,via=pmu -cpu g4 -m 1G -vga std -nic user,model=sungem \
     -prom-env 'boot-device=hd:2,grub.elf' \
     -drive file="${IMAGE:-apm.img}",format=raw,media=disk \
     "$@"
@@ -416,9 +415,6 @@ CONFIG_USB_HID=m       # mice and keyboards
 # TARGET HARDWARE: QEMU
 ## QEMU default graphics
 CONFIG_DRM_BOCHS=m
-## QEMU default network
-CONFIG_NET_VENDOR_INTEL=y
-CONFIG_E1000=m
 ## QEMU default disk
 CONFIG_ATA_PIIX=y
 ## QEMU default serial port
