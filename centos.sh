@@ -9,7 +9,6 @@ function create_buildroot() {
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
-        opt networkd && packages_buildroot+=(dnf-plugins-core rpm-build)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
@@ -29,31 +28,15 @@ function create_buildroot() {
         configure_initrd_generation
         initialize_buildroot
 
-        opt uefi && enable_epel  # EPEL is required for ImageMagick.
+        opt networkd || opt uefi && enable_epel  # EPEL now carries core RPMs.
         enter /usr/bin/dnf --assumeyes upgrade
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
-
-        # Fix a colossal RHEL 8 regression.
-        if opt networkd
-        then
-                script << 'EOF'
-dnf download --source systemd
-rpm --checksig systemd-[0-9]*.src.rpm
-dnf --assumeyes --enablerepo=PowerTools builddep systemd-[0-9]*.src.rpm
-rpm --install systemd-[0-9]*.src.rpm
-sed -i \
-    -e '/^ *-Dnetworkd=/s/=false/=true/' \
-    -e '/ systemd-resolve /{p;s/193/192/g;s/Resolver/Network Management/g;s/resolve/network/g;}' \
-    /root/rpmbuild/SPECS/systemd.spec
-dist=$(compgen -G 'systemd-[0-9]*.src.rpm') ; dist=${dist#*.el} ; dist=.el${dist%%.*}
-exec rpmbuild --define="dist $dist" -ba /root/rpmbuild/SPECS/systemd.spec
-EOF
-                packages+=(/$(cd "$buildroot" ; compgen -G "root/rpmbuild/RPMS/*/systemd-[0-9]*.rpm"))
-        fi
 }
 
-# Override package installation to fix stupid pointless garbage modules.
-eval "$(declare -f install_packages | $sed '/{ *$/amkdir -p root/etc ; cp -pt root/etc /etc/os-release')"
+# Override package installation to fix modules and the networkd RPM name.
+eval "$(declare -f install_packages | $sed \
+    -e '/{ *$/amkdir -p root/etc ; cp -pt root/etc /etc/os-release' \
+    -e '/networkd/iopt networkd && packages+=(systemd-networkd)')"
 
 function distro_tweaks() {
         exclude_paths+=('usr/lib/.build-id')

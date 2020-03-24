@@ -31,7 +31,7 @@ function create_buildroot() {
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
-GRUB_PLATFORMS="${options[uefi]:+efi-64}"
+GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}"
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
@@ -111,11 +111,11 @@ EOF
         # Accept binutils-2.34 to fix host dependencies.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept ffmpeg-4.2 to fix host dependencies.
-        echo '<media-video/ffmpeg-4.3' >> "$portage/package.accept_keywords/ffmpeg.conf"
+        echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
-        echo net-firewall/iptables >> "$portage/package.accept_keywords/iptables.conf"
+        echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libcap-2.33 to fix build ordering with EAPI=7.
         echo '<sys-libs/libcap-2.34' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libxcb-1.14 to fix root dependencies with EAPI=7.
@@ -149,6 +149,10 @@ EOF
 # Use the kill command from util-linux to minimize systemd dependencies.
 sys-apps/util-linux kill
 sys-process/procps -kill
+EOF
+        $cat << 'EOF' >> "$portage/package.use/nftables.conf"
+# Use the newer backend in iptables without switching applications to nftables.
+net-firewall/iptables nftables
 EOF
         $cat << 'EOF' >> "$portage/package.use/portage.conf"
 # Cross-compiling portage native extensions is unsupported.
@@ -222,6 +226,11 @@ patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
+## Support cross-compiling GCC without sed.
+sed -i -e /DEPEND=/d /var/db/repos/gentoo/eclass/fixheadtails.eclass
+## Support the fbdev driver without needing X on the host (#714580).
+sed -i -e 's/^EAPI=.*/EAPI=7/;s/xorg-2/xorg-3/' /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild
+ebuild /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild manifest
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -746,9 +755,9 @@ function fix_package() {
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
 <app-editors/emacs-28
 media-libs/woff2
-net-libs/webkit-gtk amd64
+net-libs/webkit-gtk *
 sys-apps/bubblewrap
-sys-apps/xdg-dbus-proxy amd64
+sys-apps/xdg-dbus-proxy *
 EOF
                 echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
                 script << 'EOF'
@@ -795,12 +804,12 @@ EOF
             firefox)
                 echo 'CPU_FLAGS_X86=""' >> "$buildroot/etc/portage/env/no-cpu-flags.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
-=dev-lang/rust-1.41.1
+=dev-lang/rust-1.42.0
 dev-libs/nspr
 dev-libs/nss
 media-libs/libvpx
 media-libs/libwebp
-=virtual/rust-1.41.1
+=virtual/rust-1.42.0
 EOF
                 echo 'media-libs/libaom no-cpu-flags.conf' >> "$buildroot/etc/portage/package.env/firefox.conf"
                 echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
@@ -825,7 +834,7 @@ media-libs/dav1d
 media-libs/libaom **
 media-libs/libvpx
 media-libs/libwebp
-www-client/firefox **
+=www-client/firefox-74.0-r1 ~*
 EOF
                 $cat << 'EOF' >> "$portage/package.env/firefox.conf"
 media-libs/libaom libaom.conf
@@ -927,8 +936,8 @@ index 0000000000..0a99c953b2
 EOF
                 script << 'EOG'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- dev-lang/rust/rust-1.41.1.ebuild
-+++ dev-lang/rust/rust-1.41.1.ebuild
+--- dev-lang/rust/rust-1.42.0.ebuild
++++ dev-lang/rust/rust-1.42.0.ebuild
 @@ -162,16 +162,19 @@ src_prepare() {
  }
  
@@ -953,7 +962,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  	local extended="true" tools="\"cargo\","
  	if use clippy; then
-@@ -204,7 +207,7 @@ src_configure() {
+@@ -207,7 +210,7 @@ src_configure() {
  		[build]
  		build = "${rust_target}"
  		host = ["${rust_target}"]
@@ -962,11 +971,10 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		cargo = "${rust_stage0_root}/bin/cargo"
  		rustc = "${rust_stage0_root}/bin/rustc"
  		docs = $(toml_usex doc)
-@@ -269,6 +272,18 @@ src_configure() {
- 			linker = "$(usex system-llvm lld rust-lld)"
+@@ -273,6 +276,18 @@ src_configure() {
  		EOF
  	fi
-+
+ 
 +	if [[ ${CTARGET:-${CHOST}} != ${CHOST} ]]; then
 +		rust_target=$(rust_abi ${CTARGET})
 +		grep -Fqx "[target.${rust_target}]" "${S}"/config.toml ||
@@ -978,14 +986,15 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
 +			ar = "$(tc-getAR "${CTARGET}")"
 +		EOF
 +	fi
++
+ 	einfo "Rust configured with the following settings:"
+ 	cat "${S}"/config.toml || die
  }
- 
- src_compile() {
 EOP
 sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
 sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild
-ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.41.1.ebuild manifest
+ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.42.0.ebuild manifest
 ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild manifest
 EOG
                 ;;

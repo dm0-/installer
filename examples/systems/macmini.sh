@@ -108,7 +108,7 @@ function customize_buildroot() {
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
@@ -116,16 +116,16 @@ function customize_buildroot() {
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Accept the sshfs version that is stable everywhere else.
-        echo 'net-fs/sshfs amd64' >> "$portage/package.accept_keywords/sshfs.conf"
+        echo 'net-fs/sshfs *' >> "$portage/package.accept_keywords/sshfs.conf"
 
         # Install QEMU to run graphical virtual machines and Intel programs.
         packages+=(app-emulation/qemu sys-firmware/seabios)
         echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
-app-emulation/qemu
-sys-apps/dtc
-sys-firmware/seabios
-virtual/libusb
+app-emulation/qemu *
+sys-apps/dtc *
+sys-firmware/seabios *
+virtual/libusb *
 EOF
         $cat << 'EOF' >> "$portage/package.use/qemu.conf"
 app-emulation/qemu gtk static-user

@@ -1,8 +1,9 @@
-# This is an example Gentoo build for a specific target system, the fit-PC Slim
-# (based on the AMD Geode LX 800 CPU).  It demonstrates cross-compiling to an
-# uncommon instruction set with plenty of other hardware components that are
-# specific to that platform.  Sample bootloader files are prepared that allow
-# booting this system from a GPT/UEFI-formatted disk.
+# This is an example Gentoo build for a specific target system, the Sylvania
+# SYNET07526-Z netbook (based on the ARM ARM926EJ-S CPU).  It demonstrates
+# cross-compiling for a 32-bit ARM9 device and generating a U-Boot script that
+# starts Linux.  The vmlinuz.uimg and scriptcmd files must be written to the
+# /script directory on the first FAT-formatted MS-DOS partition of an SD card,
+# which will be booted automatically when starting the system.
 #
 # Since this is a non-UEFI system that can't have a Secure Boot signature, it
 # might as well skip verity to save CPU cycles.  It should also avoid squashfs
@@ -11,7 +12,7 @@
 # for working on improving support.
 
 options+=(
-        [arch]=i686      # Target AMD Geode LX CPUs.  (Note i686 has no NOPL.)
+        [arch]=armv5tel  # Target ARM ARM926EJ-S CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
         [networkd]=1     # Let systemd manage the network configuration.
@@ -43,7 +44,6 @@ packages+=(
         app-admin/sudo
         sys-apps/shadow
         ## Hardware
-        sys-apps/pciutils
         sys-apps/usbutils
         ## Network
         net-firewall/iptables
@@ -65,30 +65,23 @@ packages+=(
         x11-wm/twm
 )
 
-packages_buildroot+=(
-        # The target hardware requires firmware.
-        net-wireless/wireless-regdb
-        sys-kernel/linux-firmware
-)
-
-# Build unused GRUB images for this platform for separate manual installation.
+# Support building U-Boot images and GRUB for the bootloader.
 function initialize_buildroot() {
-        echo 'GRUB_PLATFORMS="pc"' >> "$buildroot/etc/portage/make.conf"
-        packages_buildroot+=(sys-boot/grub)
+        echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
+        packages_buildroot+=(dev-embedded/u-boot-tools sys-boot/grub)
 }
 
 function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
-        # Tune compilation for the AMD Geode LX 800.
+        # Tune compilation for the ARM ARM926EJ-S.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv5te -mtune=arm926ej-s -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo 'CPU_FLAGS_X86="3dnow 3dnowext mmx mmxext"' >> "$portage/make.conf"
-        echo 'ABI_X86="32 64"' >> "$buildroot/etc/portage/make.conf"  # Portage is bad.
+        echo 'CPU_FLAGS_ARM="edsp thumb v4 v5"' >> "$portage/make.conf"
 
-        # Use the Geode video driver.
-        echo -e 'USE="$USE ztv"\nVIDEO_CARDS="geode"' >> "$portage/make.conf"
+        # Fall back to the fbdev driver for graphical sessions.
+        echo 'VIDEO_CARDS="fbdev"' >> "$portage/make.conf"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
@@ -102,7 +95,7 @@ function customize_buildroot() {
             cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
+            -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
@@ -118,9 +111,26 @@ dev-util/desktop-file-utils -emacs
 dev-vcs/git -emacs
 EOF
 
+        # Fix the dumb libgpg-error build process for this target.
+        $mkdir -p "$portage/patches/dev-libs/libgpg-error"
+        $cat << EOF > "$portage/patches/dev-libs/libgpg-error/cross.patch"
+diff --git a/src/syscfg/lock-obj-pub.${options[arch]}-unknown-linux-gnueabi.h b/src/syscfg/lock-obj-pub.${options[arch]}-unknown-linux-gnueabi.h
+new file mode 120000
+index 0000000..71a9292
+--- /dev/null
++++ b/src/syscfg/lock-obj-pub.${options[arch]}-unknown-linux-gnueabi.h
+@@ -0,0 +1 @@
++lock-obj-pub.arm-unknown-linux-gnueabi.h
+\ No newline at end of file
+EOF
+
+        # Fix the screen contrast.
+        $sed -i -e 's/fbi->contrast = 0x10/fbi->contrast = 0x80/g' \
+            "$buildroot/usr/src/linux/drivers/video/fbdev/wm8505fb.c"
+
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=x86 \
+        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=arm \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -129,52 +139,44 @@ function customize() {
         drop_development
         store_home_on_var +root
 
-        echo fitpc > root/etc/hostname
+        echo netbook > root/etc/hostname
 
         # Drop extra unused paths.
         exclude_paths+=(
                 usr/lib/firmware
                 usr/local
         )
-
-        # Start the wireless interface if it is configured.
-        mkdir -p root/usr/lib/systemd/system/network.target.wants
-        ln -fns ../wpa_supplicant-nl80211@.service \
-            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlp0s15f5u4.service
-
-        # Include a mount point for a writable boot partition.
-        mkdir root/boot
-
-        create_gpt_bios_grub_files
 }
 
-# Make our own BIOS GRUB files for booting from a GPT disk.  Formatting a disk
-# with fdisk forces the first partition to begin at least 1MiB from the start
-# of the disk, which is the usual size of the boot partition that GRUB requires
-# to install on GPT.  Reconfigure GRUB's boot.img and diskboot.img so the core
-# image can be booted when written directly after the GPT.
-#
-# Install these files with the following commands:
-#       dd bs=512 conv=notrunc if=core.img of="$disk" seek=34
-#       dd bs=512 conv=notrunc if=boot.img of="$disk"
-function create_gpt_bios_grub_files() if opt bootable
+# Override the UEFI function as a hack to produce the U-Boot files.
+function produce_uefi_exe() if opt bootable
 then
-        # Take the normal boot.img, and make it a protective MBR.
-        cp -pt . /usr/lib/grub/i386-pc/boot.img
-        dd bs=1 conv=notrunc count=64 of=boot.img seek=446 \
-            if=<(echo -en '\0\0\x02\0\xEE\xFF\xFF\xFF\x01\0\0\0\xFF\xFF\xFF\xFF' ; exec cat /dev/zero)
+        local -r dtb=/usr/src/linux/arch/arm/boot/dts/wm8505-ref.dtb
 
-        # Create a core.img with preloaded modules to read /grub.cfg on an ESP.
+        # Build the system's device tree blob.
+        make -C /usr/src/linux "${dtb##*/}" \
+            ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
+
+        # Build a U-Boot kernel image with the bundled DTB.
+        local -r data=$(mktemp)
+        cat /usr/src/linux/arch/arm/boot/{zImage,dts/wm8505-ref.dtb} > "$data"
+        mkimage -A arm -C none -O linux -T kernel -a 0x8000 -d "$data" -e 0x8000 -n Linux vmlinuz.uimg
+
+        # Write a boot script to start the kernel.
+        mkimage -A arm -C none -O linux -T script -d /dev/stdin -n 'Boot script' scriptcmd << EOF
+lcdinit
+fatload mmc 0 0 /script/vmlinuz.uimg
+setenv bootargs $(<kernel_args.txt) rootwait
+bootm 0
+EOF
+
+        # Build an ARM GRUB image that U-Boot can use.  (experiment)
         grub-mkimage \
             --compression=none \
-            --format=i386-pc \
-            --output=core.img \
-            --prefix='(hd0,gpt1)' \
-            biosdisk fat halt linux loadenv minicmd normal part_gpt reboot test
-
-        # Set boot.img and diskboot.img to load immediately after the GPT.
-        dd bs=1 conv=notrunc count=1 if=<(echo -en '\x22') of=boot.img seek=92
-        dd bs=1 conv=notrunc count=1 if=<(echo -en '\x23') of=core.img seek=500
+            --format=arm-uboot \
+            --output=grub.uimg \
+            --prefix= \
+            fat halt linux loadenv minicmd normal part_gpt reboot test
 fi
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
@@ -185,21 +187,7 @@ CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
-# Support VFAT (which is not included when not using UEFI).
-CONFIG_VFAT_FS=m
-CONFIG_FAT_DEFAULT_UTF8=y
-CONFIG_NLS=m
-CONFIG_NLS_DEFAULT="utf8"
-CONFIG_NLS_CODEPAGE_437=m
-CONFIG_NLS_ISO8859_1=m
-CONFIG_NLS_UTF8=m
-# Support mirroring disks via RAID.
-CONFIG_MD=y
-CONFIG_BLK_DEV_MD=y
-CONFIG_MD_AUTODETECT=y
-CONFIG_MD_RAID1=y
 # Support encrypted partitions.
-CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
 # Support FUSE.
@@ -236,79 +224,26 @@ CONFIG_MAGIC_SYSRQ=y
 CONFIG_NET_SCHED=y
 CONFIG_NET_SCH_DEFAULT=y
 CONFIG_NET_SCH_FQ_CODEL=y
-# TARGET HARDWARE: fit-PC Slim
-CONFIG_PCI=y
-CONFIG_PCI_MSI=y
-CONFIG_SCx200=y
-## Bundle firmware
-CONFIG_EXTRA_FIRMWARE="regulatory.db regulatory.db.p7s rt73.bin"
-## Geode LX 800 CPU
-CONFIG_MGEODE_LX=y
-CONFIG_CPU_SUP_AMD=y
-CONFIG_MICROCODE_AMD=y
-## AES processor
-CONFIG_CRYPTO_HW=y
-CONFIG_CRYPTO_DEV_GEODE=y
-## Random number generator
-CONFIG_HW_RANDOM=y
-CONFIG_HW_RANDOM_GEODE=y
-## Disks
-CONFIG_ATA=y
-CONFIG_ATA_SFF=y
-CONFIG_ATA_BMDMA=y
-CONFIG_PATA_CS5536=y
-#CONFIG_BLK_DEV_CS5536=y  # Legacy IDE version
-## Graphics
-CONFIG_FB_GEODE=y
-CONFIG_FB_GEODE_LX=y
-CONFIG_DEVMEM=y       # Required by the X video driver
-CONFIG_X86_MSR=y      # Required by the X video driver
-## Audio
-CONFIG_SOUND=y
-CONFIG_SND=y
-CONFIG_SND_PCI=y
-CONFIG_SND_CS5535AUDIO=y
+# TARGET HARDWARE: Sylvania SYNET07526-Z
+CONFIG_AEABI=y
+CONFIG_ARM_APPENDED_DTB=y
+CONFIG_ARM_ATAG_DTB_COMPAT=y
+## ARM ARM926EJ-S
+CONFIG_ARM_THUMB=y
+## SoC WM8505
+CONFIG_ARCH_WM8505=y
+CONFIG_FB_WM8505=y
+CONFIG_FB_WMT_GE_ROPS=y
+CONFIG_I2C=y
+CONFIG_I2C_WMT=y
+CONFIG_PINCTRL_WM8505=y
 ## USB support
 CONFIG_USB_SUPPORT=y
 CONFIG_USB=y
 CONFIG_USB_DEFAULT_PERSIST=y
-CONFIG_USB_PCI=y
-CONFIG_USB_GADGET=y
-CONFIG_USB_AMD5536UDC=y
-# Serial support
-CONFIG_SERIAL_8250=y
-CONFIG_SERIAL_8250_CONSOLE=y
-CONFIG_SERIAL_8250_RUNTIME_UARTS=2
-## Ethernet
-CONFIG_NETDEVICES=y
-CONFIG_ETHERNET=y
-CONFIG_NET_VENDOR_REALTEK=y
-CONFIG_8139TOO=y
-## Wifi
-CONFIG_CFG80211=y
-CONFIG_MAC80211=y
-CONFIG_MAC80211_RC_MINSTREL=y
-CONFIG_WLAN=y
-CONFIG_WLAN_VENDOR_RALINK=y
-CONFIG_RT2X00=y
-CONFIG_RT73USB=y
-## High-resolution timers
-CONFIG_MFD_CS5535=y
-CONFIG_CS5535_MFGPT=y
-CONFIG_CS5535_CLOCK_EVENT_SRC=y
-## Watchdog device
-CONFIG_WATCHDOG=y
-CONFIG_GEODE_WDT=y
-## GPIO
-CONFIG_GPIOLIB=y
-CONFIG_GPIO_CS5535=y
-## NAND controller
-CONFIG_MTD=y
-CONFIG_MTD_RAW_NAND=y
-CONFIG_MTD_NAND_CS553X=y
-## I2C
-CONFIG_I2C=y
-CONFIG_SCx200_ACB=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_EHCI_HCD_PLATFORM=y
+CONFIG_USB_UHCI_HCD=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
@@ -316,14 +251,18 @@ CONFIG_HID_GENERIC=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## USB storage
-CONFIG_USB_OHCI_HCD=y
-CONFIG_USB_OHCI_HCD_PCI=y
-CONFIG_USB_EHCI_HCD=y
-CONFIG_USB_EHCI_HCD_PCI=y
 CONFIG_SCSI=y
 CONFIG_BLK_DEV_SD=y
 CONFIG_USB_STORAGE=y
 CONFIG_USB_UAS=y
+## Memory card
+CONFIG_MMC=y
+CONFIG_MMC_BLOCK=y
+CONFIG_MMC_BLOCK_MINORS=32
+CONFIG_MMC_WMT=y
+## RTC
+CONFIG_RTC_CLASS=y
+CONFIG_RTC_DRV_VT8500=y
 ## Optional USB devices
 CONFIG_HID_GYRATION=m  # wireless mouse and keyboard
 CONFIG_USB_ACM=m       # fit-PC status LED
