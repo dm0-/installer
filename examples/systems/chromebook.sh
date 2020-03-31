@@ -82,18 +82,18 @@ function customize_buildroot() {
 
         # Use the Panfrost driver for the ARM Mali-T760 MP4 GPU.
         echo 'VIDEO_CARDS="panfrost"' >> "$portage/make.conf"
-        echo 'media-libs/mesa no-lto.conf' >> "$portage/package.env/no-lto.conf"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             fribidi icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
-            alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
+            alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
+            a52 aom dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
-            cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'

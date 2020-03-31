@@ -44,6 +44,7 @@ packages+=(
         app-admin/sudo
         sys-apps/shadow
         ## Hardware
+        dev-libs/libgpiod
         sys-apps/usbutils
         ## Network
         net-firewall/iptables
@@ -63,6 +64,12 @@ packages+=(
         x11-base/xorg-server
         x11-terms/xterm
         x11-wm/twm
+)
+
+packages_buildroot+=(
+        # The target hardware requires firmware.
+        net-wireless/wireless-regdb
+        sys-kernel/linux-firmware
 )
 
 # Support building U-Boot images and GRUB for the bootloader.
@@ -85,14 +92,15 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid \
+            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             fribidi icu idn libidn2 nls unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
-            alsa libsamplerate mp3 ogg pulseaudio sndfile sound speex theora vorbis vpx \
+            alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
+            a52 aom dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
-            cairo gtk3 pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
+            cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
             dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
@@ -100,6 +108,9 @@ function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
+        # Accept GPIO device tools with no stable versions.
+        echo dev-libs/libgpiod >> "$portage/package.accept_keywords/libgpiod.conf"
 
         # Install Emacs as a terminal application.
         fix_package emacs
@@ -146,6 +157,47 @@ function customize() {
                 usr/lib/firmware
                 usr/local
         )
+
+        # Dump emacs into the image since the target CPU is so slow.
+        local -r host=${options[host]}
+        local -r gccdir=/$(cd "/usr/$host" ; compgen -G "usr/lib/gcc/$host/*")
+        cat << 'EOF' >> /etc/portage/package.use/qemu.conf
+app-emulation/qemu qemu_user_targets_arm static-user
+dev-libs/glib static-libs
+dev-libs/libpcre static-libs
+sys-apps/attr static-libs
+sys-libs/zlib static-libs
+EOF
+        emerge --changed-use --jobs=4 --verbose app-emulation/qemu
+        ln -ft "/usr/$host/tmp" /usr/bin/qemu-arm
+        chroot "/usr/$host" \
+            /tmp/qemu-arm -cpu arm926 -E "LD_LIBRARY_PATH=$gccdir" \
+            /usr/bin/emacs --batch --eval='(dump-emacs-portable "/tmp/emacs.pdmp")'
+        rm -f root/usr/libexec/emacs/*/*/emacs.pdmp \
+            root/usr/lib/systemd/system{,/multi-user.target.wants}/emacs-pdmp.service
+        cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
+
+        # Make a GPIO daemon to power the wireless interface.
+        mkdir -p root/usr/lib/systemd/system/sys-subsystem-net-devices-wlan0.device.requires
+        cat << 'EOF' > root/usr/lib/systemd/system/gpio-power-wifi.service
+[Unit]
+Description=Power the wireless interface
+DefaultDependencies=no
+After=systemd-tmpfiles-setup-dev.service
+[Service]
+ExecStart=/usr/bin/gpioset --mode=signal gpiochip0 2=1
+EOF
+        ln -fst root/usr/lib/systemd/system/sys-subsystem-net-devices-wlan0.device.requires \
+            ../gpio-power-wifi.service
+
+        # Start the wireless interface if it is configured.
+        mkdir -p root/usr/lib/systemd/system/network.target.wants
+        ln -fns ../wpa_supplicant-nl80211@.service \
+            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlan0.service
+
+        # Fix the screen contrast with udev in case of an unpatched kernel.
+        echo > root/usr/lib/udev/rules.d/50-wm8505-fb.rules \
+            'ACTION=="add", SUBSYSTEM=="platform", DRIVER=="wm8505-fb", ATTR{contrast}="128"'
 }
 
 # Override the UEFI function as a hack to produce the U-Boot files.
@@ -159,7 +211,7 @@ then
 
         # Build a U-Boot kernel image with the bundled DTB.
         local -r data=$(mktemp)
-        cat /usr/src/linux/arch/arm/boot/{zImage,dts/wm8505-ref.dtb} > "$data"
+        cat /usr/src/linux/arch/arm/boot/zImage "$dtb" > "$data"
         mkimage -A arm -C none -O linux -T kernel -a 0x8000 -d "$data" -e 0x8000 -n Linux vmlinuz.uimg
 
         # Write a boot script to start the kernel.
@@ -228,8 +280,12 @@ CONFIG_NET_SCH_FQ_CODEL=y
 CONFIG_AEABI=y
 CONFIG_ARM_APPENDED_DTB=y
 CONFIG_ARM_ATAG_DTB_COMPAT=y
+## Bundle firmware
+CONFIG_EXTRA_FIRMWARE="regulatory.db regulatory.db.p7s rt2870.bin"
 ## ARM ARM926EJ-S
 CONFIG_ARM_THUMB=y
+CONFIG_ARM_CRYPTO=y
+CONFIG_CRYPTO_SHA1_ARM=y
 ## SoC WM8505
 CONFIG_ARCH_WM8505=y
 CONFIG_FB_WM8505=y
@@ -244,6 +300,15 @@ CONFIG_USB_DEFAULT_PERSIST=y
 CONFIG_USB_EHCI_HCD=y
 CONFIG_USB_EHCI_HCD_PLATFORM=y
 CONFIG_USB_UHCI_HCD=y
+## Wifi
+CONFIG_CFG80211=y
+CONFIG_MAC80211=y
+CONFIG_MAC80211_RC_MINSTREL=y
+CONFIG_NETDEVICES=y
+CONFIG_WLAN=y
+CONFIG_WLAN_VENDOR_RALINK=y
+CONFIG_RT2X00=y
+CONFIG_RT2800USB=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y

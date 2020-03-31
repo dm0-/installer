@@ -226,8 +226,6 @@ patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
-## Support cross-compiling GCC without sed.
-sed -i -e /DEPEND=/d /var/db/repos/gentoo/eclass/fixheadtails.eclass
 ## Support the fbdev driver without needing X on the host (#714580).
 sed -i -e 's/^EAPI=.*/EAPI=7/;s/xorg-2/xorg-3/' /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild
 ebuild /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild manifest
@@ -768,7 +766,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		myconf+=" --without-x --without-ns"
  	fi
  
-+	CFLAGS= CPPFLAGS= LDFLAGS= ./configure --without-all
++	CFLAGS= CPPFLAGS= LDFLAGS= ./configure --without-all --without-x-toolkit
 +	make -j$(nproc) lisp {C,CPP,LD}FLAGS=
 +	make -C lib-src -j$(nproc) blessmail {C,CPP,LD}FLAGS=
 +	mv lib-src/make-docfile{,.save} ; mv lib-src/make-fingerprint{,.save}
@@ -802,7 +800,7 @@ ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebui
 EOF
                 ;;
             firefox)
-                echo 'CPU_FLAGS_X86=""' >> "$buildroot/etc/portage/env/no-cpu-flags.conf"
+                fix_package libaom
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
 =dev-lang/rust-1.42.0
 dev-libs/nspr
@@ -811,7 +809,6 @@ media-libs/libvpx
 media-libs/libwebp
 =virtual/rust-1.42.0
 EOF
-                echo 'media-libs/libaom no-cpu-flags.conf' >> "$buildroot/etc/portage/package.env/firefox.conf"
                 echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
 dev-db/sqlite secure-delete
@@ -825,21 +822,16 @@ sys-devel/clang default-libcxx
 x11-libs/gtk+ X
 EOF
                 echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/bindgen.conf"
-                echo 'EGIT_OVERRIDE_COMMIT_AOM="01c7a66021087cb65d33bc73812d89dd0ecac644"' >> "$portage/env/libaom.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 dev-db/sqlite
 dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
-media-libs/libaom **
 media-libs/libvpx
 media-libs/libwebp
-=www-client/firefox-74.0-r1 ~*
+=www-client/firefox-74.0-r2 ~*
 EOF
-                $cat << 'EOF' >> "$portage/package.env/firefox.conf"
-media-libs/libaom libaom.conf
-www-client/firefox bindgen.conf
-EOF
+                echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
                 $mkdir -p "$portage/patches/media-video/ffmpeg"
                 $cat << 'EOF' > "$portage/patches/media-video/ffmpeg/cross-native.patch"
@@ -938,7 +930,7 @@ EOF
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
 --- dev-lang/rust/rust-1.42.0.ebuild
 +++ dev-lang/rust/rust-1.42.0.ebuild
-@@ -162,16 +162,19 @@ src_prepare() {
+@@ -164,16 +164,19 @@
  }
  
  src_configure() {
@@ -962,7 +954,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  	local extended="true" tools="\"cargo\","
  	if use clippy; then
-@@ -207,7 +210,7 @@ src_configure() {
+@@ -209,7 +212,7 @@
  		[build]
  		build = "${rust_target}"
  		host = ["${rust_target}"]
@@ -971,7 +963,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		cargo = "${rust_stage0_root}/bin/cargo"
  		rustc = "${rust_stage0_root}/bin/rustc"
  		docs = $(toml_usex doc)
-@@ -273,6 +276,18 @@ src_configure() {
+@@ -274,6 +277,18 @@
  		EOF
  	fi
  
@@ -991,12 +983,51 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	cat "${S}"/config.toml || die
  }
 EOP
-sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild
+sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r2.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild
+sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r2.ebuild
 ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.42.0.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r1.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r2.ebuild manifest
 EOG
+                ;;
+            libaom)
+                echo 'CPU_FLAGS_X86=""' > "$buildroot/etc/portage/env/no-cpu-flags.conf"
+                echo 'media-libs/libaom no-cpu-flags.conf' > "$buildroot/etc/portage/package.env/libaom.conf"
+                echo 'EGIT_OVERRIDE_COMMIT_AOM="01c7a66021087cb65d33bc73812d89dd0ecac644"' > "$portage/env/libaom.conf"
+                echo 'media-libs/libaom **' > "$portage/package.accept_keywords/libaom.conf"
+                echo 'media-libs/libaom libaom.conf' > "$portage/package.env/libaom.conf"
+                ;;
+            vlc)
+                fix_package libaom
+                $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
+dev-libs/libpcre2 pcre16
+dev-qt/qtgui X
+media-plugins/alsa-plugins pulseaudio
+x11-libs/libxkbcommon X
+EOF
+                [[ ${options[arch]} =~ 64 ]] &&
+                echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf" ||
+                echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf"
+                echo 'CPPFLAGS="-DAOM_IMG_FMT_444A=AOM_IMG_FMT_I444"' >> "$portage/env/vlc.conf"
+                echo 'dev-qt/* pkgconfig-redundant.conf' >> "$portage/package.env/qt.conf"
+                echo 'media-video/vlc vlc.conf' >> "$portage/package.env/vlc.conf"
+                $cat << 'EOF' >> "$portage/package.use/vlc.conf"
+dev-libs/libpcre2 pcre16
+sys-libs/zlib minizip
+EOF
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtgui/qtgui-5.14.1-r3.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-5.14.1.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-5.14.1.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-5.14.1.ebuild"
+                script << 'EOF'
+for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*5.14.1*.ebuild
+do ebuild "$ebuild" manifest
+done
+EOF
+                $sed -i \
+                    -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \
+                    -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' \
+                    "$buildroot/var/db/repos/gentoo/eclass/qt5-build.eclass"
                 ;;
         esac
 }
