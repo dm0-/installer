@@ -109,7 +109,7 @@ function customize_buildroot() {
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive threads \
-            dynamic-loading hwaccel postproc secure-delete startup-notification toolkit-scroll-bars user-session wide-int \
+            dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
@@ -124,7 +124,6 @@ function customize_buildroot() {
         echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu *
-sys-apps/dtc *
 sys-firmware/seabios *
 virtual/libusb *
 EOF
@@ -139,12 +138,7 @@ EOF
         # Include a graphical Emacs.
         fix_package emacs
         packages+=(app-editors/emacs)
-        echo 'USE="$USE emacs gzip-el xwidgets"' >> "$portage/make.conf"
-        $cat << 'EOF' >> "$portage/package.use/emacs.conf"
-app-editors/emacs gtk
-dev-util/desktop-file-utils -emacs
-dev-vcs/git -emacs
-EOF
+        echo 'app-editors/emacs gtk xwidgets' >> "$portage/package.use/emacs.conf"
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"

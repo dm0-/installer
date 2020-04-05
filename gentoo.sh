@@ -75,6 +75,10 @@ EOF
 # Block bad dependencies for restorecond, which is pretty useless these days.
 sys-apps/policycoreutils -dbus
 EOF
+        $cat << 'EOF' >> "$portage/package.use/sqlite.conf"
+# Always enable secure delete.  Some things need it.
+dev-db/sqlite secure-delete
+EOF
         $cat << 'EOF' >> "$portage/package.use/squashfs-tools.conf"
 # Support zstd squashfs compression.
 sys-fs/squashfs-tools zstd
@@ -119,12 +123,14 @@ EOF
         # Accept libcap-2.33 to fix build ordering with EAPI=7.
         echo '<sys-libs/libcap-2.34' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libxcb-1.14 to fix root dependencies with EAPI=7.
-        echo -e 'x11-base/xcb-proto\nx11-libs/libxcb' >> "$portage/package.accept_keywords/xcb.conf"
+        echo -e '<x11-base/xcb-proto-1.15 ~*\n<x11-libs/libxcb-1.15 ~*' >> "$portage/package.accept_keywords/xcb.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
+        # Accept psmisc-23.3 to fix host dependencies.
+        echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
-        echo '<sys-apps/systemd-246' >> "$portage/package.accept_keywords/systemd.conf"
+        echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
         echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
         # Accept util-linux-2.34 to fix build ordering with EAPI=7.
@@ -229,6 +235,12 @@ ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
 ## Support the fbdev driver without needing X on the host (#714580).
 sed -i -e 's/^EAPI=.*/EAPI=7/;s/xorg-2/xorg-3/' /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild
 ebuild /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild manifest
+## Support host dependencies in psmisc correctly (#715928).
+sed -i -e 's/^DEPEND="[^"]*$/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild
+ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
+## Support static pixman libraries in the live ebuild (#698548).
+sed -i -e 's/^IUSE="/&static-libs /;/emesonargs/a--default-library=$(usex static-libs both shared)' /var/db/repos/gentoo/x11-libs/pixman/pixman-9999.ebuild
+ebuild /var/db/repos/gentoo/x11-libs/pixman/pixman-9999.ebuild manifest
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -306,7 +318,7 @@ function install_packages() {
             @world "${packages[@]}" "$@"
 
         # Install the target root from binaries with no build dependencies.
-        mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib,sbin}}
+        mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib,sbin},var}
         mkdir -pm 0700 root/root
         [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
         (cd root ; exec ln -fst . usr/*)
@@ -354,6 +366,7 @@ L /var/lock - - - - ../run/lock
 EOF
 
         # Conditionalize wireless interfaces on their configuration files.
+        test -s root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service &&
         sed -i \
             -e '/^\[Unit]/aConditionFileNotEmpty=/etc/wpa_supplicant/wpa_supplicant-nl80211-%I.conf' \
             root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service
@@ -748,6 +761,7 @@ function fix_package() {
         case "$*" in
             emacs)
                 echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/emacs.conf"
+                echo 'USE="$USE emacs gzip-el"' >> "$portage/make.conf"
                 echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
                 echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
@@ -758,6 +772,10 @@ sys-apps/bubblewrap
 sys-apps/xdg-dbus-proxy *
 EOF
                 echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
+                $cat << 'EOF' >> "$portage/package.use/emacs.conf"
+dev-util/desktop-file-utils -emacs
+dev-vcs/git -emacs
+EOF
                 script << 'EOF'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
 --- app-editors/emacs/emacs-27.0.90.ebuild
@@ -829,7 +847,7 @@ dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
 media-libs/libwebp
-=www-client/firefox-74.0-r2 ~*
+=www-client/firefox-74.0.1 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
@@ -843,7 +861,7 @@ EOF
  if test "$cpu" = host; then
 +    false &&
      enabled cross_compile &&
-         true "--cpu=host makes no sense when cross-compiling."
+         die "--cpu=host makes no sense when cross-compiling."
  
 EOF
                 $mkdir -p "$portage/patches/www-client/firefox"
@@ -983,11 +1001,11 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	cat "${S}"/config.toml || die
  }
 EOP
-sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r2.ebuild
+sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0.1.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r2.ebuild
+sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0.1.ebuild
 ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.42.0.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0-r2.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0.1.ebuild manifest
 EOG
                 ;;
             libaom)
@@ -1015,8 +1033,8 @@ EOF
 dev-libs/libpcre2 pcre16
 sys-libs/zlib minizip
 EOF
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtgui/qtgui-5.14.1-r3.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-5.14.1.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtgui/qtgui-5.14.1-r4.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-5.14.1-r1.ebuild"
                 $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-5.14.1.ebuild"
                 $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-5.14.1.ebuild"
                 script << 'EOF'
