@@ -1,16 +1,16 @@
-options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=31 [squash]=1)
+options+=([arch]=i686 [distro]=fedora [executable]=1 [release]=30 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
         libGLU
+        libX{cursor,i,inerama,randr,ScrnSaver,xf86vm}
         mesa-dri-drivers
-        which
 )
 
-packages_buildroot+=(tar)
+packages_buildroot+=(unzip)
 function customize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
-        $cp "${1:-FTL.1.5.4.tar.gz}" "$output/FTL.tgz"
+        $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.sh"
 }
 
 function customize() {
@@ -23,29 +23,30 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        local -r drop=$(test "x${options[arch]}" = xi686 && echo amd64)
-        tar --exclude="${drop:-x86}" -xf FTL.tgz -C root
-        rm -f FTL.tgz
+        unzip grim.sh -d /grim -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [ 1 -eq $? ]
+        mv /grim/data/noarch/game/bin root/grim
+        mkdir -p root/grim/Saves
+        rm -f grim.sh
 
-        sed "${drop:+s/-64//}" << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
-[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||
-mkdir -p "$XDG_DATA_HOME/FasterThanLight"
+[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/GrimFandango" ] ||
+mkdir -p "$XDG_DATA_HOME/GrimFandango"
 
 exec sudo systemd-nspawn \
-    --bind="$XDG_DATA_HOME/FasterThanLight:/tmp/save" \
+    --bind="$XDG_DATA_HOME/GrimFandango:/grim/Saves" \
     --bind=/dev/dri \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
-    --chdir=/FTL \
-    --hostname=FasterThanLight \
-    --image="${IMAGE:-FasterThanLight.img}" \
+    --chdir=/grim \
+    --hostname=GrimFandango \
+    --image="${IMAGE:-GrimFandango.img}" \
     --link-journal=no \
-    --machine="FasterThanLight-$USER" \
-    --personality=x86-64 \
+    --machine="GrimFandango-$USER" \
+    --personality=x86 \
     --private-network \
     --read-only \
     --setenv="DISPLAY=$DISPLAY" \
@@ -54,10 +55,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-mkdir -p "$HOME/.local/share"
-ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
-exec ./FTL "$@"
+    ./GrimFandango "$@"
 EOF
-EOG
 }

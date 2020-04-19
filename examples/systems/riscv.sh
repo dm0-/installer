@@ -47,11 +47,6 @@ packages+=(
         sys-fs/e2fsprogs
 )
 
-packages_buildroot+=(
-        # This is needed to make an Emacs symlink.
-        app-eselect/eselect-emacs
-)
-
 # Build a static RISC-V QEMU in case the host system's QEMU is too old.
 function initialize_buildroot() {
         local -r portage="$buildroot/etc/portage"
@@ -100,7 +95,7 @@ EOF
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            fribidi icu idn libidn2 nls unicode \
+            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dvd libaom mpeg theora vpx x265 \

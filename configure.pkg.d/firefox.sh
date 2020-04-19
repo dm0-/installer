@@ -17,6 +17,8 @@ pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
 pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
 // Disable spam-tier nonsense on new tabs.
 pref("browser.newtabpage.enabled", false);
+// Don't download autocomplete URLs.
+pref("browser.urlbar.speculativeConnect.enabled", false);
 // Don't send information to Mozilla.
 pref("datareporting.healthreport.uploadEnabled", false);
 // Never give up laptop battery information.
@@ -49,6 +51,8 @@ pref("browser.startup.page", 3);
 // Fit more stuff on the screen.
 pref("browser.tabs.drawInTitlebar", true);
 pref("browser.uidensity", 1);
+// Disable obnoxious visual spam when selecting the URL.
+pref("browser.urlbar.openViewOnFocus", false);
 // Stop hiding protocols.
 pref("browser.urlbar.trimURLs", false);
 // Enable some mildly useful developer tools.

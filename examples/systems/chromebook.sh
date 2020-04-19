@@ -86,7 +86,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
             curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            fribidi icu idn libidn2 nls unicode \
+            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dvd libaom mpeg theora vpx x265 \
@@ -217,6 +217,8 @@ fi
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
+# Support adding swap space.
+CONFIG_SWAP=y
 # Support ext2/ext3/ext4 (which is not included for read-only images).
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
@@ -239,7 +241,6 @@ CONFIG_UTS_NS=y
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
 # Provide a fancy framebuffer console.
-CONFIG_FB=y
 CONFIG_TTY=y
 CONFIG_VT=y
 CONFIG_VT_CONSOLE=y

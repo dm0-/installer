@@ -7,7 +7,7 @@ function create_buildroot() {
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
         local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)$([[ $arch == armv7* ]] && echo hf)}
 
-        opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
+        opt bootable || opt selinux && packages_buildroot+=(app-arch/zstd sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
         opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio)
         opt read_only && ! opt squash && packages_buildroot+=(sys-fs/erofs-utils)
@@ -71,6 +71,10 @@ EOF
 # Support installing kernels configured with compressed modules.
 sys-apps/kmod lzma
 EOF
+        $cat << 'EOF' >> "$portage/package.use/linux.conf"
+# Apply patches to support zstd and additional CPU optimizations.
+sys-kernel/gentoo-sources experimental
+EOF
         $cat << 'EOF' >> "$portage/package.use/policycoreutils.conf"
 # Block bad dependencies for restorecond, which is pretty useless these days.
 sys-apps/policycoreutils -dbus
@@ -88,6 +92,10 @@ EOF
 app-admin/setools-9999
 EOF
         $cat << 'EOF' >> "$portage/profile/packages"
+# Don't force installing binary QEMU.
+-*app-emulation/qemu-riscv64-bin
+# Don't force building busybox in every Linux profile.
+-*sys-apps/busybox
 # Don't force building HFS utilities.
 -*sys-fs/hfsutils
 -*sys-fs/hfsplusutils
@@ -122,17 +130,17 @@ EOF
         echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libcap-2.33 to fix build ordering with EAPI=7.
         echo '<sys-libs/libcap-2.34' >> "$portage/package.accept_keywords/libcap.conf"
-        # Accept libxcb-1.14 to fix root dependencies with EAPI=7.
-        echo -e '<x11-base/xcb-proto-1.15 ~*\n<x11-libs/libxcb-1.15 ~*' >> "$portage/package.accept_keywords/xcb.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
+        # Accept sshfs-3.7.0 to use newer FUSE to fix LTO.
+        echo '<net-fs/sshfs-3.8 ~*' >> "$portage/package.accept_keywords/sshfs.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept upower-0.99.11 to fix SELinux labels on state directories.
-        echo '~sys-power/upower-0.99.11' >> "$portage/package.accept_keywords/upower.conf"
+        echo 'sys-power/upower *' >> "$portage/package.accept_keywords/upower.conf"
         # Accept util-linux-2.34 to fix build ordering with EAPI=7.
         echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
 
@@ -187,7 +195,6 @@ dev-libs/libaio no-lto.conf
 media-libs/alsa-lib no-lto.conf
 media-sound/pulseaudio no-lto.conf
 net-libs/webkit-gtk no-lto.conf
-sys-fs/fuse no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
@@ -224,6 +231,8 @@ host=$1 ; shift
 
 # Fetch the latest package definitions, and fix them.
 emerge-webrsync
+## Support unpacking RPM sources in sysroots.
+sed -i -e 's/^D.*/[[ $EAPI == [7-9] ]] \&\& B& || &/' /var/db/repos/gentoo/eclass/rpm.eclass
 ## Support sysusers (#702624).
 curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
 test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xf749a2e2221b31613cdd28f1144cf8656457b663a7603bc82c59aa181bbcc917
@@ -245,11 +254,11 @@ ebuild /var/db/repos/gentoo/x11-libs/pixman/pixman-9999.ebuild manifest
 if test "x$*" != "x${*/erofs-utils}"
 then
         mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
-        curl -L 'https://bugs.gentoo.org/attachment.cgi?id=597574' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild
-        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild | sed -n '1s/ .*//p') = x81dec7d30505c1dae482fe2bb067b3dcf6d11ad792f3fc0cb791d1e4c03eff44
-        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.0.tar.gz' > /var/cache/distfiles/erofs-utils-1.0.tar.gz
-        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.0.tar.gz | sed -n '1s/ .*//p') = x508ee818dc6a02cf986647e37cb991b76f7b3e7ea303ffc9e980772de68f3b10
-        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.0.ebuild manifest --force
+        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=632708' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild
+        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild | sed -n '1s/ .*//p') = x7c960c61869a5809bf8877e70387b804d2bd70d4ee581b54c98e0fb955e29bd4
+        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.1.tar.gz' > /var/cache/distfiles/erofs-utils-1.1.tar.gz
+        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.1.tar.gz | sed -n '1s/ .*//p') = xa14a30d0d941f6642cad130fbba70a2493fabbe7baa09a8ce7d20745ea3385d6
+        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild manifest --force
 fi
 
 # Update the native build root packages to the latest versions.
@@ -300,18 +309,21 @@ function install_packages() {
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
-        COLLISION_IGNORE='*' USE=-selinux emerge --jobs=4 --verbose \
+        COLLISION_IGNORE='*' USE=-selinux emerge --jobs=4 --oneshot --verbose \
             sys-devel/gcc sys-kernel/linux-headers sys-libs/glibc
         packages+=(sys-devel/gcc sys-libs/glibc)  # Install libstdc++ etc.
 
         # These packages must be installed outside the dependency graph.
-        emerge --jobs=4 --nodeps --verbose \
+        emerge --changed-use --jobs=4 --nodeps --oneshot --verbose \
             media-fonts/font-util \
             ${options[selinux]:+sec-policy/selinux-base} \
             x11-base/x{cb,org}-proto
 
-        # Cheat systemd bootstrapping.
-        USE='-* kill' emerge --jobs=4 --verbose sys-apps/util-linux
+        # Cheat systemd/PAM/freetype bootstrapping.
+        USE='-* kill truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
+            media-libs/harfbuzz \
+            sys-apps/util-linux \
+            sys-libs/libcap
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -442,7 +454,7 @@ EOF
         ln -fn final.img "$root/sysroot/root.img"
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
-        xz --check=crc32 -9e > ramdisk.img
+        zstd --threads=0 --ultra -22 > ramdisk.img
 fi
 
 function write_base_kernel_config() if opt bootable
@@ -452,7 +464,7 @@ CONFIG_ACPI=y
 CONFIG_BASE_FULL=y
 CONFIG_BLOCK=y
 CONFIG_JUMP_LABEL=y
-CONFIG_KERNEL_XZ=y
+CONFIG_KERNEL_'$([[ ${options[arch]} =~ [3-6x]86 ]] && echo ZSTD || echo XZ)'=y
 CONFIG_MULTIUSER=y
 CONFIG_SHMEM=y
 CONFIG_UNIX=y
@@ -495,7 +507,7 @@ CONFIG_PCI=y
 CONFIG_BLK_DEV_NVME=y'
         opt ramdisk && echo '# Initrd settings
 CONFIG_BLK_DEV_INITRD=y
-CONFIG_RD_XZ=y
+CONFIG_RD_ZSTD=y
 # Loop settings
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
@@ -847,7 +859,7 @@ dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
 media-libs/libwebp
-=www-client/firefox-74.0.1 ~*
+=www-client/firefox-75.0 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
@@ -1001,11 +1013,11 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	cat "${S}"/config.toml || die
  }
 EOP
-sed -i -e 's/.*lto.*gold/#&/' /var/db/repos/gentoo/www-client/firefox/firefox-74.0.1.ebuild
+sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-75.0.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-74.0.1.ebuild
+sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-75.0.ebuild
 ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.42.0.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-74.0.1.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-75.0.ebuild manifest
 EOG
                 ;;
             libaom)

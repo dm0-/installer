@@ -63,7 +63,7 @@ The project may be completely revised at some point, so don't expect anything in
 
 **Implement content whitelisting.**  (There is a prototype in *TheBindingOfIsaac.sh*.)  The images currently include all installed files with an option to blacklist paths using an exclude list.  The opposite should be supported for minimal systems, where individual files, directories, entire packages, and ELF binaries (as a shortcut for all linked libraries) can be listed for inclusion and everything else is dropped.
 
-**Use the list of excluded paths in ext4 and EROFS.**  Only squashfs is dropping the files.  SELinux might be a problem with EROFS until file exclusion makes it into the distribution packages.
+**Use the list of excluded paths in ext4 and EROFS.**  Only squashfs is dropping the files, and EROFS in Gentoo and Fedora.  SELinux might be a problem with EROFS until file exclusion makes it into the other distribution packages.
 
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
 
