@@ -109,6 +109,9 @@ function customize_buildroot() {
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
+        # Disable LTO for packages broken with this architecture/ABI.
+        echo 'media-libs/opus no-lto.conf' >> "$portage/package.env/no-lto.conf"
+
         # Accept GPIO device tools with no stable versions.
         echo dev-libs/libgpiod >> "$portage/package.accept_keywords/libgpiod.conf"
 

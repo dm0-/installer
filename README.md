@@ -49,7 +49,7 @@ The majority of the code in this repository is just writing configuration files,
 
 The project may be completely revised at some point, so don't expect anything in here to be stable.  Some operations might still require running on x86_64 for the build system.  Five distros are supported to varying degrees:
 
-  - Fedora supports everything, but only Fedora 30 and 31 (the default) can be used.
+  - Fedora supports everything, but only Fedora 30, 31, and 32 (the default) can be used.
   - CentOS is too old to support EROFS.  CentOS 7 systemd is too old to support building a UEFI image and the persistent `/etc` Git overlay.
   - Gentoo supports all features in theory, but its SELinux policy is unsupported with systemd upstream, so it is only running in permissive mode.
   - Arch supports everything besides SELinux, since AUR is not yet integrated with the build.
@@ -66,8 +66,6 @@ The project may be completely revised at some point, so don't expect anything in
 **Use the list of excluded paths in ext4 and EROFS.**  Only squashfs is dropping the files, and EROFS in Gentoo and Fedora.  SELinux might be a problem with EROFS until file exclusion makes it into the other distribution packages.
 
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
-
-**Fix the logind/DRM race.**  It looks like systemd-logind can try to start before the DRM module is ready (at least on QEMU), which prevents GDM from starting.  Restart systemd-logind to get it working.
 
 **Prepopulate a Wine prefix for the game containers.**  I need to figure out what Wine needs so it can initialize itself in a chroot instead of a full container.  The games currently generate the Wine prefix (and its `C:` drive) every run as a workaround.  By installing a prebuilt `C:` drive and Wine prefix with the GOG registry changes applied, runtime memory will be reduced by potentially hundreds of megabytes and startup times will improve by several seconds.
 

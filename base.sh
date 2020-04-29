@@ -296,6 +296,7 @@ function verity() if opt verity
 then
         local -ir size=$(stat --format=%s "$disk")
         local -A verity
+        local -a opt_params=()
         local root=/dev/sda
         ! (( size % 4096 ))
 
@@ -312,7 +313,7 @@ then
             ${verity[Data block size]} ${verity[Hash block size]} \
             ${verity[Data blocks]} $(( ${verity[Data blocks]} + 1 )) \
             ${verity[Hash algorithm]} ${verity[Root hash]} \
-            ${verity[Salt]} 0
+            ${verity[Salt]} "${#opt_params[@]}" "${opt_params[@]}"
 
         cat "$disk" signatures.img > final.img
 else ln -fn "$disk" final.img

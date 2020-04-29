@@ -12,7 +12,7 @@ function create_buildroot() {
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
         opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick) &&
         opt sb_cert && opt sb_key && packages_buildroot+=(mozilla-nss-tools pesign)
-        packages_buildroot+=(e2fsprogs)
+        packages_buildroot+=(curl e2fsprogs)
 
         $mkdir -p "$buildroot"
         $curl -L "$image.sha256" > "$output/checksum"

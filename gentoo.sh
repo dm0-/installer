@@ -7,7 +7,7 @@ function create_buildroot() {
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
         local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)$([[ $arch == armv7* ]] && echo hf)}
 
-        opt bootable || opt selinux && packages_buildroot+=(app-arch/zstd sys-kernel/gentoo-sources)
+        opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
         opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio)
         opt read_only && ! opt squash && packages_buildroot+=(sys-fs/erofs-utils)
@@ -67,11 +67,9 @@ sys-fs/cryptsetup nettle -gcrypt -kernel -luks1_default -openssl
 # Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
 sys-fs/lvm2 device-mapper-only -thin
 EOF
-        $cat << 'EOF' >> "$portage/package.use/kmod.conf"
+        $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Support installing kernels configured with compressed modules.
 sys-apps/kmod lzma
-EOF
-        $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Apply patches to support zstd and additional CPU optimizations.
 sys-kernel/gentoo-sources experimental
 EOF
@@ -133,14 +131,12 @@ EOF
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
+        # Accept pixman-0.40.0 to fix static libraries.
+        echo '<x11-libs/pixman-0.41 ~*' >> "$portage/package.accept_keywords/pixman.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
-        # Accept sshfs-3.7.0 to use newer FUSE to fix LTO.
-        echo '<net-fs/sshfs-3.8 ~*' >> "$portage/package.accept_keywords/sshfs.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
-        # Accept upower-0.99.11 to fix SELinux labels on state directories.
-        echo 'sys-power/upower *' >> "$portage/package.accept_keywords/upower.conf"
         # Accept util-linux-2.34 to fix build ordering with EAPI=7.
         echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
 
@@ -149,9 +145,11 @@ EOF
         $mkdir -p "${portage%/portage}"
         $cp -at "${portage%/portage}" "$buildroot/etc/portage"
         $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
-        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -g -flto=jobserver&/' "$portage/make.conf"
+        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto=jobserver&/' "$portage/make.conf"
         $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
 ROOT="/usr/$CHOST"
+BINPKG_COMPRESS="zstd"
+BINPKG_COMPRESS_FLAGS="--fast --threads=0"
 FEATURES="$FEATURES buildpkg compressdebug installsources pkgdir-index-trusted splitdebug"
 PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
@@ -231,8 +229,6 @@ host=$1 ; shift
 
 # Fetch the latest package definitions, and fix them.
 emerge-webrsync
-## Support unpacking RPM sources in sysroots.
-sed -i -e 's/^D.*/[[ $EAPI == [7-9] ]] \&\& B& || &/' /var/db/repos/gentoo/eclass/rpm.eclass
 ## Support sysusers (#702624).
 curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
 test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xf749a2e2221b31613cdd28f1144cf8656457b663a7603bc82c59aa181bbcc917
@@ -247,9 +243,9 @@ ebuild /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.
 ## Support host dependencies in psmisc correctly (#715928).
 sed -i -e 's/^DEPEND="[^"]*$/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild
 ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
-## Support static pixman libraries in the live ebuild (#698548).
-sed -i -e 's/^IUSE="/&static-libs /;/emesonargs/a--default-library=$(usex static-libs both shared)' /var/db/repos/gentoo/x11-libs/pixman/pixman-9999.ebuild
-ebuild /var/db/repos/gentoo/x11-libs/pixman/pixman-9999.ebuild manifest
+## Support host dependencies in libxml2 correctly (#719088).
+sed -i -e '/^EAPI=/s/=.*/=7/;/^DEPEND="/s/$/"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild
+ebuild /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild manifest
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -263,7 +259,7 @@ fi
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-    @world dev-util/debugedit sys-devel/crossdev
+    @world app-arch/zstd dev-util/debugedit sys-devel/crossdev
 
 # Create the cross-compiler toolchain in the native build root.
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
@@ -824,20 +820,21 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  #src_compile() {
 EOP
-sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild
+sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.3.ebuild
 ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.90.ebuild manifest
-ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.60.4.ebuild manifest
+ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.3.ebuild manifest
 EOF
                 ;;
             firefox)
                 fix_package libaom
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
-=dev-lang/rust-1.42.0
+=dev-lang/rust-1.43.0
+dev-libs/libgit2
 dev-libs/nspr
 dev-libs/nss
 media-libs/libvpx
 media-libs/libwebp
-=virtual/rust-1.42.0
+=virtual/rust-1.43.0
 EOF
                 echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
@@ -859,7 +856,7 @@ dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
 media-libs/libwebp
-=www-client/firefox-75.0 ~*
+=www-client/firefox-75.0-r3 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
@@ -958,8 +955,8 @@ index 0000000000..0a99c953b2
 EOF
                 script << 'EOG'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- dev-lang/rust/rust-1.42.0.ebuild
-+++ dev-lang/rust/rust-1.42.0.ebuild
+--- dev-lang/rust/rust-1.43.0.ebuild
++++ dev-lang/rust/rust-1.43.0.ebuild
 @@ -164,16 +164,19 @@
  }
  
@@ -1013,11 +1010,11 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	cat "${S}"/config.toml || die
  }
 EOP
-sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-75.0.ebuild
+sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-75.0-r3.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e '/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-75.0.ebuild
-ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.42.0.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-75.0.ebuild manifest
+sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-75.0-r3.ebuild
+ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.43.0.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-75.0-r3.ebuild manifest
 EOG
                 ;;
             libaom)
@@ -1032,7 +1029,10 @@ EOG
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
 dev-qt/qtgui X
+media-libs/libepoxy X
+media-libs/mesa X
 media-plugins/alsa-plugins pulseaudio
+x11-libs/gtk+ X
 x11-libs/libxkbcommon X
 EOF
                 [[ ${options[arch]} =~ 64 ]] &&

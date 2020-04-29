@@ -1,6 +1,6 @@
 # This is an example Gentoo build to try RISC-V on an emulator.  There are some
 # things that still need to be implemented in upstream projects, particularly
-# around UEFI support.
+# around UEFI support.  Secure Boot will not be used in this build yet.
 
 options+=(
         [arch]=riscv64   # Target RISC-V emulators.
@@ -8,7 +8,7 @@ options+=(
         [executable]=1   # Generate a VM image for fast testing.
         [bootable]=1     # Build a kernel for this system.
         [networkd]=1     # Let systemd manage the network configuration.
-        [uefi]=          # UEFI is not implemented everywhere yet.
+        [uefi]=1         # This is for hacking purposes only.
         [verity]=1       # Prevent the file system from being modified.
 )
 
@@ -47,13 +47,10 @@ packages+=(
         sys-fs/e2fsprogs
 )
 
-# Build a static RISC-V QEMU in case the host system's QEMU is too old.
 function initialize_buildroot() {
-        local -r portage="$buildroot/etc/portage"
-        echo 'EGIT_OVERRIDE_COMMIT_PIXMAN_PIXMAN="348e99b52f41caf32f8b7840e53f0b1322716c47"' >> "$portage/env/pixman.conf"
-        echo 'x11-libs/pixman **' >> "$portage/package.accept_keywords/pixman.conf"
-        echo 'x11-libs/pixman pixman.conf' >> "$portage/package.env/pixman.conf"
-        $cat << 'EOF' >> "$portage/package.use/qemu.conf"
+        # Build a static RISC-V QEMU in case the host system's QEMU is too old.
+        packages_buildroot+=(app-emulation/qemu)
+        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
 app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 static static-user
 dev-libs/glib static-libs
 dev-libs/libpcre static-libs
@@ -62,7 +59,17 @@ sys-apps/dtc static-libs
 sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
-        packages_buildroot+=(app-emulation/qemu)
+
+        # Build RISC-V UEFI GRUB for bootloader testing.
+        packages_buildroot+=(sys-boot/grub)
+        $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
+        $mkdir -p "$buildroot/etc/portage/patches/sys-boot/grub"
+        local -i p ; for p in 1 2 3
+        do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
+        done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
+        $rm -f "$output/grub.mbox"
+        test x$($sha256sum "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
+            x85a67391bb67605ba5eb590c325843290ab85eedcf22f17a21763259754f11b3
 }
 
 function customize_buildroot() {
@@ -77,9 +84,6 @@ function customize_buildroot() {
 
         # Avoid some Python nonsense.
         echo 'sys-apps/portage -rsync-verify' >> "$portage/package.use/portage.conf"
-
-        # Allow building the (unimplemented) RISC-V UEFI stub.
-        echo 'sys-apps/systemd -gnuefi' >> "$portage/profile/package.use.mask"
 
         # Disable multilib to prevent BDEPEND from breaking everything.
         $cat << 'EOF' >> "$portage/profile/use.mask"
@@ -153,7 +157,7 @@ function customize() {
 #!/bin/bash -eu
 kargs=$(<kernel_args.txt)
 exec qemu-system-riscv64 -nographic \
-    -bios /usr/share/qemu/opensbi-riscv64-virt-fw_jump.bin \
+    -L "$PWD" -bios opensbi-riscv64-virt-fw_jump.bin \
     -machine virt -cpu rv64 -m 4G \
     -drive file="${IMAGE:-disk.exe}",format=raw,id=hd0,media=disk \
     -netdev user,id=net0 \
@@ -161,10 +165,70 @@ exec qemu-system-riscv64 -nographic \
     -device virtio-blk-device,drive=hd0 \
     -device virtio-net-device,netdev=net0 \
     -device virtio-rng-device,rng=rng0 \
-    -kernel vmlinuz -append "console=ttyS0 earlycon=sbi ${kargs//sda/vda1}" \
+    -kernel vmlinuz -append "console=ttyS0 earlycon=sbi ${kargs//sda/vda2}" \
     "$@"
 EOF
 }
+
+# Override the UEFI function as a hack to produce a UEFI BIOS file for QEMU and
+# a UEFI GRUB image for the bootloader until the systemd boot stub exists.
+function produce_uefi_exe() if opt uefi
+then
+        # Build U-Boot to provide UEFI.
+        git clone https://github.com/u-boot/u-boot.git /root/u-boot
+        git -C /root/u-boot reset --hard a5f9b8a8b592400a01771ad2dac76cba69c914f3
+        cp /root/u-boot/configs/qemu-riscv64_smode_defconfig /root/u-boot/.config
+        echo 'CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"' >> /root/u-boot/.config
+        make -C /root/u-boot -j"$(nproc)" olddefconfig CROSS_COMPILE="${options[host]}-" V=1
+        make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="${options[host]}-" V=1
+
+        # Build OpenSBI with a U-Boot payload for the firmware image.
+        git clone --branch=v0.7 --depth=1 https://github.com/riscv/opensbi.git /root/opensbi
+        git -C /root/opensbi reset --hard 9f1b72ce66d659e91013b358939e832fb27223f5
+        make -C /root/opensbi -j"$(nproc)" all \
+            CROSS_COMPILE="${options[host]}-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=qemu/virt V=1
+        cp -p /root/opensbi/build/platform/qemu/virt/firmware/fw_payload.bin opensbi-uboot.bin
+
+        # Build a UEFI GRUB binary, and write a sample configuration.
+        grub-mkimage \
+            --compression=none \
+            --format=riscv64-efi \
+            --output=BOOTRISCV64.EFI \
+            --prefix='(hd0,gpt1)/' \
+            fat halt linux loadenv minicmd normal part_gpt reboot test
+        local -r kargs="$(<kernel_args.txt)"
+        cat << EOF > grub.cfg
+set timeout=5
+
+if test /linux_b -nt /linux_a
+then set default=boot-b
+else set default=boot-a
+fi
+
+menuentry 'Boot A' --id boot-a {
+        linux /linux_a console=ttyS0 earlycon=sbi ${kargs//sda/vda2}
+}
+menuentry 'Boot B' --id boot-b {
+        linux /linux_b console=ttyS0 earlycon=sbi ${kargs//sda/vda2}
+}
+
+menuentry 'U-Boot' --id uboot {
+        exit
+}
+menuentry 'Reboot' --id reboot {
+        reboot
+}
+menuentry 'Power Off' --id poweroff {
+        halt
+}
+EOF
+fi
+
+# Override executable image generation to force GRUB into the mix.
+eval "$(declare -f produce_executable_image | $sed '
+/^ *opt uefi/{s/BOOT[0-9A-Z]*.EFI/vmlinuz/;s/) + /) * 2 + /;}
+s,mcopy.*X64.EFI,&\nmcopy -i esp.img vmlinuz ::/linux_a\nmcopy -i esp.img grub.cfg ::/grub.cfg,
+s/BOOTX64/BOOTRISCV64/g')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
 # Show initialization messages.
