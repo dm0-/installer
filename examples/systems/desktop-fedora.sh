@@ -119,7 +119,7 @@ function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         script << 'EOF'
 git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-git -C rtl8812au reset --hard 64ba0b538c13295e077f796a1661c0dfb65feab7
+git -C rtl8812au reset --hard fc0194c1d90453bf4943089ca237159ef19a7374
 exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 EOF
 
@@ -153,13 +153,12 @@ function customize() {
             rtl8812au/88XXau.ko
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        opt sb_key &&
         for module in \
             root/lib/modules/*/extra/nvidia/nvidia*.ko \
             root/lib/modules/*/kernel/drivers/net/wireless/88XXau.ko
         do
                 /lib/modules/*/build/scripts/sign-file \
-                    sha256 "$keydir/sign.key" "$keydir/sign.crt" "$module"
+                    sha256 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.

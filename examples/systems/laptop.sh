@@ -12,11 +12,12 @@ options+=(
         [selinux]=1      # Load a targeted SELinux policy in permissive mode.
         [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=1         # Create a UEFI executable that boots into this image.
-        [verity]=1       # Prevent the file system from being modified.
+        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(
         # Utilities
+        app-arch/cpio
         app-arch/tar
         app-arch/unzip
         app-shells/bash
@@ -90,7 +91,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -146,7 +147,6 @@ function customize() {
             root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlp82s0.service
 
         # Sign the out-of-tree kernel modules due to required signatures.
-        opt sb_key &&
         for module in root/lib/modules/*/video/nvidia*.ko
         do
                 /usr/src/linux/scripts/sign-file \
@@ -290,9 +290,11 @@ CONFIG_HID_GENERIC=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## Optional USB devices
-CONFIG_HID_GYRATION=m  # wireless mouse and keyboard
-CONFIG_USB_ACM=m       # fit-PC status LED
-CONFIG_USB_HID=m       # mice and keyboards
+CONFIG_SND_USB=y
+CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
+CONFIG_SND_USB_AUDIO=m  # headsets
+CONFIG_USB_ACM=m        # fit-PC status LED
+CONFIG_USB_HID=m        # mice and keyboards
 # TARGET HARDWARE: QEMU
 ## QEMU default graphics
 CONFIG_DRM_BOCHS=m

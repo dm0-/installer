@@ -1,6 +1,6 @@
 # This is an example Gentoo build to try RISC-V on an emulator.  There are some
 # things that still need to be implemented in upstream projects, particularly
-# around UEFI support.  Secure Boot will not be used in this build yet.
+# around UEFI support.  Secure Boot cannot be enforced with the current setup.
 
 options+=(
         [arch]=riscv64   # Target RISC-V emulators.
@@ -8,12 +8,14 @@ options+=(
         [executable]=1   # Generate a VM image for fast testing.
         [bootable]=1     # Build a kernel for this system.
         [networkd]=1     # Let systemd manage the network configuration.
+        [secureboot]=    # This is unused until systemd-boot supports RISC-V.
         [uefi]=1         # This is for hacking purposes only.
         [verity]=1       # Prevent the file system from being modified.
 )
 
 packages+=(
         # Utilities
+        app-arch/cpio
         app-arch/tar
         app-arch/unzip
         app-shells/bash
@@ -50,12 +52,15 @@ packages+=(
 function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
+        echo app-emulation/qemu >> "$buildroot/etc/portage/package.accept_keywords/qemu.conf"
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
 app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 static static-user
 dev-libs/glib static-libs
+dev-libs/libffi static-libs
 dev-libs/libpcre static-libs
 dev-libs/libxml2 static-libs
 sys-apps/dtc static-libs
+sys-apps/util-linux static-libs
 sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
@@ -63,20 +68,36 @@ EOF
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
         $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
+        test x$($sha256sum "$output/grub.mbox" | $sed -n '1s/ .*//p') = \
+            x32d142f8af7a0d4c1bf3cb0455e8cb9b4107125a04678da0f471044d90f28137
         $mkdir -p "$buildroot/etc/portage/patches/sys-boot/grub"
         local -i p ; for p in 1 2 3
         do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
         done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
         $rm -f "$output/grub.mbox"
-        test x$($sha256sum "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
-            x85a67391bb67605ba5eb590c325843290ab85eedcf22f17a21763259754f11b3
+
+        # Switch to a release candidate kernel to patch in UEFI stub support.
+        packages_buildroot+=(sys-kernel/git-sources)
+        echo 'sys-kernel/git-sources symlink' >> "$buildroot/etc/portage/package.use/linux.conf"
+        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/git-sources"
+        $curl -L > "$buildroot/etc/portage/patches/sys-kernel/git-sources/riscv-uefi.patch" \
+            https://github.com/atishp04/linux/compare/ae83d0b416db002fe95601e7f97f64b59514d936...919538d7e19e085ee376f5d2300e14d8e6345218.patch
+        test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/git-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
+            x014245400e9c839d1a8fbcbbd69ef97791c397c304102361bcbdceb7b0f1202b
 }
 
 function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
+        # Add the Gentoo systemd config shortcuts to the unpatched source.
+        test -e "$buildroot/usr/src/linux/distro" || $cp -at "$buildroot/usr/src/linux" "$buildroot"/usr/src/linux-*/distro
+        $sed -n /distro/q1 "$buildroot/usr/src/linux/Kconfig" && echo 'source "distro/Kconfig"' >> "$buildroot/usr/src/linux/Kconfig"
+
         # Packages just aren't keyworded enough, so accept anything stabilized.
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
+
+        # Disable the new broken GCC 10 release until things are sorted.
+        echo '>=sys-devel/gcc-10' >> "$portage/package.mask/gcc.conf"
 
         # Work around the broken aclocal path ordering.
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
@@ -98,7 +119,7 @@ EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -138,7 +159,7 @@ function customize() {
                 usr/local
         )
 
-        # Dump emacs into the image since it fails at runtime.
+        # Dump emacs into the image since QEMU is built already anyway.
         local -r host=${options[host]}
         local -r gccdir=/$(cd "/usr/$host" ; compgen -G "usr/lib/gcc/$host/*")
         ln -ft "/usr/$host/tmp" /usr/bin/qemu-riscv64
@@ -149,36 +170,13 @@ function customize() {
             root/usr/lib/systemd/system{,/multi-user.target.wants}/emacs-pdmp.service
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
-        # Support an executable VM image for quick testing.
-        cp -pt . \
-            /usr/bin/qemu-system-riscv64 \
-            /usr/share/qemu/opensbi-riscv64-virt-fw_jump.bin
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
-#!/bin/bash -eu
-kargs=$(<kernel_args.txt)
-exec qemu-system-riscv64 -nographic \
-    -L "$PWD" -bios opensbi-riscv64-virt-fw_jump.bin \
-    -machine virt -cpu rv64 -m 4G \
-    -drive file="${IMAGE:-disk.exe}",format=raw,id=hd0,media=disk \
-    -netdev user,id=net0 \
-    -object rng-random,id=rng0 \
-    -device virtio-blk-device,drive=hd0 \
-    -device virtio-net-device,netdev=net0 \
-    -device virtio-rng-device,rng=rng0 \
-    -kernel vmlinuz -append "console=ttyS0 earlycon=sbi ${kargs//sda/vda2}" \
-    "$@"
-EOF
-}
-
-# Override the UEFI function as a hack to produce a UEFI BIOS file for QEMU and
-# a UEFI GRUB image for the bootloader until the systemd boot stub exists.
-function produce_uefi_exe() if opt uefi
-then
         # Build U-Boot to provide UEFI.
-        git clone https://github.com/u-boot/u-boot.git /root/u-boot
-        git -C /root/u-boot reset --hard a5f9b8a8b592400a01771ad2dac76cba69c914f3
-        cp /root/u-boot/configs/qemu-riscv64_smode_defconfig /root/u-boot/.config
-        echo 'CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"' >> /root/u-boot/.config
+        git clone --branch=v2020.07-rc1 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
+        git -C /root/u-boot reset --hard dd2c676a659a03daeef31d1221da2edff009d426
+        cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
+CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
+CONFIG_BOOTDELAY=0
+EOF
         make -C /root/u-boot -j"$(nproc)" olddefconfig CROSS_COMPILE="${options[host]}-" V=1
         make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="${options[host]}-" V=1
 
@@ -188,30 +186,42 @@ then
         make -C /root/opensbi -j"$(nproc)" all \
             CROSS_COMPILE="${options[host]}-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=qemu/virt V=1
         cp -p /root/opensbi/build/platform/qemu/virt/firmware/fw_payload.bin opensbi-uboot.bin
+        chmod 0644 opensbi-uboot.bin
 
-        # Build a UEFI GRUB binary, and write a sample configuration.
+        # Support an executable VM image for quick testing.
+        cp -pt . /usr/bin/qemu-system-riscv64
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/bash -eu
+exec qemu-system-riscv64 -nographic \
+    -L "$PWD" -bios opensbi-uboot.bin \
+    -machine virt -cpu rv64 -m 4G \
+    -drive file="${IMAGE:-disk.exe}",format=raw,id=hd0,media=disk \
+    -netdev user,id=net0 \
+    -object rng-random,id=rng0 \
+    -device virtio-blk-device,drive=hd0 \
+    -device virtio-net-device,netdev=net0 \
+    -device virtio-rng-device,rng=rng0 \
+    "$@"
+EOF
+}
+
+# Override the UEFI function as a hack to produce a UEFI GRUB image for the
+# bootloader until the systemd boot stub exists for RISC-V.
+function produce_uefi_exe() if opt uefi
+then
         grub-mkimage \
             --compression=none \
             --format=riscv64-efi \
             --output=BOOTRISCV64.EFI \
             --prefix='(hd0,gpt1)/' \
             fat halt linux loadenv minicmd normal part_gpt reboot test
-        local -r kargs="$(<kernel_args.txt)"
         cat << EOF > grub.cfg
-set timeout=5
-
-if test /linux_b -nt /linux_a
-then set default=boot-b
-else set default=boot-a
-fi
-
+set default=boot-a
+set timeout=3
 menuentry 'Boot A' --id boot-a {
-        linux /linux_a console=ttyS0 earlycon=sbi ${kargs//sda/vda2}
+        linux /linux_a console=ttyS0 earlycon=sbi $(<kernel_args.txt)
+        if test -s /initrd_a ; then initrd /initrd_a ; fi
 }
-menuentry 'Boot B' --id boot-b {
-        linux /linux_b console=ttyS0 earlycon=sbi ${kargs//sda/vda2}
-}
-
 menuentry 'U-Boot' --id uboot {
         exit
 }
@@ -224,13 +234,23 @@ menuentry 'Power Off' --id poweroff {
 EOF
 fi
 
+# Override zstd initrd compression since RC kernels don't have the patch.
+eval "$(
+declare -f build_busybox_initrd | $sed 's/zstd.*-22/xz --check=crc32 -9e/'
+declare -f write_base_kernel_config | $sed s/RD_ZSTD/RD_XZ/
+)"
+
 # Override executable image generation to force GRUB into the mix.
 eval "$(declare -f produce_executable_image | $sed '
 /^ *opt uefi/{s/BOOT[0-9A-Z]*.EFI/vmlinuz/;s/) + /) * 2 + /;}
-s,mcopy.*X64.EFI,&\nmcopy -i esp.img vmlinuz ::/linux_a\nmcopy -i esp.img grub.cfg ::/grub.cfg,
+s,mcopy.*X64.EFI.*,&\nmcopy -i esp.img vmlinuz ::/linux_a\ntest -s initrd.img \&\& mcopy -i esp.img initrd.img ::/initrd_a\nmcopy -i esp.img grub.cfg ::/grub.cfg,
 s/BOOTX64/BOOTRISCV64/g')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+# XXX: Stuff apparently needed by the experimental UEFI patches to compile 5.7.
+CONFIG_RISCV_SBI_V01=y
+CONFIG_VT=y
+CONFIG_DUMMY_CONSOLE=y
 # Show initialization messages.
 CONFIG_PRINTK=y
 ## Output early printk messages to the console.

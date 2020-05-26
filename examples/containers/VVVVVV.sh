@@ -1,4 +1,4 @@
-options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=31 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=32 [squash]=1)
 
 packages+=(
         pulseaudio-libs
@@ -14,9 +14,9 @@ test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
     x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
 git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
 mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
-git reset --hard e92a21cf8aa94b65db610d70db629e0ff27ea810
+git reset --hard a623190b09a4af6e5acb60a90617d26aca447ee3
 cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
-exec ninja -j$(nproc) all
+exec ninja -j"$(nproc)" all
 EOF
 }
 

@@ -1,17 +1,19 @@
 packages=(aaa_base branding-openSUSE openSUSE-release)
 packages_buildroot=()
 
+options[verity_sig]=
+
 function create_buildroot() {
         local -r image="https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.$DEFAULT_ARCH-lxc.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-default ucode-{amd,intel})
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
+        opt secureboot && packages_buildroot+=(mozilla-nss-tools pesign)
         opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86)
         opt squash && packages_buildroot+=(squashfs)
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
-        opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick) &&
-        opt sb_cert && opt sb_key && packages_buildroot+=(mozilla-nss-tools pesign)
+        opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
         packages_buildroot+=(curl e2fsprogs)
 
         $mkdir -p "$buildroot"
@@ -84,13 +86,12 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        test -s vmlinuz || cp -pt . /boot/vmlinuz
-        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
-        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
         opt uefi && test ! -s logo.bmp &&
         sed -i -e '/<svg/,/>/s,>,&<style>#g885{display:none}</style>,' /usr/share/pixmaps/distribution-logos/light-dual-branding.svg &&
         magick -background none -size 720x320 /usr/share/pixmaps/distribution-logos/light-dual-branding.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s os-release || cp -pt . root/etc/os-release
+        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
+        build_systemd_ramdisk
+        test -s vmlinuz || cp -pt . /boot/vmlinuz
 fi
 
 # Override relabeling to add the missing disk driver and fix pthread_cancel.

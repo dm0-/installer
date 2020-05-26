@@ -22,6 +22,7 @@ options+=(
 
 packages+=(
         # Utilities
+        app-arch/cpio
         app-arch/tar
         app-arch/unzip
         app-shells/bash
@@ -70,12 +71,25 @@ packages_buildroot+=(
         # The target hardware requires firmware.
         net-wireless/wireless-regdb
         sys-kernel/linux-firmware
+
+        # Produce a U-Boot script and kernel image in this script.
+        dev-embedded/u-boot-tools
 )
 
-# Support building U-Boot images and GRUB for the bootloader.
 function initialize_buildroot() {
+        # Build a static QEMU user binary for the target CPU.
+        packages_buildroot+=(app-emulation/qemu)
+        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
+app-emulation/qemu qemu_user_targets_arm static-user
+dev-libs/glib static-libs
+dev-libs/libpcre static-libs
+sys-apps/attr static-libs
+sys-libs/zlib static-libs
+EOF
+
+        # Build ARM U-Boot GRUB for bootloader testing.
+        packages_buildroot+=(sys-boot/grub)
         echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
-        packages_buildroot+=(dev-embedded/u-boot-tools sys-boot/grub)
 }
 
 function customize_buildroot() {
@@ -92,7 +106,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -159,14 +173,6 @@ function customize() {
         # Dump emacs into the image since the target CPU is so slow.
         local -r host=${options[host]}
         local -r gccdir=/$(cd "/usr/$host" ; compgen -G "usr/lib/gcc/$host/*")
-        cat << 'EOF' >> /etc/portage/package.use/qemu.conf
-app-emulation/qemu qemu_user_targets_arm static-user
-dev-libs/glib static-libs
-dev-libs/libpcre static-libs
-sys-apps/attr static-libs
-sys-libs/zlib static-libs
-EOF
-        emerge --changed-use --jobs=4 --verbose app-emulation/qemu
         ln -ft "/usr/$host/tmp" /usr/bin/qemu-arm
         chroot "/usr/$host" \
             /tmp/qemu-arm -cpu arm926 -E "LD_LIBRARY_PATH=$gccdir" \
@@ -204,7 +210,7 @@ then
         local -r dtb=/usr/src/linux/arch/arm/boot/dts/wm8505-ref.dtb
 
         # Build the system's device tree blob.
-        make -C /usr/src/linux "${dtb##*/}" \
+        make -C /usr/src/linux -j"$(nproc)" "${dtb##*/}" \
             ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
 
         # Build a U-Boot kernel image with the bundled DTB.

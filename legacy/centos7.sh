@@ -4,6 +4,7 @@ packages=()
 packages_buildroot=()
 
 DEFAULT_RELEASE=7
+options[secureboot]=
 options[uefi]=
 
 function create_buildroot() {
@@ -11,12 +12,12 @@ function create_buildroot() {
 
         opt bootable && packages_buildroot+=(kernel microcode_ctl)
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
-        opt uefi && packages_buildroot+=(centos-logos ImageMagick) &&
-        opt sb_cert && opt sb_key && packages_buildroot+=(openssl pesign)
-        packages_buildroot+=(e2fsprogs)
+        opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tar.xz"
@@ -43,6 +44,8 @@ function install_packages() {
         mount --bind /var/cache/yum root/var/cache/yum
         trap -- 'umount root/var/cache/yum ; trap - RETURN' RETURN
 
+        opt arch && mkdir -p root/etc/yum/vars &&
+        echo "${options[arch]/#i[4-6]86/i386}" > root/etc/yum/vars/basearch
         yum --assumeyes --installroot="$PWD/root" \
             --releasever="${options[release]}" \
             install "${packages[@]:-filesystem}" "$@"
@@ -69,13 +72,10 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
-        test -s initrd.img || cp -p /boot/initramfs-* initrd.img
-        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
         opt uefi && test ! -s logo.bmp && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s os-release || cp -pt . root/etc/os-release
-elif opt selinux
-then test -s vmlinuz.relabel || cp -p /boot/vmlinuz-* vmlinuz.relabel
+        test -s initrd.img || cp -p /boot/initramfs-* initrd.img
+        build_systemd_ramdisk
+        test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
 fi
 
 # Override ext4 file system handling to work with old CentOS 7 command options.
@@ -85,11 +85,14 @@ declare -f unmount_root | $sed 's/tune2fs -O read-only/: &/'
 )"
 
 # Override the SELinux labeling VM to add more old CentOS 7 kernel modules.
-eval "$(declare -f relabel | $sed '
+eval "$(declare -f relabel | $sed 's, /[^ ]*/vmlinuz , /boot/vmlinuz-* ,
 s/\(-name \)\?sd_mod\(.ko.xz -o\)\?/\1crct10dif_common\2 \1crc-t10dif\2 &/')"
 
+# Override verity formatting to skip ancient broken bash syntax.
+eval "$(declare -f verity | $sed 's/"[^ ]*#opt_params.*"/0/')"
+
 # Override initrd creation to work with old CentOS 7 command options.
-eval "$(declare -f build_ramdisk relabel |
+eval "$(declare -f build_systemd_ramdisk relabel |
 $sed 's/cpio -D \([^ ]*\) \([^|]*\)|/{ cd \1 ; cpio \2 ; } |/')"
 
 # Override the /etc overlay to disable persistent Git support.
@@ -99,44 +102,6 @@ eval "$(declare -f overlay_etc | $sed 's/test.*git/false/')"
 eval "$(declare -f configure_initrd_generation | $sed /hostonly=/r<(echo \
     "opt verity && echo 'add_dracutmodules+=\" dm \"'" \
     '>> "$buildroot/etc/dracut.conf.d/99-settings.conf"'))"
-
-function verify_distro() {
-        local -rx GNUPGHOME="$output/gnupg"
-        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
-        $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
------BEGIN PGP PUBLIC KEY BLOCK-----
-
-mQINBFOn/0sBEADLDyZ+DQHkcTHDQSE0a0B2iYAEXwpPvs67cJ4tmhe/iMOyVMh9
-Yw/vBIF8scm6T/vPN5fopsKiW9UsAhGKg0epC6y5ed+NAUHTEa6pSOdo7CyFDwtn
-4HF61Esyb4gzPT6QiSr0zvdTtgYBRZjAEPFVu3Dio0oZ5UQZ7fzdZfeixMQ8VMTQ
-4y4x5vik9B+cqmGiq9AW71ixlDYVWasgR093fXiD9NLT4DTtK+KLGYNjJ8eMRqfZ
-Ws7g7C+9aEGHfsGZ/SxLOumx/GfiTloal0dnq8TC7XQ/JuNdB9qjoXzRF+faDUsj
-WuvNSQEqUXW1dzJjBvroEvgTdfCJfRpIgOrc256qvDMp1SxchMFltPlo5mbSMKu1
-x1p4UkAzx543meMlRXOgx2/hnBm6H6L0FsSyDS6P224yF+30eeODD4Ju4BCyQ0jO
-IpUxmUnApo/m0eRelI6TRl7jK6aGqSYUNhFBuFxSPKgKYBpFhVzRM63Jsvib82rY
-438q3sIOUdxZY6pvMOWRkdUVoz7WBExTdx5NtGX4kdW5QtcQHM+2kht6sBnJsvcB
-JYcYIwAUeA5vdRfwLKuZn6SgAUKdgeOtuf+cPR3/E68LZr784SlokiHLtQkfk98j
-NXm6fJjXwJvwiM2IiFyg8aUwEEDX5U+QOCA0wYrgUQ/h8iathvBJKSc9jQARAQAB
-tEJDZW50T1MtNyBLZXkgKENlbnRPUyA3IE9mZmljaWFsIFNpZ25pbmcgS2V5KSA8
-c2VjdXJpdHlAY2VudG9zLm9yZz6JAjUEEwECAB8FAlOn/0sCGwMGCwkIBwMCBBUC
-CAMDFgIBAh4BAheAAAoJECTGqKf0qA61TN0P/2730Th8cM+d1pEON7n0F1YiyxqG
-QzwpC2Fhr2UIsXpi/lWTXIG6AlRvrajjFhw9HktYjlF4oMG032SnI0XPdmrN29lL
-F+ee1ANdyvtkw4mMu2yQweVxU7Ku4oATPBvWRv+6pCQPTOMe5xPG0ZPjPGNiJ0xw
-4Ns+f5Q6Gqm927oHXpylUQEmuHKsCp3dK/kZaxJOXsmq6syY1gbrLj2Anq0iWWP4
-Tq8WMktUrTcc+zQ2pFR7ovEihK0Rvhmk6/N4+4JwAGijfhejxwNX8T6PCuYs5Jiv
-hQvsI9FdIIlTP4XhFZ4N9ndnEwA4AH7tNBsmB3HEbLqUSmu2Rr8hGiT2Plc4Y9AO
-aliW1kOMsZFYrX39krfRk2n2NXvieQJ/lw318gSGR67uckkz2ZekbCEpj/0mnHWD
-3R6V7m95R6UYqjcw++Q5CtZ2tzmxomZTf42IGIKBbSVmIS75WY+cBULUx3PcZYHD
-ZqAbB0Dl4MbdEH61kOI8EbN/TLl1i077r+9LXR1mOnlC3GLD03+XfY8eEBQf7137
-YSMiW5r/5xwQk7xEcKlbZdmUJp3ZDTQBXT06vavvp3jlkqqH9QOE8ViZZ6aKQLqv
-pL+4bs52jzuGwTMT7gOR5MzD+vT0fVS7Xm8MjOxvZgbHsAgzyFGlI1ggUQmU7lu3
-uPNL0eRx4S1G4Jn5
-=OGYX
------END PGP PUBLIC KEY BLOCK-----
-EOF
-        $gpg --verify "$@"
-}
 
 # OPTIONAL (BUILDROOT)
 

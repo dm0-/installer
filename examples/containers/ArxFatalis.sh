@@ -1,4 +1,4 @@
-options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=31 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=32 [squash]=1)
 
 packages+=(
         freetype
@@ -20,9 +20,9 @@ function customize_buildroot() {
         script << 'EOF'
 git clone --branch=master https://github.com/arx/ArxLibertatis.git
 mkdir ArxLibertatis/build ; cd ArxLibertatis/build
-git reset --hard d8fbcafc2cebb7de7d9378625c615fc66138fd46
+git reset --hard 04f39f2aba082aef6f763c0bc6a4e7ba6430e974
 cmake -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
-exec make -j$(nproc) all
+exec make -j"$(nproc)" all
 EOF
 }
 

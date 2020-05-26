@@ -9,12 +9,12 @@ function create_buildroot() {
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt verity && packages_buildroot+=(veritysetup)
-        opt uefi && packages_buildroot+=(centos-logos ImageMagick) &&
-        opt sb_cert && opt sb_key && packages_buildroot+=(openssl pesign)
-        packages_buildroot+=(e2fsprogs)
+        opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tar.xz"
@@ -64,13 +64,10 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
-        test -s initrd.img || cp -p /boot/*/*/initrd initrd.img
-        opt selinux && test ! -s vmlinuz.relabel && ln -fn vmlinuz vmlinuz.relabel
         opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s os-release || cp -pt . root/etc/os-release
-elif opt selinux
-then test -s vmlinuz.relabel || cp -p /lib/modules/*/vmlinuz vmlinuz.relabel
+        test -s initrd.img || cp -p /boot/*/*/initrd initrd.img
+        build_systemd_ramdisk
+        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 
 # Override image generation to drop EROFS support since it's not enabled.
@@ -135,9 +132,9 @@ EOF
 
         umount root
         local -r cores=$(test -e /dev/kvm && nproc)
-        /usr/libexec/qemu-kvm -nodefaults -serial stdio < /dev/null \
+        /usr/libexec/qemu-kvm -nodefaults -no-reboot -serial stdio < /dev/null \
             ${cores:+-cpu host -smp cores="$cores"} -m 1G \
-            -kernel vmlinuz.relabel -append console=ttyS0 \
+            -kernel /lib/modules/*/vmlinuz -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
         mount /dev/loop-root root
         opt squash && mv -t . "root/$disk"
@@ -327,4 +324,4 @@ eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
 # WORKAROUNDS
 
 # The CentOS 7 implementation is so different that it needs its own file.
-test "x${options[release]-}" != x7 || . centos7.sh
+test "x${options[release]-}" != x7 || . legacy/centos7.sh

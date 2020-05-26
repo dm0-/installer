@@ -115,12 +115,11 @@ function customize() {
             /var/lib/dkms/nvidia/kernel-*/module/nvidia*.ko.xz
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        opt sb_key &&
         for module in root/lib/modules/*/kernel/drivers/video/nvidia*.ko.xz
         do
                 unxz "$module" ; module=${module%.xz}
                 /lib/modules/*/build/scripts/sign-file \
-                    sha512 "$keydir/sign.key" "$keydir/sign.crt" "$module"
+                    sha512 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.

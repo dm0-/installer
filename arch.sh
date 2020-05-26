@@ -2,6 +2,7 @@ packages=()
 packages_buildroot=()
 
 options[selinux]=
+options[verity_sig]=
 
 function create_buildroot() {
         local -r dir="https://mirrors.kernel.org/archlinux/iso/latest"
@@ -10,9 +11,9 @@ function create_buildroot() {
 
         opt bootable && packages_buildroot+=(dracut intel-ucode linux-firmware linux-hardened)
         opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt secureboot && packages_buildroot+=(pesign)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt uefi && packages_buildroot+=(binutils librsvg imagemagick) &&
-        opt sb_cert && opt sb_key && packages_buildroot+=(pesign)
+        opt uefi && packages_buildroot+=(binutils librsvg imagemagick)
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tgz"
@@ -29,6 +30,7 @@ function create_buildroot() {
                 $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-3ffbe2a97e7f6f459b8d34391d65422979debda0.tar.gz' > "$output/erofs-utils.tgz"
                 test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = xe85e2c7e7d0e7b8e9c8987af7ce7d6844a9a9048e53f1c48d3a3b30b157079b6
                 $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
+                $sed -i -e 's/1\.0/1.1/g;s/508e[0-9a-f]*/a14a30d0d941f6642cad130fbba70a2493fabbe7baa09a8ce7d20745ea3385d6/' "$output"/erofs-utils/{.SRCINFO,PKGBUILD}
                 packages_buildroot+=(base-devel)
         fi
 
@@ -97,12 +99,12 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
-        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '*')"
         opt uefi && test ! -s logo.bmp &&
         sed -i -e '/<svg/,/>/s,>,&<style>text{display:none}</style>,' /usr/share/pixmaps/archlinux.svg &&
         magick -background none /usr/share/pixmaps/archlinux.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s os-release || cp -pt . root/etc/os-release
+        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '*')"
+        build_systemd_ramdisk
+        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 
 # Override dm-init with userspace since the Arch kernel doesn't enable it.

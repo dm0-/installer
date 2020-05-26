@@ -9,13 +9,13 @@ function create_buildroot() {
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
-        opt ramdisk || opt selinux && packages_buildroot+=(app-arch/cpio)
+        opt ramdisk || opt selinux || opt verity_sig && packages_buildroot+=(app-arch/cpio)
         opt read_only && ! opt squash && packages_buildroot+=(sys-fs/erofs-utils)
+        opt secureboot && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
         opt selinux && packages_buildroot+=(app-emulation/qemu)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
-        opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork) &&
-        opt sb_cert && opt sb_key && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
+        opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -45,7 +45,9 @@ sys-boot/vboot-utils
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
+sys-kernel/gentoo-kernel
 sys-kernel/gentoo-sources
+sys-kernel/git-sources
 sys-kernel/linux-headers
 sec-policy/*
 EOF
@@ -62,14 +64,16 @@ sys-apps/gentoo-systemd-integration
 sys-apps/systemd
 EOF
         $cat << 'EOF' >> "$portage/package.use/cryptsetup.conf"
-# Choose nettle as the crypto backend and LUKS2 as the default LUKS version.
-sys-fs/cryptsetup nettle -gcrypt -kernel -luks1_default -openssl
+# Choose nettle as the crypto backend.
+sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 # Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
 sys-fs/lvm2 device-mapper-only -thin
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Support installing kernels configured with compressed modules.
 sys-apps/kmod lzma
+# Disable trying to build an initrd since it won't run in a chroot.
+sys-kernel/gentoo-kernel -initramfs
 # Apply patches to support zstd and additional CPU optimizations.
 sys-kernel/gentoo-sources experimental
 EOF
@@ -94,6 +98,8 @@ EOF
 -*app-emulation/qemu-riscv64-bin
 # Don't force building busybox in every Linux profile.
 -*sys-apps/busybox
+# Don't force building a debugger for experimental architectures.
+-*sys-devel/gdb
 # Don't force building HFS utilities.
 -*sys-fs/hfsutils
 -*sys-fs/hfsplusutils
@@ -118,16 +124,18 @@ FFLAGS="$FFLAGS -fno-lto"
 FCFLAGS="$FCFLAGS -fno-lto"
 EOF
 
-        # Accept binutils-2.34 to fix host dependencies.
+        # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
-        # Accept ffmpeg-4.2 to fix host dependencies.
-        echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
         echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
-        # Accept libcap-2.33 to fix build ordering with EAPI=7.
-        echo '<sys-libs/libcap-2.34' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libaom-2.0.0 release candidates to fix ARM builds.
+        echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
+        # Accept libcap-2.34 to fix build ordering with EAPI 7.
+        echo '<sys-libs/libcap-2.35 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libuv-1.38.0 to fix host dependencies.
+        echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
@@ -135,10 +143,12 @@ EOF
         echo '<x11-libs/pixman-0.41 ~*' >> "$portage/package.accept_keywords/pixman.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
+        # Accept sed-4.8 to fix build ordering with EAPI 7.
+        echo '<sys-apps/sed-4.9 ~*' >> "$portage/package.accept_keywords/sed.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
-        # Accept util-linux-2.34 to fix build ordering with EAPI=7.
-        echo '<sys-apps/util-linux-2.35' >> "$portage/package.accept_keywords/util-linux.conf"
+        # Accept util-linux-2.35 to fix build ordering with EAPI 7.
+        echo 'sys-apps/util-linux *' >> "$portage/package.accept_keywords/util-linux.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -171,25 +181,27 @@ EOF
 sys-apps/portage -native-extensions
 EOF
         echo 'EXTRA_ECONF="--with-dbus-binding-tool=dbus-binding-tool"' >> "$portage/env/cross-dbus-glib.conf"
-        echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib.conf"
+        echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
+        echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'PKG_CONFIG="$CHOST-pkg-config"' >> "$portage/env/cross-pkgconfig.conf"
-        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.6m"' >> "$portage/env/cross-python.conf"
+        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.7m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 dev-libs/dbus-glib cross-dbus-glib.conf
 dev-python/pypax cross-python.conf
+media-libs/gstreamer cross-glib-mkenums.conf
 sys-apps/dtc cross-pkgconfig.conf
-x11-libs/gtk+ cross-glib.conf
+x11-libs/gtk+ cross-glib-compile-resources.conf
 x11-wm/windowmaker cross-windowmaker.conf
 EOF
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
-dev-libs/elfutils no-lto.conf
 dev-libs/icu no-lto.conf
 dev-libs/libaio no-lto.conf
+media-gfx/potrace no-lto.conf
 media-libs/alsa-lib no-lto.conf
 media-sound/pulseaudio no-lto.conf
 net-libs/webkit-gtk no-lto.conf
@@ -214,6 +226,8 @@ EOF
         # Work around bad dependencies requiring this on the host.
         echo 'x11-libs/cairo X' >> "$portage/package.use/cairo.conf"
         echo 'media-libs/libglvnd X' >> "$portage/package.use/libglvnd.conf"
+        # Work around broken SSE2 with multilib on the host.
+        echo 'media-libs/libaom -cpu_flags_*' >> "$portage/package.use/libaom.conf"
         # Support building the UEFI boot stub, its logo image, and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
@@ -261,6 +275,11 @@ fi
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
     @world app-arch/zstd dev-util/debugedit sys-devel/crossdev
 
+# Ensure Python defaults to the version in the profile before continuing.
+sed -i -e '/^[^#]/d' /etc/python-exec/python-exec.conf
+portageq envvar PYTHON_SINGLE_TARGET |
+sed s/_/./g >> /etc/python-exec/python-exec.conf
+
 # Create the cross-compiler toolchain in the native build root.
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
@@ -277,7 +296,7 @@ emerge --changed-use --jobs=4 --update --verbose "$@"
 if test -d /usr/src/linux
 then
         ln -fst "/usr/$host/usr/src" ../../../../usr/src/linux
-        make -C /usr/src/linux -j$(nproc) mrproper V=1
+        make -C /usr/src/linux -j"$(nproc)" mrproper V=1
 fi
 EOF
 
@@ -292,16 +311,15 @@ function install_packages() {
         opt selinux && packages+=(sec-policy/selinux-base-policy)
         packages+=(sys-apps/baselayout)
 
-        # Build the final kernel.
+        # Build the kernel now so external modules can be built.
         if opt bootable
         then
                 local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
                 test -s /usr/src/linux/.config
-                opt sb_key && sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=\".*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
-                make -C /usr/src/linux -j$(nproc) V=1 \
-                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
-                make -C /usr/src/linux install V=1 \
-                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
+                sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=.*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
+                opt verity_sig && sed -i -e "/^CONFIG_SYSTEM_TRUSTED_KEYS=\"\"$/s,.$,$keydir/verity.crt&," /usr/src/linux/.config
+                make -C /usr/src/linux -j"$(nproc)" \
+                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
@@ -331,33 +349,23 @@ function install_packages() {
         [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
         (cd root ; exec ln -fst . usr/*)
         ln -fns .. "root$ROOT"  # Lazily work around bad packaging.
-        emerge --{,sys}root=root --jobs=$(nproc) -1Kv "${packages[@]}" "$@"
+        emerge --{,sys}root=root --jobs="$(nproc)" -1Kv "${packages[@]}" "$@"
         mv -t root/usr/bin root/gcc-bin/*/* ; rm -fr root/{binutils,gcc}-bin
 
         # If a modular kernel was configured, install the stripped modules.
         opt bootable && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
-        make -C /usr/src/linux modules_install V=1 \
+        make -C /usr/src/linux modules_install \
             INSTALL_MOD_PATH=/wd/root INSTALL_MOD_STRIP=1 \
-            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-"
+            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
 
         # List everything installed in the image and what was used to build it.
         qlist -CIRSSUv > packages-buildroot.txt
         qlist --root=/ -CIRSSUv > packages-host.txt
         qlist --root=root -CIRSSUv > packages.txt
-
-        # Cross-compile minimal tools for an initrd after everything is done.
-        if opt ramdisk
-        then
-                opt verity && USE=static-libs \
-                emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose \
-                    dev-libs/libaio sys-apps/util-linux
-                USE='-* device-mapper-only static' \
-                emerge --buildpkg=n --jobs=4 --nodeps --oneshot --verbose \
-                    sys-apps/busybox ${options[verity]:+sys-fs/lvm2}
-        fi
 }
 
 function distro_tweaks() {
+        rm -fr root/etc/init.d root/etc/kernel
         ln -fns ../lib/systemd/systemd root/usr/sbin/init
         ln -fns ../proc/self/mounts root/etc/mtab
 
@@ -368,10 +376,7 @@ function distro_tweaks() {
         opt uefi && mkdir root/boot
 
         # Create some usual stuff in /var that is missing.
-        cat << 'EOF' > root/usr/lib/tmpfiles.d/var-compat.conf
-d /var/empty
-L /var/lock - - - - ../run/lock
-EOF
+        echo 'd /var/empty' > root/usr/lib/tmpfiles.d/var-compat.conf
 
         # Conditionalize wireless interfaces on their configuration files.
         test -s root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service &&
@@ -415,42 +420,68 @@ EOF
 
 function save_boot_files() if opt bootable
 then
-        test -s vmlinux || cp -p /boot/vmlinux-* vmlinux ||
-        test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
         opt uefi && test ! -s logo.bmp &&
         sed -i -e '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg &&
         magick -background none /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s os-release || cp -pt . root/etc/os-release
+        build_busybox_initrd
+        if ! test -s vmlinux -o -s vmlinuz
+        then
+                local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
+                make -C /usr/src/linux install \
+                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                cp -p /boot/vmlinux-* vmlinux || cp -p /boot/vmlinuz-* vmlinuz
+        fi < /dev/null
 fi
 
-function build_ramdisk() if opt ramdisk
+function build_busybox_initrd() if opt ramdisk || opt verity_sig
 then
-        local -r sysroot="/usr/${options[host]}"
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
         mkdir -p "$root"/{bin,dev,proc,sys,sysroot}
-        cp -pt "$root/bin" "$sysroot/bin/busybox"
-        for cmd in ash mount losetup switch_root
+
+        # Cross-compile minimal static tools required for the initrd.
+        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
+        opt verity && USE=static-libs \
+        emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose \
+            dev-libs/libaio sys-apps/util-linux
+        USE='-* device-mapper-only static' \
+        emerge --buildpkg=n --jobs=4 --nodeps --oneshot --verbose \
+            sys-apps/busybox \
+            ${options[verity]:+sys-fs/lvm2} \
+            ${options[verity_sig]:+sys-apps/keyutils}
+
+        # Import the cross-compiled tools into the initrd root.
+        cp -pt "$root/bin" "$ROOT/bin/busybox"
+        local cmd ; for cmd in ash cat losetup mount mountpoint switch_root
         do ln -fns busybox "$root/bin/$cmd"
         done
-        opt verity && cp -p "$sysroot/sbin/dmsetup.static" "$root/bin/dmsetup"
+        opt verity && cp -p "$ROOT/sbin/dmsetup.static" "$root/bin/dmsetup"
+        opt verity_sig && cp -pt "$root/bin" "$ROOT/bin/keyctl"
+
+        # Write an init script and include required build artifacts.
         cat << EOF > "$root/init" && chmod 0755 "$root/init"
 #!/bin/ash -eux
 export PATH=/bin
-mount -nt devtmpfs devtmpfs /dev
-mount -nt proc proc /proc
-mount -nt sysfs sysfs /sys
-losetup ${options[read_only]:+-r }/dev/loop0 /sysroot/root.img
-$(opt verity && cat << EOG ||
-dmsetup create --concise '$(<dmsetup.txt)'
+mountpoint -q /dev || mount -nt devtmpfs devtmpfs /dev
+mountpoint -q /proc || mount -nt proc proc /proc
+mountpoint -q /sys || mount -nt sysfs sysfs /sys
+$(opt ramdisk && echo "losetup ${options[read_only]:+-r }/dev/loop0 /root.img"
+opt verity_sig && echo 'keyctl padd user verity:root @u < /verity.sig'
+opt verity && cat << 'EOG' ||
+dmv=" $(cat /proc/cmdline) "
+dmv=${dmv##* \"DVR=} ; dmv=${dmv##* DVR=\"} ; dmv=${dmv%%\"*}
+dmsetup create --concise "$dmv"
 mount -no ro /dev/mapper/root /sysroot
 EOG
 echo "mount -n${options[read_only]:+o ro} /dev/loop0 /sysroot")
 exec switch_root /sysroot /sbin/init
 EOF
-        ln -fn final.img "$root/sysroot/root.img"
+        opt ramdisk && ln -fn final.img "$root/root.img"
+        opt verity_sig && ln -ft "$root" verity.sig
+
+        # Build the initrd.
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
-        zstd --threads=0 --ultra -22 > ramdisk.img
+        zstd --threads=0 --ultra -22 > initrd.img
 fi
 
 function write_base_kernel_config() if opt bootable
@@ -488,7 +519,12 @@ CONFIG_SECURITY_LOCKDOWN_LSM=y
 CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
 CONFIG_STACKPROTECTOR=y
 CONFIG_STACKPROTECTOR_STRONG=y
-CONFIG_STRICT_KERNEL_RWX=y'
+CONFIG_STRICT_KERNEL_RWX=y
+# Signing settings
+CONFIG_MODULE_SIG=y
+CONFIG_MODULE_SIG_ALL=y
+CONFIG_MODULE_SIG_FORCE=y
+CONFIG_MODULE_SIG_SHA512=y'
         [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
 CONFIG_64BIT=y'
         test "x${options[arch]}" = xx86_64 && echo 'CONFIG_SMP=y
@@ -501,19 +537,14 @@ CONFIG_PACKET=y'
         opt nvme && echo '# NVMe settings
 CONFIG_PCI=y
 CONFIG_BLK_DEV_NVME=y'
-        opt ramdisk && echo '# Initrd settings
+        opt ramdisk || opt verity_sig && echo '# Initrd settings
 CONFIG_BLK_DEV_INITRD=y
-CONFIG_RD_ZSTD=y
-# Loop settings
+CONFIG_RD_ZSTD=y'
+        opt ramdisk && echo '# Loop settings
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
 CONFIG_BLK_DEV_LOOP_MIN_COUNT=1' || echo '# Loop settings
 CONFIG_BLK_DEV_LOOP_MIN_COUNT=0'
-        opt sb_key && opt sb_cert && echo '# Signing settings
-CONFIG_MODULE_SIG=y
-CONFIG_MODULE_SIG_ALL=y
-CONFIG_MODULE_SIG_FORCE=y
-CONFIG_MODULE_SIG_SHA512=y'
         opt selinux && echo '# SELinux settings
 CONFIG_AUDIT=y
 CONFIG_SECURITY=y
@@ -554,6 +585,7 @@ CONFIG_BLK_DEV_DM=y
 CONFIG_DM_INIT=y
 CONFIG_DM_VERITY=y
 CONFIG_CRYPTO_SHA256=y'
+        opt verity_sig && echo CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG=y
         echo '# Settings for systemd as decided by Gentoo, plus some missing
 CONFIG_COMPAT_32BIT_TIME=y
 CONFIG_DMI=y
@@ -619,12 +651,12 @@ CONFIG_ACPI=y
 CONFIG_PRINTK=y'
 
         script << 'EOF'
-make -C /usr/src/linux -j$(nproc) allnoconfig KCONFIG_ALLCONFIG="$PWD/config.relabel" V=1
-make -C /usr/src/linux -j$(nproc) V=1
+make -C /usr/src/linux -j"$(nproc)" allnoconfig KCONFIG_ALLCONFIG="$PWD/config.relabel" V=1
+make -C /usr/src/linux -j"$(nproc)" V=1
 make -C /usr/src/linux install V=1
 mv /boot/vmlinuz-* vmlinuz.relabel
 rm -f /boot/*
-exec make -C /usr/src/linux -j$(nproc) mrproper V=1
+exec make -C /usr/src/linux -j"$(nproc)" mrproper V=1
 EOF
 fi
 
@@ -786,9 +818,9 @@ dev-vcs/git -emacs
 EOF
                 script << 'EOF'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- app-editors/emacs/emacs-27.0.90.ebuild
-+++ app-editors/emacs/emacs-27.0.90.ebuild
-@@ -250,6 +250,11 @@ src_configure() {
+--- app-editors/emacs/emacs-27.0.91.ebuild
++++ app-editors/emacs/emacs-27.0.91.ebuild
+@@ -249,6 +249,11 @@
  		myconf+=" --without-x --without-ns"
  	fi
  
@@ -800,7 +832,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	econf \
  		--program-suffix="-${EMACS_SUFFIX}" \
  		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
-@@ -259,7 +264,7 @@ src_configure() {
+@@ -258,7 +263,7 @@
  		--without-compress-install \
  		--without-hesiod \
  		--without-pop \
@@ -809,7 +841,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		--with-file-notification=$(usev inotify || usev gfile || echo no) \
  		$(use_enable acl) \
  		$(use_with dbus) \
-@@ -279,6 +284,9 @@ src_configure() {
+@@ -278,6 +283,9 @@
  		$(use_with wide-int) \
  		$(use_with zlib) \
  		${myconf}
@@ -821,20 +853,19 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  #src_compile() {
 EOP
 sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.3.ebuild
-ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.90.ebuild manifest
+ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.91.ebuild manifest
 ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.3.ebuild manifest
 EOF
                 ;;
             firefox)
-                fix_package libaom
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
-=dev-lang/rust-1.43.0
+=dev-lang/rust-1.43.1
 dev-libs/libgit2
 dev-libs/nspr
 dev-libs/nss
 media-libs/libvpx
 media-libs/libwebp
-=virtual/rust-1.43.0
+=virtual/rust-1.43.1
 EOF
                 echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
@@ -856,7 +887,7 @@ dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
 media-libs/libwebp
-=www-client/firefox-75.0-r3 ~*
+=www-client/firefox-76.0.1 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
@@ -884,38 +915,9 @@ index 0000000000..0a99c953b2
 @@ -0,0 +1 @@
 +ioctl_powerpc64le.rs
 \ No newline at end of file
---- a/gfx/wr/webrender/src/resource_cache.rs
-+++ b/gfx/wr/webrender/src/resource_cache.rs
-@@ -44,7 +44,7 @@
- #[cfg(any(feature = "capture", feature = "replay"))]
- use std::path::PathBuf;
- use std::sync::{Arc, RwLock};
--use std::sync::atomic::{AtomicU64, Ordering};
-+use std::sync::atomic::{AtomicU32, Ordering};
- use std::time::SystemTime;
- use std::u32;
- use crate::texture_cache::{TextureCache, TextureCacheHandle, Eviction};
-@@ -53,7 +53,7 @@
- const DEFAULT_TILE_SIZE: TileSize = 512;
- 
- // Counter for generating unique native surface ids
--static NEXT_NATIVE_SURFACE_ID: AtomicU64 = AtomicU64::new(0);
-+static NEXT_NATIVE_SURFACE_ID: AtomicU32 = AtomicU32::new(0);
- 
- #[cfg_attr(feature = "capture", derive(Serialize))]
- #[cfg_attr(feature = "replay", derive(Deserialize))]
-@@ -1786,7 +1786,7 @@
-         tile_size: DeviceIntSize,
-         is_opaque: bool,
-     ) -> NativeSurfaceId {
--        let id = NativeSurfaceId(NEXT_NATIVE_SURFACE_ID.fetch_add(1, Ordering::Relaxed));
-+        let id = NativeSurfaceId(NEXT_NATIVE_SURFACE_ID.fetch_add(1, Ordering::Relaxed).into());
- 
-         self.pending_native_surface_updates.push(
-             NativeSurfaceOperation {
 --- a/js/src/jit/none/MacroAssembler-none.h
 +++ b/js/src/jit/none/MacroAssembler-none.h
-@@ -99,7 +99,7 @@
+@@ -100,7 +100,7 @@
  static constexpr Register WasmJitEntryReturnScratch{Registers::invalid_reg};
  
  static constexpr uint32_t ABIStackAlignment = 4;
@@ -955,9 +957,9 @@ index 0000000000..0a99c953b2
 EOF
                 script << 'EOG'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- dev-lang/rust/rust-1.43.0.ebuild
-+++ dev-lang/rust/rust-1.43.0.ebuild
-@@ -164,16 +164,19 @@
+--- dev-lang/rust/rust-1.43.1.ebuild
++++ dev-lang/rust/rust-1.43.1.ebuild
+@@ -170,16 +170,19 @@
  }
  
  src_configure() {
@@ -979,9 +981,9 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	fi
 -	rust_targets="${rust_targets#,}"
  
- 	local extended="true" tools="\"cargo\","
+ 	local tools="\"cargo\","
  	if use clippy; then
-@@ -209,7 +212,7 @@
+@@ -216,7 +219,7 @@
  		[build]
  		build = "${rust_target}"
  		host = ["${rust_target}"]
@@ -990,7 +992,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		cargo = "${rust_stage0_root}/bin/cargo"
  		rustc = "${rust_stage0_root}/bin/rustc"
  		docs = $(toml_usex doc)
-@@ -274,6 +277,18 @@
+@@ -292,6 +295,18 @@
  		EOF
  	fi
  
@@ -1010,22 +1012,14 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	cat "${S}"/config.toml || die
  }
 EOP
-sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-75.0-r3.ebuild
+sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-76.0.1.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-75.0-r3.ebuild
-ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.43.0.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-75.0-r3.ebuild manifest
+sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-76.0.1.ebuild
+ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.43.1.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-76.0.1.ebuild manifest
 EOG
                 ;;
-            libaom)
-                echo 'CPU_FLAGS_X86=""' > "$buildroot/etc/portage/env/no-cpu-flags.conf"
-                echo 'media-libs/libaom no-cpu-flags.conf' > "$buildroot/etc/portage/package.env/libaom.conf"
-                echo 'EGIT_OVERRIDE_COMMIT_AOM="01c7a66021087cb65d33bc73812d89dd0ecac644"' > "$portage/env/libaom.conf"
-                echo 'media-libs/libaom **' > "$portage/package.accept_keywords/libaom.conf"
-                echo 'media-libs/libaom libaom.conf' > "$portage/package.env/libaom.conf"
-                ;;
             vlc)
-                fix_package libaom
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
 dev-qt/qtgui X
@@ -1038,19 +1032,17 @@ EOF
                 [[ ${options[arch]} =~ 64 ]] &&
                 echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf" ||
                 echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf"
-                echo 'CPPFLAGS="-DAOM_IMG_FMT_444A=AOM_IMG_FMT_I444"' >> "$portage/env/vlc.conf"
                 echo 'dev-qt/* pkgconfig-redundant.conf' >> "$portage/package.env/qt.conf"
-                echo 'media-video/vlc vlc.conf' >> "$portage/package.env/vlc.conf"
                 $cat << 'EOF' >> "$portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
 sys-libs/zlib minizip
 EOF
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtgui/qtgui-5.14.1-r4.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-5.14.1-r1.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-5.14.1.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-5.14.1.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtgui/qtgui-5.14.2.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-5.14.2.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-5.14.2.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-5.14.2.ebuild"
                 script << 'EOF'
-for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*5.14.1*.ebuild
+for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*5.14.2*.ebuild
 do ebuild "$ebuild" manifest
 done
 EOF
@@ -1076,6 +1068,7 @@ function drop_debugging() {
 function drop_development() {
         exclude_paths+=(
                 etc/env.d/gcc
+                etc/portage
                 usr/include
                 'usr/lib/lib*.a'
                 usr/lib/gcc

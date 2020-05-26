@@ -41,10 +41,10 @@ do
             V) options[verity]=1 ;;
             Z) options[selinux]=1 ;;
             a) options[adduser]+="${OPTARG//$'\n'/ }"$'\n' ;;
-            c) options[sb_cert]=$OPTARG ;;
+            c) options[signing_cert]=$OPTARG ;;
             d) options[distro]=$OPTARG ;;
             h) usage ; exit 0 ;;
-            k) options[sb_key]=$OPTARG ;;
+            k) options[signing_key]=$OPTARG ;;
             p) options[packages]=$OPTARG ;;
             u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
             *) usage 1>&2 ; exit 1 ;;
@@ -79,13 +79,12 @@ configure_system
 distro_tweaks
 customize
 finalize_packages
-save_boot_files
 relabel
 squash
 unmount_root
 verity
-build_ramdisk
 kernel_cmdline
+save_boot_files
 produce_uefi_exe
 produce_executable_image
 EOF

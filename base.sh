@@ -11,10 +11,12 @@ options[nvme]=        # Support root on an NVMe disk.
 options[partuuid]=    # The partition UUID for verity to map into the root FS
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
+options[secureboot]=  # Sign the UEFI executable for Secure Boot verification
 options[selinux]=     # Enforce SELinux policy
 options[squash]=      # Produce a compressed squashfs image
 options[uefi]=        # Generate a single UEFI executable containing boot files
 options[verity]=      # Prevent file system modification with dm-verity
+options[verity_sig]=  # Create and require a verity root hash signature
 
 function usage() {
         echo "Usage: $0 [-BKRSUVZhu] \
@@ -38,7 +40,7 @@ Output format options:
   -R    Make the system run in read-only mode with tmpfs mounts where needed.
   -S    Use squashfs as the root file system for compression (implying -R).
   -U    Generate a UEFI executable that boots into the system (implying -B).
-  -V    Attach verity signatures to the root file system image (implying -R).
+  -V    Attach verity hashes to the root file system image (implying -R).
   -Z    Install and enforce targeted SELinux policy, and label the file system.
 
 Install options:
@@ -55,11 +57,11 @@ Install options:
 
 Signing options:
   -c <pem-certificate>
-        Use the given PEM certificate for Secure Boot signing.  When not using
-        UEFI, the certificate can still be used e.g. for kernel module signing.
+        Provide the PEM certificate for cryptographic authentication purposes
+        (e.g. Secure Boot, verity) instead of creating temporary keys for them.
   -k <pem-private-key>
-        Use the given PEM private key for Secure Boot signing.  When not using
-        UEFI, the private key can still be used e.g. for kernel module signing.
+        Provide the PEM private key for cryptographic authentication purposes
+        (e.g. Secure Boot, verity) instead of creating temporary keys for them.
 
 Customization options:
   -a <username>:[<uid>]:[<group-list>]:[<comment>]
@@ -84,18 +86,27 @@ Help options:
 }
 
 function imply_options() {
+        opt sb_cert && opt sb_key && options[secureboot]=1
+        opt verity_cert && opt verity_key && options[verity_sig]=1
+        opt secureboot || opt uefi_path && options[uefi]=1
+        opt verity_sig && options[verity]=1
         opt squash || opt verity && options[read_only]=1
-        opt uefi_path && options[uefi]=1
         opt uefi || opt ramdisk && options[bootable]=1
+        opt uefi && options[secureboot]=1  # Always sign the UEFI executable.
         opt executable && opt uefi && ! opt ramdisk && ! opt partuuid &&
         options[partuuid]=$(</proc/sys/kernel/random/uuid)
         opt distro || options[distro]=fedora  # This can't be unset.
 }
 
 function validate_options() {
-        # Secure Boot signing requires both a key and a certificate.
-        opt sb_cert && opt sb_key ; opt sb_cert && test -s "${options[sb_cert]}"
-        opt sb_key && opt sb_cert ; opt sb_key && test -s "${options[sb_key]}"
+        # Require both a certificate and key for each signing option.
+        local k ; for k in sb signing verity
+        do
+                opt "${k}_cert" && opt "${k}_key"
+                opt "${k}_key" && opt "${k}_cert"
+                opt "${k}_cert" && test -s "${options[${k}_cert]}"
+                opt "${k}_key" && test -s "${options[${k}_key]}"
+        done
         # Validate form, but don't look for a device yet (because hot-plugging exists).
         opt partuuid &&
         [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
@@ -103,8 +114,10 @@ function validate_options() {
         opt executable && opt uefi && ! opt ramdisk && opt partuuid
         # A partition is required when writing to disk.
         opt install_to_disk && opt partuuid
-        # A UEFI executable is required in order to save it.
-        opt uefi_path && opt uefi
+        # A UEFI executable is required in order to sign it or save it.
+        opt secureboot || opt uefi_path && opt uefi
+        # A verity signature can't exist without verity.
+        opt verity_sig && opt verity
         # Enforce the read-only setting when writing is unsupported.
         opt squash || opt verity && opt read_only
         # The distro must be set or something went wrong.
@@ -126,36 +139,53 @@ function enter() {
 }
 
 function script() {
-        $cat <([[ $- =~ x ]] && echo "PS4='+\e[34m+\e[0m '"$'\nset -x') - |
-        enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@"
+        enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@" < \
+            <([[ $- =~ x ]] && echo "PS4='+\e[34m+\e[0m ' ; set -x" ; exec $cat)
 }
 
-function script_with_keydb() if opt sb_cert && opt sb_key
-then enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@" << EOF
-PS4='+\e[34m+\e[0m '
-$([[ $- =~ x ]] && echo 'set -x')
-keydir=\$(mktemp -d)
-cat << 'EOP-' > "\$keydir/sign.key"
-$(<"${options[sb_key]}")
-EOP-
-cat << 'EOP-' > "\$keydir/sign.crt"
-$(<"${options[sb_cert]}")
-EOP-
-cat "\$keydir/sign.crt" <(echo) "\$keydir/sign.key" > "\$keydir/sign.pem"
-if ${options[uefi]:+:} false
+function script_with_keydb() { script "$@" << EOF ; }
+keydir=\$(mktemp -d) ; (cd "\$keydir"
+# Copy any specified signing keys from the host into volatile storage.
+$(for app in sb signing verity
+do for ext in cert key ; do opt "${app}_$ext" && $cat \
+    <(echo "cat << 'EOP-' > ${app/#signing/sign}.${ext/#ce/c}") \
+    "${options[${app}_$ext]}" \
+    <(echo -e '\nEOP-') ||
+: ; done ; done)
+
+# Generate the default signing keys if they weren't supplied.
+if ! test -s sign.crt -a -s sign.key
+then
+        openssl req -batch -nodes -utf8 -x509 -newkey rsa:4096 -sha512 \
+            -days 36500 -subj '/CN=Single-use signing key' \
+            -outform PEM -out sign.crt -keyout sign.key
+        cp -pt /wd sign.crt  # Save the generated certificate for convenience.
+fi
+
+# Point any missing application signing keys to the default keys.
+for app in sb verity
+do
+        if ! test -s "\$app.crt" -a -s "\$app.key"
+        then
+                ln -fn sign.crt "\$app.crt"
+                ln -fn sign.key "\$app.key"
+        fi
+done
+
+# Format keys as needed for each application.
+cat sign.crt <(echo) sign.key > sign.pem
+if ${options[secureboot]:+:} false
 then
         openssl pkcs12 -export \
-            -in "\$keydir/sign.crt" -inkey "\$keydir/sign.key" \
-            -name sb -out "\$keydir/sign.p12" -password pass:
-        certutil --empty-password -N -d "\$keydir"
-        pk12util -W '' -d "\$keydir" -i "\$keydir/sign.p12"
+            -in sb.crt -inkey sb.key \
+            -name sb -out sb.p12 -password pass:
+        certutil --empty-password -N -d .
+        pk12util -W '' -d . -i sb.p12
 fi
-{
+) ; {
 $(</dev/stdin)
 } < /dev/null
 EOF
-else script "$@"
-fi
 
 # Distros should override these functions.
 function create_buildroot() { : ; }
@@ -227,7 +257,7 @@ EOF
         elif opt read_only
         then
                 disk=erofs.img
-                grep -q exclude-regex <(mkfs.erofs --help 2>&1) > "$root/ef" &&
+                local path
                 for path in "$disk" "${exclude_paths[@]//\*/[^/]*}"
                 do
                         path=${path//+/\\+} ; path=${path//./\\.}
@@ -255,9 +285,13 @@ EOF
         cpio -D "$root" -H newc -R 0:0 -o |
         xz --check=crc32 -9e > relabel.img
 
+        test -s vmlinuz.relabel ||
+        cp -p /lib/modules/*/vmlinuz vmlinuz.relabel ||
+        cp -p /boot/vmlinuz-* vmlinuz.relabel
+
         umount root
         local -r cores=$(test -e /dev/kvm && nproc)
-        qemu-system-x86_64 -nodefaults -serial stdio < /dev/null \
+        qemu-system-x86_64 -nodefaults -no-reboot -serial stdio < /dev/null \
             ${cores:+-enable-kvm -cpu host -smp cores="$cores"} -m 1G \
             -kernel vmlinuz.relabel -append console=ttyS0 \
             -initrd relabel.img /dev/loop-root
@@ -277,19 +311,18 @@ elif opt read_only && ! opt selinux
 then
         local -a args ; local path
         disk=erofs.img
-        if grep -q exclude-regex <(mkfs.erofs --help 2>&1)
-        then
-                for path in "${exclude_paths[@]//\*/[^/]*}"
-                do
-                        path=${path//+/\\+} ; path=${path//./\\.}
-                        args+=("--exclude-regex=^${path//\?/[^/]}$")
-                done
-        else
-                for path in "${exclude_paths[@]}"
-                do compgen -G "root/$path" || continue
-                done | xargs --delimiter='\n' -- rm -fr
-        fi
+        for path in "${exclude_paths[@]//\*/[^/]*}"
+        do
+                path=${path//+/\\+} ; path=${path//./\\.}
+                args+=("--exclude-regex=^${path//\?/[^/]}$")
+        done
         mkfs.erofs "${args[@]}" -Eforce-inode-compact -x-1 "$disk" root
+elif ! opt read_only
+then
+        local path
+        for path in "${exclude_paths[@]}"
+        do compgen -G "root/$path" || continue
+        done | xargs --delimiter='\n' -- rm -fr
 fi
 
 function verity() if opt verity
@@ -302,10 +335,11 @@ then
 
         opt partuuid && root=PARTUUID=${options[partuuid]}
         opt ramdisk && root=/dev/loop0
+        opt verity_sig && opt_params+=(root_hash_sig_key_desc verity:root)
 
         while read -rs
         do verity[${REPLY%%:*}]=${REPLY#*:}
-        done < <(veritysetup format "$disk" signatures.img)
+        done < <(veritysetup format "$disk" verity.img)
 
         echo > dmsetup.txt \
             root,,,ro,0 $(( size / 512 )) \
@@ -315,30 +349,13 @@ then
             ${verity[Hash algorithm]} ${verity[Root hash]} \
             ${verity[Salt]} "${#opt_params[@]}" "${opt_params[@]}"
 
-        cat "$disk" signatures.img > final.img
-else ln -fn "$disk" final.img
-fi
+        opt verity_sig && openssl smime -sign \
+            -inkey "$keydir/verity.key" -signer "$keydir/verity.crt" \
+            -binary -in <(echo -n ${verity[Root hash]}) \
+            -noattr -nocerts -out verity.sig -outform DER
 
-function build_ramdisk() if opt ramdisk
-then
-        local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
-        mkdir -p "$root/usr/lib/systemd/system/dev-loop0.device.requires"
-        cat << EOF > "$root/usr/lib/systemd/system/losetup-root.service"
-[Unit]
-DefaultDependencies=no
-After=systemd-tmpfiles-setup-dev.service
-Requires=systemd-tmpfiles-setup-dev.service
-[Service]
-ExecStart=/usr/sbin/losetup --find${options[read_only]:+ --read-only} /sysroot/root.img
-RemainAfterExit=yes
-Type=oneshot
-EOF
-        ln -fst "$root/usr/lib/systemd/system/dev-loop0.device.requires" ../losetup-root.service
-        mkdir -p "$root/sysroot"
-        ln -fn final.img "$root/sysroot/root.img"
-        find "$root" -mindepth 1 -printf '%P\n' |
-        cpio -D "$root" -H newc -R 0:0 -o |
-        xz --check=crc32 -9e | cat initrd.img - > ramdisk.img
+        cat "$disk" verity.img > final.img
+else ln -fn "$disk" final.img
 fi
 
 function kernel_cmdline() if opt bootable
@@ -348,6 +365,7 @@ then
         local type=ext4
 
         opt ramdisk && dmsetup=DVR
+        opt verity_sig && dmsetup=DVR  # Skip dm-init for userspace as a hack.
 
         opt partuuid && root=PARTUUID=${options[partuuid]}
         opt ramdisk && root=/dev/loop0
@@ -360,7 +378,30 @@ then
             $(opt read_only && echo ro || echo rw) \
             "root=$root" \
             "rootfstype=$type" \
-            $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"")
+            $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"") \
+            $(opt verity_sig && echo dm-verity.require_signatures=1)
+fi
+
+function build_systemd_ramdisk() if opt ramdisk
+then
+        local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
+        mkdir -p "$root/usr/lib/systemd/system/dev-loop0.device.requires"
+        cat << EOF > "$root/usr/lib/systemd/system/losetup-root.service"
+[Unit]
+DefaultDependencies=no
+After=systemd-tmpfiles-setup-dev.service
+Requires=systemd-tmpfiles-setup-dev.service
+[Service]
+ExecStart=/usr/sbin/losetup --find${options[read_only]:+ --read-only} /root.img
+RemainAfterExit=yes
+Type=oneshot
+EOF
+        ln -fst "$root/usr/lib/systemd/system/dev-loop0.device.requires" ../losetup-root.service
+        ln -fn final.img "$root/root.img"
+        cp -p initrd.img initrd.base.img  # Save the unmodified initrd.
+        find "$root" -mindepth 1 -printf '%P\n' |
+        cpio -D "$root" -H newc -R 0:0 -o |
+        xz --check=crc32 -9e >> initrd.img
 fi
 
 function tmpfs_var() if opt read_only
@@ -566,7 +607,7 @@ function finalize_packages() {
         systemd-sysusers --root=root
 
         # Create users from options after system groups were created.
-        ! opt adduser || (IFS=$'\n'
+        opt adduser && (IFS=$'\n'
                 for spec in ${options[adduser]}
                 do
                         spec+=::::
@@ -581,6 +622,9 @@ function finalize_packages() {
                             --password= "$name"
                 done
         )
+
+        # Save /etc/os-release outside the image after all customizations.
+        test ! -s root/etc/os-release || cp -pt . root/etc/os-release
 }
 
 function produce_uefi_exe() if opt uefi
@@ -588,8 +632,7 @@ then
         local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
         local -r logo=$(test -s logo.bmp && echo logo.bmp)
         local -r osrelease=$(test -s os-release && echo os-release)
-        local initrd=$(opt ramdisk && echo ramdisk || echo initrd).img
-        test -s "$initrd" || initrd=
+        local -r initrd=$(test -s initrd.img && echo initrd.img)
 
         objcopy \
             ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=0x20000} \
@@ -599,7 +642,7 @@ then
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
             /usr/lib/systemd/boot/efi/linuxx64.efi.stub unsigned.efi
 
-        if opt sb_cert && opt sb_key
+        if opt secureboot
         then
                 pesign --certdir="$keydir" --certificate=sb --force \
                     --in=unsigned.efi --out=BOOTX64.EFI --sign

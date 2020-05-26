@@ -17,6 +17,7 @@ options+=(
 
 packages+=(
         # Utilities
+        app-arch/cpio
         app-arch/tar
         app-arch/unzip
         app-shells/bash
@@ -85,7 +86,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -155,11 +156,11 @@ then
         local -r dtb=/usr/src/linux/arch/arm/boot/dts/rk3288-veyron-minnie.dtb
 
         # Build the system's device tree blob.
-        make -C /usr/src/linux "${dtb##*/}" \
+        make -C /usr/src/linux -j"$(nproc)" "${dtb##*/}" \
             ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
 
         # Build the FIT binary from the kernel and DTB.
-        mkimage -f - kernel.itb << EOF
+        mkimage -f - /root/kernel.itb << EOF
 /dts-v1/;
 / {
     description = "Gentoo";
@@ -197,21 +198,22 @@ EOF
         # Pack the kernel image.
         local b=/usr/share/vboot/devkeys/kernel.keyblock
         local p=/usr/share/vboot/devkeys/kernel_data_key.vbprivk
-        if opt sb_key  # This assumes RSA4096/SHA512.
+        if test -s "$keydir/sign.pem"  # This assumes RSA4096/SHA512.
         then
                 dumpRSAPublicKey -cert "$keydir/sign.crt" > "$keydir/sign.keyb"
                 vbutil_key --pack "$keydir/sign.vbpubk" \
                     --algorithm 8 --key "$keydir/sign.keyb" --version 1
                 vbutil_key --pack "$keydir/sign.vbprivk" \
                     --algorithm 8 --key "$keydir/sign.pem" --version 1
-                vbutil_keyblock --pack sign.keyblock \
+                vbutil_keyblock --pack /root/sign.keyblock \
                     --datapubkey "$keydir/sign.vbpubk" --flags 15
-                b=sign.keyblock ; p="$keydir/sign.vbprivk"
+                b=/root/sign.keyblock ; p="$keydir/sign.vbprivk"
         fi
-        dd bs=512 count=1 if=/dev/zero of=bootloader.img
+        dd bs=512 count=1 if=/dev/zero of=/root/bootloader.img
         vbutil_kernel --pack kernel.img \
-            --arch arm --bootloader bootloader.img --config kernel_args.txt \
-            --keyblock "$b" --signprivate "$p" --version 1 --vmlinuz kernel.itb
+            --arch arm --bootloader /root/bootloader.img \
+            --config kernel_args.txt --keyblock "$b" --signprivate "$p" \
+            --version 1 --vmlinuz /root/kernel.itb
 fi
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }

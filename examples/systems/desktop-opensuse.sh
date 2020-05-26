@@ -164,11 +164,10 @@ function customize() {
         )
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        opt sb_key &&
         for module in root/lib/modules/*/updates/nvidia*.ko
         do
                 /lib/modules/*/build/scripts/sign-file \
-                    sha256 "$keydir/sign.key" "$keydir/sign.crt" "$module"
+                    sha256 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.

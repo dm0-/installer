@@ -23,6 +23,7 @@ options+=(
 
 packages+=(
         # Utilities
+        app-arch/cpio
         app-arch/tar
         app-arch/unzip
         app-shells/bash
@@ -99,7 +100,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -246,6 +247,7 @@ EOF
         hcopy -r grub.elf :grub.elf
         hcopy -r kargs.env :kargs_a
         hcopy -r vmlinux :linux_a
+        test -s initrd.img && hcopy -r initrd.img :initrd_a
         hattrib -c UNIX -t tbxi :grub.elf
         hattrib -b :
         humount
@@ -402,9 +404,11 @@ CONFIG_BLK_DEV_SD=y
 CONFIG_USB_STORAGE=y
 CONFIG_USB_UAS=y
 ## Optional USB devices
-CONFIG_HID_GYRATION=m  # wireless mouse and keyboard
-CONFIG_USB_ACM=m       # fit-PC status LED
-CONFIG_USB_HID=m       # mice and keyboards
+CONFIG_SND_USB=y
+CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
+CONFIG_SND_USB_AUDIO=m  # headsets
+CONFIG_USB_ACM=m        # fit-PC status LED
+CONFIG_USB_HID=m        # mice and keyboards
 # TARGET HARDWARE: QEMU
 ## QEMU default graphics
 CONFIG_DRM_BOCHS=m
