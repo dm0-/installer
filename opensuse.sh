@@ -14,14 +14,15 @@ function create_buildroot() {
         opt squash && packages_buildroot+=(squashfs)
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
         opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
-        packages_buildroot+=(curl e2fsprogs)
+        packages_buildroot+=(curl e2fsprogs glib2-tools)
 
         $mkdir -p "$buildroot"
         $curl -L "$image.sha256" > "$output/checksum"
+        $curl -L "$image.sha256.asc" > "$output/checksum.sig"
         $curl -L "$image" > "$output/image.tar.xz"
-        verify_distro "$output/checksum" "$output/image.tar.xz"
+        verify_distro "$output"/checksum{,.sig} "$output/image.tar.xz"
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output/checksum" "$output/image.tar.xz"
+        $rm -f "$output"/checksum{,.sig} "$output/image.tar.xz"
 
         # Disable non-OSS packages by default.
         $sed -i -e '/^enabled=/s/=.*/=0/' "$buildroot/etc/zypp/repos.d/repo-non-oss.repo"
@@ -43,7 +44,8 @@ function install_packages() {
 
         opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
         zypper --non-interactive --installroot="$PWD/root" \
-            install "${packages[@]:-filesystem}" "$@" || [ 107 -eq "$?" ]
+            install --auto-agree-with-licenses \
+            "${packages[@]:-filesystem}" "$@" || [ 107 -eq "$?" ]
 
         # Define basic users and groups prior to configuring other stuff.
         grep -qs '^wheel:' root/etc/group ||
@@ -202,8 +204,8 @@ hqrPS+q2yftjNbsODagaOUb85ESfQGx/LqoMePD+7MqGpAXjKMZqsEDP0TbxTwSk
 =i2TA
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$1"
-        test x$($sed -n 's/  .*//p' "$1") = x$($sha256sum "$2" | $sed -n '1s/ .*//p')
+        $gpg --verify "$2"
+        test x$($sed -n 's/  .*//p' "$1") = x$($sha256sum "$3" | $sed -n '1s/ .*//p')
 }
 
 # OPTIONAL (IMAGE)

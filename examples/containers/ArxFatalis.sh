@@ -49,6 +49,8 @@ mkdir -p "$XDG_CONFIG_HOME/arx"
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/arx" ] ||
 mkdir -p "$XDG_DATA_HOME/arx"
 
+declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+
 exec sudo systemd-nspawn \
     --bind="$XDG_CONFIG_HOME/arx:/home/$USER/.config/arx" \
     --bind="$XDG_DATA_HOME/arx:/home/$USER/.local/share/arx" \
@@ -59,6 +61,7 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir="/home/$USER" \
+    ${console:+--console=pipe} \
     --hostname=ArxFatalis \
     --image="${IMAGE:-ArxFatalis.img}" \
     --link-journal=no \

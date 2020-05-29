@@ -127,11 +127,13 @@ function validate_options() {
 function opt() { test -n "${options["${*?}"]-}" ; }
 
 function enter() {
+        local -r console=$($nspawn --help |& $sed -n /--console=/p)
         $nspawn \
             --bind="$output:/wd" \
             $(test -e /dev/kvm && echo --bind=/dev/kvm) \
             ${loop:+--bind="$loop:/dev/loop-root"} \
             --chdir=/wd \
+            ${console:+--console=pipe} \
             --directory="$buildroot" \
             --machine="buildroot-${output##*.}" \
             --quiet \

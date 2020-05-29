@@ -1,15 +1,16 @@
-options+=([arch]=i686 [distro]=fedora [executable]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=opensuse [executable]=1 [squash]=1)
 
 packages+=(
-        alsa-plugins-pulseaudio
-        libGL
-        libXcursor
-        mesa-dri-drivers
+        alsa-plugins-pulse
+        desktop-data-openSUSE
+        libXcursor1
+        Mesa-dri{,-nouveau}
+        Mesa-libGL1
 )
 
 packages_buildroot+=(expect)
 function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
         $cp "${1:-psychonauts-linux-05062013-bin}" "$output/install"
         $chmod 0755 "$output/install"
 }
@@ -40,6 +41,8 @@ EOF
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/Psychonauts" ] ||
 mkdir -p "$XDG_DATA_HOME/Psychonauts"
 
+declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/Psychonauts:/tmp/save" \
     --bind=/dev/dri \
@@ -48,6 +51,7 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir="/home/$USER" \
+    ${console:+--console=pipe} \
     --hostname=Psychonauts \
     --image="${IMAGE:-Psychonauts.img}" \
     --link-journal=no \

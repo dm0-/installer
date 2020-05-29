@@ -1,14 +1,13 @@
-options+=([arch]=i686 [distro]=fedora [executable]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=opensuse [executable]=1 [squash]=1)
 
 packages+=(
-        mesa-dri-drivers
-        wine-core
-        wine-pulseaudio
+        Mesa-dri{,-nouveau}
+        wine
 )
 
 packages_buildroot+=(innoextract)
 function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
         $cp "${1:-setup_fallout_2.1.0.18.exe}" "$output/install.exe"
 }
 
@@ -40,6 +39,8 @@ do
         touch "$XDG_DATA_HOME/Fallout/$file"
 done
 
+declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/Fallout/SAVEGAME:/fallout/DATA/SAVEGAME" \
     --bind="$XDG_DATA_HOME/Fallout/f1_res.ini:/fallout/f1_res.ini" \
@@ -50,6 +51,7 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/fallout \
+    ${console:+--console=pipe} \
     --hostname=Fallout \
     --image="${IMAGE:-Fallout.img}" \
     --link-journal=no \

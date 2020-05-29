@@ -1,14 +1,13 @@
-options+=([arch]=i686 [distro]=fedora [executable]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=opensuse [executable]=1 [squash]=1)
 
 packages+=(
-        mesa-dri-drivers
-        wine-core
-        wine-pulseaudio
+        Mesa-dri{,-nouveau}
+        wine
 )
 
 packages_buildroot+=(innoextract jq)
 function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
 }
@@ -38,6 +37,8 @@ mkdir -p "$XDG_DATA_HOME/TheLongestJourney/Save"
 [ -e "$XDG_DATA_HOME/TheLongestJourney/preferences.ini" ] ||
 touch "$XDG_DATA_HOME/TheLongestJourney/preferences.ini"
 
+declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/TheLongestJourney/Save:/TLJ/Save" \
     --bind="$XDG_DATA_HOME/TheLongestJourney/preferences.ini:/TLJ/preferences.ini" \
@@ -47,6 +48,7 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/TLJ \
+    ${console:+--console=pipe} \
     --hostname=TheLongestJourney \
     --image="${IMAGE:-TheLongestJourney.img}" \
     --link-journal=no \

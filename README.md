@@ -60,8 +60,8 @@ Five distros are supported: *Fedora* (30, 31, and the default 32), *CentOS* (7 a
 **Cross-building**:  A target architecture can be specified to build an image for a processor different than the build system.
 
   * :star: *Gentoo* supports cross-compiling to any architecture for any image type.
-  * :construction: *CentOS 7* and *Fedora 30* support building i686 containers on x86_64 systems.
-  * :skull: *Arch*, *CentOS 8*, *Fedora 31+*, and *openSUSE* can only create images for the same architecture as the build system.
+  * :construction: *CentOS 7*, *Fedora 30*, and *openSUSE* support building i686 containers on x86_64 systems.
+  * :skull: *Arch*, *CentOS 8*, and *Fedora 31+* can only create images for the same architecture as the build system.
 
 **Bootable**:  The bootable option produces a kernel and other boot-related files in addition to the root file system.  This option should always be used unless a container is being built.
 

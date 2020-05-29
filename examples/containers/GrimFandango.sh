@@ -1,15 +1,15 @@
-options+=([arch]=i686 [distro]=fedora [executable]=1 [release]=30 [squash]=1)
+options+=([arch]=i686 [distro]=opensuse [executable]=1 [squash]=1)
 
 packages+=(
-        alsa-plugins-pulseaudio
-        libGLU
-        libX{cursor,i,inerama,randr,ScrnSaver,xf86vm}
-        mesa-dri-drivers
+        alsa-plugins-pulse
+        libGLU1
+        libX{cursor1,i6,inerama1,randr2,ss1,xf86vm1}
+        Mesa-dri{,-nouveau}
 )
 
 packages_buildroot+=(unzip)
 function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
         $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.sh"
 }
 
@@ -34,6 +34,8 @@ function customize() {
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/GrimFandango" ] ||
 mkdir -p "$XDG_DATA_HOME/GrimFandango"
 
+declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/GrimFandango:/grim/Saves" \
     --bind=/dev/dri \
@@ -42,6 +44,7 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/grim \
+    ${console:+--console=pipe} \
     --hostname=GrimFandango \
     --image="${IMAGE:-GrimFandango.img}" \
     --link-journal=no \

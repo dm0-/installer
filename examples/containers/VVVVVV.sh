@@ -39,6 +39,8 @@ function customize() {
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/VVVVVV" ] ||
 mkdir -p "$XDG_DATA_HOME/VVVVVV"
 
+declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/VVVVVV:/home/$USER/.local/share/VVVVVV" \
     --bind=/dev/dri \
@@ -47,6 +49,7 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/ \
+    ${console:+--console=pipe} \
     --hostname=VVVVVV \
     --image="${IMAGE:-VVVVVV.img}" \
     --link-journal=no \
