@@ -116,8 +116,6 @@ function initialize_buildroot() {
         $rm -f "$output/nvidia.key"
         echo -e > "$buildroot/etc/zypp/repos.d/nvidia.repo" \
             "[nvidia]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
-        $sed -i -e 's/^[# ]*\(autoAgreeWithLicenses\) *=.*/\1 = yes/' \
-            "$buildroot/etc/zypp/zypper.conf"
         echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
         packages_buildroot+=(nvidia-gfxG05-kmp-default)
 }

@@ -28,13 +28,15 @@ function customize() {
         mkdir -p root/grim/Saves
         rm -f grim.sh
 
+        ln -fns grim/GrimFandango root/init
+
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/GrimFandango" ] ||
 mkdir -p "$XDG_DATA_HOME/GrimFandango"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/GrimFandango:/grim/Saves" \
@@ -58,6 +60,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    ./GrimFandango "$@"
+    /init "$@"
 EOF
 }

@@ -40,6 +40,7 @@ packages+=(
         app-admin/sudo
         sys-apps/shadow
         ## Hardware
+        dev-libs/libgpiod
         sys-apps/usbutils
         ## Network
         net-firewall/iptables
@@ -54,6 +55,7 @@ packages+=(
         sys-fs/e2fsprogs
 
         # Graphics
+        media-sound/pulseaudio
         x11-apps/xev
         x11-apps/xrandr
         x11-base/xorg-server
@@ -195,10 +197,11 @@ then
 };
 EOF
 
-        # Pack the kernel image.
+        # Pack the kernel image.  Accept a custom RSA4096/SHA512 signing key.
         local b=/usr/share/vboot/devkeys/kernel.keyblock
         local p=/usr/share/vboot/devkeys/kernel_data_key.vbprivk
-        if test -s "$keydir/sign.pem"  # This assumes RSA4096/SHA512.
+        if openssl x509 -noout -text < "$keydir/sign.crt" |
+                sed -n '/^ *Sig.*Alg.*sha512/,${/^ *RSA Pub.*4096 bit/q0;};$q1'
         then
                 dumpRSAPublicKey -cert "$keydir/sign.crt" > "$keydir/sign.keyb"
                 vbutil_key --pack "$keydir/sign.vbpubk" \
@@ -354,6 +357,13 @@ CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
+## Webcam
+CONFIG_MEDIA_SUPPORT=y
+CONFIG_MEDIA_CAMERA_SUPPORT=y
+CONFIG_MEDIA_USB_SUPPORT=y
+CONFIG_USB_VIDEO_CLASS=y
+CONFIG_VIDEO_DEV=y
+CONFIG_VIDEO_V4L2=y
 ## USB storage
 CONFIG_SCSI=y
 CONFIG_BLK_DEV_SD=y
@@ -387,7 +397,9 @@ CONFIG_REGULATOR_RK808=y
 CONFIG_RTC_CLASS=y
 CONFIG_RTC_DRV_RK808=y
 ## Optional USB devices
-CONFIG_HID_GYRATION=m  # wireless mouse and keyboard
-CONFIG_USB_ACM=m       # fit-PC status LED
-CONFIG_USB_HID=m       # mice and keyboards
+CONFIG_SND_USB=y
+CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
+CONFIG_SND_USB_AUDIO=m  # headsets
+CONFIG_USB_ACM=m        # fit-PC status LED
+CONFIG_USB_HID=m        # mice and keyboards
 EOF

@@ -41,13 +41,20 @@ EOF
         )
         minimize "${files[@]}"
 
-        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > root/init && chmod 0755 root/init
+#!/bin/sh -eu
+mkdir -p "$HOME/.macromedia"
+ln -fns /tmp/save "$HOME/.macromedia/Flash_Player"
+exec flashplayer /boiwotl.swf "$@"
+EOF
+
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheBindingOfIsaac" ] ||
 mkdir -p "$XDG_DATA_HOME/TheBindingOfIsaac"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/TheBindingOfIsaac:/tmp/save" \
@@ -71,12 +78,8 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-mkdir -p "$HOME/.macromedia"
-ln -fns /tmp/save "$HOME/.macromedia/Flash_Player"
-exec flashplayer /boiwotl.swf "$@"
+    /init "$@"
 EOF
-EOG
 }
 
 function minimize() {

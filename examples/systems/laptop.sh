@@ -55,6 +55,7 @@ packages+=(
         sys-fs/e2fsprogs
 
         # Graphics
+        media-sound/pulseaudio
         x11-apps/xev
         x11-apps/xrandr
         x11-base/xorg-server
@@ -88,6 +89,9 @@ function customize_buildroot() {
         echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
+        $mkdir -p "$portage/patches/x11-drivers/nvidia-drivers"
+        $curl -L 'https://726688.bugs.gentoo.org/attachment.cgi?id=643102' > "$portage/patches/x11-drivers/nvidia-drivers/linux-5.7.patch"
+        test x$($sha256sum "$portage/patches/x11-drivers/nvidia-drivers/linux-5.7.patch" | sed -n '1s/ .*//p') = x2d2996aa4475e006d8cc1ae7c1884b6d42505304c0bccf7631982ffe080ee41a
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' twm \

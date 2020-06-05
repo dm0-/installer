@@ -27,13 +27,20 @@ function customize() {
         tar --exclude="${drop:-x86}" -xf FTL.tgz -C root
         rm -f FTL.tgz
 
-        sed "${drop:+s/-64//}" << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > root/init && chmod 0755 root/init
+#!/bin/sh -eu
+mkdir -p "$HOME/.local/share"
+ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
+exec ./FTL "$@"
+EOF
+
+        sed "${drop:+s/-64//}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||
 mkdir -p "$XDG_DATA_HOME/FasterThanLight"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/FasterThanLight:/tmp/save" \
@@ -57,10 +64,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-mkdir -p "$HOME/.local/share"
-ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
-exec ./FTL "$@"
+    /init "$@"
 EOF
-EOG
 }

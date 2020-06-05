@@ -21,6 +21,7 @@ packages+=(
 
         # Utilities
         binutils
+        bzip2
         crypto-policies-scripts
         emacs-nox
         file

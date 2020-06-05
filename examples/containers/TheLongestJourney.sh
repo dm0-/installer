@@ -28,7 +28,17 @@ function customize() {
         wine_gog_script /TLJ < root/TLJ/goggame-1207658794.script > reg.sh
         sed -i -e 's/Z:/C:/g' reg.sh
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOG' > launch.sh && chmod 0755 launch.sh
+        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init && chmod 0755 root/init
+#!/bin/sh -eu
+test -s preferences.ini || cat preferences.ini.orig > preferences.ini
+(unset DISPLAY
+REG_SCRIPT
+)
+ln -fst "$HOME/.wine/dosdevices/c:" /TLJ
+exec wine explorer /desktop=virtual,640x480 /TLJ/game.exe "$@"
+EOF
+
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheLongestJourney/Save" ] ||
@@ -37,7 +47,7 @@ mkdir -p "$XDG_DATA_HOME/TheLongestJourney/Save"
 [ -e "$XDG_DATA_HOME/TheLongestJourney/preferences.ini" ] ||
 touch "$XDG_DATA_HOME/TheLongestJourney/preferences.ini"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/TheLongestJourney/Save:/TLJ/Save" \
@@ -62,13 +72,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-test -s preferences.ini || cat preferences.ini.orig > preferences.ini
-(unset DISPLAY
-REG_SCRIPT
-)
-ln -fst "$HOME/.wine/dosdevices/c:" /TLJ
-exec wine explorer /desktop=virtual,640x480 /TLJ/game.exe "$@"
+    /init "$@"
 EOF
-EOG
 }

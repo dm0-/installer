@@ -35,13 +35,22 @@ expect eof
 EOF
         rm -f root/install install
 
-        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > root/init && chmod 0755 root/init
+#!/bin/sh -eu
+mkdir -p "$HOME/.local/share"
+ln -fns /tmp/save "$HOME/.local/share/Psychonauts"
+test -e /tmp/save/DisplaySettings.ini ||
+cp -t /tmp/save /psychonauts/DisplaySettings.ini
+exec /psychonauts/Psychonauts "$@"
+EOF
+
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/Psychonauts" ] ||
 mkdir -p "$XDG_DATA_HOME/Psychonauts"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/Psychonauts:/tmp/save" \
@@ -65,12 +74,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-mkdir -p "$HOME/.local/share"
-ln -fns /tmp/save "$HOME/.local/share/Psychonauts"
-test -e /tmp/save/DisplaySettings.ini ||
-cp -t /tmp/save /psychonauts/DisplaySettings.ini
-exec /psychonauts/Psychonauts "$@"
+    /init "$@"
 EOF
-EOG
 }

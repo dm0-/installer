@@ -25,13 +25,22 @@ function customize() {
         rm -fr install.exe root/root/app/{gog*,__support,webcache.zip}
         mv root/root/app root/BGE
 
-        cat << 'EOG' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > root/init && chmod 0755 root/init
+#!/bin/sh -eu
+(unset DISPLAY
+wine reg add 'HKEY_CURRENT_USER\Software\Ubisoft\Beyond Good & Evil\SettingsApplication.INI\Basic video' /v 'NoBands' /t REG_DWORD /d 1 /f
+wine /BGE/SettingsApplication.exe
+exec sleep 1)
+exec wine /BGE/BGE.exe "$@"
+EOF
+
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/BeyondGoodAndEvil" ] ||
 mkdir -p "$XDG_DATA_HOME/BeyondGoodAndEvil"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind=/dev/dri \
@@ -55,12 +64,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-(unset DISPLAY
-wine reg add 'HKEY_CURRENT_USER\Software\Ubisoft\Beyond Good & Evil\SettingsApplication.INI\Basic video' /v 'NoBands' /t REG_DWORD /d 1 /f
-wine /BGE/SettingsApplication.exe
-exec sleep 1)
-exec wine /BGE/BGE.exe "$@"
+    /init "$@"
 EOF
-EOG
 }

@@ -27,7 +27,7 @@ function create_buildroot() {
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
         $ln -fns "../../var/db/repos/gentoo/profiles/$(archmap_profile)" "$portage/make.profile"
-        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile,repos.conf}
+        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.force,repos.conf}
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
@@ -134,6 +134,8 @@ EOF
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
         # Accept libcap-2.34 to fix build ordering with EAPI 7.
         echo '<sys-libs/libcap-2.35 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libgpiod-1.4.1 since there is no stable version.
+        echo dev-libs/libgpiod >> "$portage/package.accept_keywords/libgpiod.conf"
         # Accept libuv-1.38.0 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
         # Accept pango-1.44.7 to fix host dependencies.
@@ -235,6 +237,8 @@ media-gfx/imagemagick svg xml
 sys-apps/pciutils -udev
 sys-apps/systemd gnuefi
 EOF
+        # Prevent accidentally disabling required modules.
+        echo 'dev-libs/libxml2 python' >> "$portage/profile/package.use.force/libxml2.conf"
 
         initialize_buildroot
 
@@ -860,13 +864,13 @@ EOF
                 ;;
             firefox)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
-=dev-lang/rust-1.43.1
+=dev-lang/rust-1.44.0
 dev-libs/libgit2
 dev-libs/nspr
 dev-libs/nss
 media-libs/libvpx
 media-libs/libwebp
-=virtual/rust-1.43.1
+=virtual/rust-1.44.0
 EOF
                 echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
@@ -888,7 +892,7 @@ dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
 media-libs/libwebp
-=www-client/firefox-76.0.1 ~*
+=www-client/firefox-77.0.1 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
@@ -908,14 +912,6 @@ EOF
                 $mkdir -p "$portage/patches/www-client/firefox"
                 test "x${options[arch]}" = xpowerpc &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
-diff --git a/third_party/rust/authenticator/src/linux/ioctl_powerpcbe.rs b/third_party/rust/authenticator/src/linux/ioctl_powerpcbe.rs
-new file mode 120000
-index 0000000000..0a99c953b2
---- /dev/null
-+++ b/third_party/rust/authenticator/src/linux/ioctl_powerpcbe.rs
-@@ -0,0 +1 @@
-+ioctl_powerpc64le.rs
-\ No newline at end of file
 --- a/js/src/jit/none/MacroAssembler-none.h
 +++ b/js/src/jit/none/MacroAssembler-none.h
 @@ -100,7 +100,7 @@
@@ -958,9 +954,9 @@ index 0000000000..0a99c953b2
 EOF
                 script << 'EOG'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- dev-lang/rust/rust-1.43.1.ebuild
-+++ dev-lang/rust/rust-1.43.1.ebuild
-@@ -170,16 +170,19 @@
+--- dev-lang/rust/rust-1.44.0.ebuild
++++ dev-lang/rust/rust-1.44.0.ebuild
+@@ -173,16 +173,19 @@
  }
  
  src_configure() {
@@ -984,7 +980,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  	local tools="\"cargo\","
  	if use clippy; then
-@@ -216,7 +219,7 @@
+@@ -219,7 +222,7 @@
  		[build]
  		build = "${rust_target}"
  		host = ["${rust_target}"]
@@ -993,7 +989,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		cargo = "${rust_stage0_root}/bin/cargo"
  		rustc = "${rust_stage0_root}/bin/rustc"
  		docs = $(toml_usex doc)
-@@ -292,6 +295,18 @@
+@@ -295,6 +298,18 @@
  		EOF
  	fi
  
@@ -1013,11 +1009,11 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	cat "${S}"/config.toml || die
  }
 EOP
-sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-76.0.1.ebuild
+sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-76.0.1.ebuild
-ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.43.1.ebuild manifest
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-76.0.1.ebuild manifest
+sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild
+ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.44.0.ebuild manifest
+ebuild /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild manifest
 EOG
                 ;;
             vlc)

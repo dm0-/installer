@@ -60,6 +60,7 @@ packages+=(
         sys-fs/e2fsprogs
 
         # Graphics
+        media-sound/pulseaudio
         x11-apps/xev
         x11-apps/xrandr
         x11-base/xorg-server
@@ -125,9 +126,6 @@ function customize_buildroot() {
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'media-libs/opus no-lto.conf' >> "$portage/package.env/no-lto.conf"
-
-        # Accept GPIO device tools with no stable versions.
-        echo dev-libs/libgpiod >> "$portage/package.accept_keywords/libgpiod.conf"
 
         # Install Emacs as a terminal application.
         fix_package emacs
@@ -335,7 +333,9 @@ CONFIG_MMC_WMT=y
 CONFIG_RTC_CLASS=y
 CONFIG_RTC_DRV_VT8500=y
 ## Optional USB devices
-CONFIG_HID_GYRATION=m  # wireless mouse and keyboard
-CONFIG_USB_ACM=m       # fit-PC status LED
-CONFIG_USB_HID=m       # mice and keyboards
+CONFIG_SND_USB=y
+CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
+CONFIG_SND_USB_AUDIO=m  # headsets
+CONFIG_USB_ACM=m        # fit-PC status LED
+CONFIG_USB_HID=m        # mice and keyboards
 EOF

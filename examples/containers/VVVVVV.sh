@@ -14,7 +14,7 @@ test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
     x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
 git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
 mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
-git reset --hard a623190b09a4af6e5acb60a90617d26aca447ee3
+git reset --hard c561cd97408c0415a8ef7a9b69a33f2eef3626ea
 cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec ninja -j"$(nproc)" all
 EOF
@@ -33,13 +33,15 @@ function customize() {
         cp -pt root VVVVVV/desktop_version/build/VVVVVV
         cp -pt root data.zip
 
+        ln -fns VVVVVV root/init
+
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/VVVVVV" ] ||
 mkdir -p "$XDG_DATA_HOME/VVVVVV"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/VVVVVV:/home/$USER/.local/share/VVVVVV" \
@@ -63,6 +65,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /VVVVVV "$@"
+    /init "$@"
 EOF
 }

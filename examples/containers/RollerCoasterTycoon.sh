@@ -26,7 +26,15 @@ function customize() {
         wine_gog_script /RCT < root/root/app/goggame-1207658945.script > reg.sh
         mv root/root/app root/RCT
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOG' > launch.sh && chmod 0755 launch.sh
+        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init && chmod 0755 root/init
+#!/bin/sh -eu
+(unset DISPLAY
+REG_SCRIPT
+)
+exec wine explorer /desktop=virtual,1024x768 /RCT/RCT.EXE "$@"
+EOF
+
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 for dir in Data 'Saved Games' Scenarios Tracks
@@ -35,7 +43,7 @@ do
         mkdir -p "$XDG_DATA_HOME/RollerCoasterTycoon/$dir"
 done
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind=/dev/dri \
@@ -59,11 +67,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /bin/sh -euo pipefail /dev/stdin "$@" << 'EOF'
-(unset DISPLAY
-REG_SCRIPT
-)
-exec wine explorer /desktop=virtual,1024x768 /RCT/RCT.EXE "$@"
+    /init "$@"
 EOF
-EOG
 }

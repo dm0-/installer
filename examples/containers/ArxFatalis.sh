@@ -3,13 +3,19 @@ options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=32 [squash]=1)
 packages+=(
         freetype
         libepoxy
-        libGL
         libX{cursor,inerama,randr,ScrnSaver}
-        mesa-dri-drivers
         openal-soft
         pulseaudio-libs
         SDL2
 )
+
+# Support an option for running on a host with proprietary video drivers.
+function initialize_buildroot() if opt nvidia
+then
+        enable_rpmfusion +nonfree
+        packages+=(xorg-x11-drv-nvidia-libs)
+else packages+=(libGL mesa-dri-drivers)
+fi
 
 packages_buildroot+=({boost,freetype,glm,libepoxy,openal-soft,SDL2}-devel)
 packages_buildroot+=(cmake gcc-c++ git-core ImageMagick inkscape make optipng)
@@ -20,7 +26,7 @@ function customize_buildroot() {
         script << 'EOF'
 git clone --branch=master https://github.com/arx/ArxLibertatis.git
 mkdir ArxLibertatis/build ; cd ArxLibertatis/build
-git reset --hard 04f39f2aba082aef6f763c0bc6a4e7ba6430e974
+git reset --hard 5c8582267c1a31a7b4178290d45ab04d1ff29040
 cmake -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec make -j"$(nproc)" all
 EOF
@@ -40,7 +46,9 @@ function customize() {
         root/usr/bin/arx-install-data --data-dir=root/usr/share/games/arx --source=install.exe
         rm -f install.exe
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        ln -fns usr/bin/arx root/init
+
+        sed "${options[nvidia]:+s, /dev/dri ,&/dev/nvidia* ,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_CONFIG_HOME:=$HOME/.config}/arx" ] ||
@@ -49,13 +57,13 @@ mkdir -p "$XDG_CONFIG_HOME/arx"
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/arx" ] ||
 mkdir -p "$XDG_DATA_HOME/arx"
 
-declare -r console=$(systemd-nspawn --help | grep -Foe --console=)
+console=$(systemd-nspawn --help | grep -Foe --console=)
 
 exec sudo systemd-nspawn \
     --bind="$XDG_CONFIG_HOME/arx:/home/$USER/.config/arx" \
     --bind="$XDG_DATA_HOME/arx:/home/$USER/.local/share/arx" \
     --bind="+/tmp:/home/$USER/.cache" \
-    --bind=/dev/dri \
+    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
@@ -75,6 +83,6 @@ exec sudo systemd-nspawn \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
     --tmpfs=/home \
     --user="$USER" \
-    /usr/bin/arx "$@"
+    /init "$@"
 EOF
 }

@@ -76,27 +76,22 @@ EOF
         done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
         $rm -f "$output/grub.mbox"
 
-        # Switch to a release candidate kernel to patch in UEFI stub support.
-        packages_buildroot+=(sys-kernel/git-sources)
-        echo 'sys-kernel/git-sources symlink' >> "$buildroot/etc/portage/package.use/linux.conf"
-        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/git-sources"
-        $curl -L > "$buildroot/etc/portage/patches/sys-kernel/git-sources/riscv-uefi.patch" \
+        # Patch UEFI stub support into Linux 5.7.
+        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
+        $curl -L > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" \
             https://github.com/atishp04/linux/compare/ae83d0b416db002fe95601e7f97f64b59514d936...919538d7e19e085ee376f5d2300e14d8e6345218.patch
-        test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/git-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
+        test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
             x014245400e9c839d1a8fbcbbd69ef97791c397c304102361bcbdceb7b0f1202b
 }
 
 function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
-        # Add the Gentoo systemd config shortcuts to the unpatched source.
-        test -e "$buildroot/usr/src/linux/distro" || $cp -at "$buildroot/usr/src/linux" "$buildroot"/usr/src/linux-*/distro
-        $sed -n /distro/q1 "$buildroot/usr/src/linux/Kconfig" && echo 'source "distro/Kconfig"' >> "$buildroot/usr/src/linux/Kconfig"
-
         # Packages just aren't keyworded enough, so accept anything stabilized.
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
 
-        # Disable the new broken GCC 10 release until things are sorted.
+        # Disable broken unstable packages.
+        echo '>=dev-libs/libgpg-error-1.38' >> "$portage/package.mask/gnupg.conf"
         echo '>=sys-devel/gcc-10' >> "$portage/package.mask/gcc.conf"
 
         # Work around the broken aclocal path ordering.
