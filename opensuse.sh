@@ -27,6 +27,10 @@ function create_buildroot() {
         # Disable non-OSS packages by default.
         $sed -i -e '/^enabled=/s/=.*/=0/' "$buildroot/etc/zypp/repos.d/repo-non-oss.repo"
 
+        # Bypass license checks since it is abused to display random warnings.
+        $sed -i -e 's/^[# ]*\(autoAgreeWithLicenses\) *=.*/\1 = yes/' \
+            "$buildroot/etc/zypp/zypper.conf"
+
         configure_initrd_generation
         enable_selinux_repo
         initialize_buildroot
@@ -44,8 +48,7 @@ function install_packages() {
 
         opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
         zypper --non-interactive --installroot="$PWD/root" \
-            install --auto-agree-with-licenses \
-            "${packages[@]:-filesystem}" "$@" || [ 107 -eq "$?" ]
+            install "${packages[@]:-filesystem}" "$@" || [ 107 -eq "$?" ]
 
         # Define basic users and groups prior to configuring other stuff.
         grep -qs '^wheel:' root/etc/group ||

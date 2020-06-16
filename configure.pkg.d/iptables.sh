@@ -1,17 +1,18 @@
-if test -x root/sbin/iptables -o -h root/sbin/iptables
+if local name=iptables ; test -x root/sbin/$name -o -h root/sbin/$name
 then
-        local restore=$(test -s root/usr/lib/systemd/system/iptables-restore.service && echo -restore)
+        local restore=$(test -s root/usr/lib/systemd/system/$name-restore.service && echo -restore)
 
         # Map the rules from /var into /etc if needed.
         test -n "$restore" && mkdir -p root/etc/iptables &&
-        cat << 'EOF' > root/usr/lib/tmpfiles.d/iptables.conf
-d /var/lib/iptables
-L /var/lib/iptables/rules-save - - - - ../../../etc/iptables/iptables.rules
+        cat << EOF > root/usr/lib/tmpfiles.d/$name.conf
+d /var/lib/$name
+L /var/lib/$name/rules-save - - - - ../../../etc/iptables/$name.rules
 EOF
 
         # Write very simple IPv4 firewall rules until they are customized.
-        (cd root/etc/iptables && ext=.rules || cd root/etc/sysconfig
-                cat > iptables${ext-} ; chmod 0600 iptables${ext-}
+        (cd root/etc/iptables && name+=.rules || cd root/etc/sysconfig
+                test -d ../../usr/share/netfilter-persistent && name=rules.v4
+                cat > "$name" ; chmod 0600 "$name"
         ) << 'EOF'
 *filter
 :INPUT DROP [0:0]
@@ -25,23 +26,24 @@ EOF
         # Enable the services to load the rules but not to save them.
         mkdir -p root/usr/lib/systemd/system/basic.target.wants
         ln -fst root/usr/lib/systemd/system/basic.target.wants \
-            ../iptables"$restore".service
+            "../$name$restore.service"
 fi
 
-if test -x root/sbin/ip6tables -o -h root/sbin/ip6tables
+if local name=ip6tables ; test -x root/sbin/$name -o -h root/sbin/$name
 then
-        local restore=$(test -s root/usr/lib/systemd/system/ip6tables-restore.service && echo -restore)
+        local restore=$(test -s root/usr/lib/systemd/system/$name-restore.service && echo -restore)
 
         # Map the rules from /var into /etc if needed.
         test -n "$restore" && mkdir -p root/etc/iptables &&
-        cat << 'EOF' > root/usr/lib/tmpfiles.d/ip6tables.conf
-d /var/lib/ip6tables
-L /var/lib/ip6tables/rules-save - - - - ../../../etc/iptables/ip6tables.rules
+        cat << EOF > root/usr/lib/tmpfiles.d/$name.conf
+d /var/lib/$name
+L /var/lib/$name/rules-save - - - - ../../../etc/iptables/$name.rules
 EOF
 
         # Write local-only IPv6 firewall rules until they are customized.
-        (cd root/etc/iptables && ext=.rules || cd root/etc/sysconfig
-                cat > ip6tables${ext-} ; chmod 0600 ip6tables${ext-}
+        (cd root/etc/iptables && name+=.rules || cd root/etc/sysconfig
+                test -d ../../usr/share/netfilter-persistent && name=rules.v6
+                cat > "$name" ; chmod 0600 "$name"
         ) << 'EOF'
 *filter
 :INPUT DROP [0:0]
@@ -54,5 +56,5 @@ EOF
         # Enable the services to load the rules but not to save them.
         mkdir -p root/usr/lib/systemd/system/basic.target.wants
         ln -fst root/usr/lib/systemd/system/basic.target.wants \
-            ../ip6tables"$restore".service
+            "../$name$restore.service"
 fi

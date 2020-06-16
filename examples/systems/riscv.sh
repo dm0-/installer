@@ -91,7 +91,6 @@ function customize_buildroot() {
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
 
         # Disable broken unstable packages.
-        echo '>=dev-libs/libgpg-error-1.38' >> "$portage/package.mask/gnupg.conf"
         echo '>=sys-devel/gcc-10' >> "$portage/package.mask/gcc.conf"
 
         # Work around the broken aclocal path ordering.
@@ -166,8 +165,8 @@ function customize() {
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
         # Build U-Boot to provide UEFI.
-        git clone --branch=v2020.07-rc3 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
-        git -C /root/u-boot reset --hard 8c48bb21bd6a1778d1f299de30ff62c07929702b
+        git clone --branch=v2020.07-rc4 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
+        git -C /root/u-boot reset --hard e411a090cf7162626d54d72dfc4530986c788cdb
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0

@@ -54,8 +54,6 @@ EOF
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheBindingOfIsaac" ] ||
 mkdir -p "$XDG_DATA_HOME/TheBindingOfIsaac"
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/TheBindingOfIsaac:/tmp/save" \
     --bind=/dev/dri \
@@ -64,7 +62,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir="/home/$USER" \
-    ${console:+--console=pipe} \
     --hostname=TheBindingOfIsaac \
     --image="${IMAGE:-TheBindingOfIsaac.img}" \
     --link-journal=no \

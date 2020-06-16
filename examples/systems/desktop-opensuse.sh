@@ -21,6 +21,7 @@ packages+=(
 
         # Utilities
         binutils
+        bzip2
         emacs-nox
         file
         findutils
@@ -30,6 +31,7 @@ packages+=(
         kbd
         lsof
         man{,-pages}
+        p7zip-full
         procps
         sed
         strace

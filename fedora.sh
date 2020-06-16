@@ -45,8 +45,7 @@ function install_packages() {
         opt bootable || opt networkd && packages+=(systemd)
         opt selinux && packages+=(selinux-policy-targeted)
 
-        mkdir -p root/var/cache/dnf
-        mount --bind /var/cache/dnf root/var/cache/dnf
+        mount -o bind,X-mount.mkdir {,root}/var/cache/dnf
         trap -- 'umount root/var/cache/dnf ; trap - RETURN' RETURN
 
         dnf --assumeyes --installroot="$PWD/root" \

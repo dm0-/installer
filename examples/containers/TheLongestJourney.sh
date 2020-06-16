@@ -47,8 +47,6 @@ mkdir -p "$XDG_DATA_HOME/TheLongestJourney/Save"
 [ -e "$XDG_DATA_HOME/TheLongestJourney/preferences.ini" ] ||
 touch "$XDG_DATA_HOME/TheLongestJourney/preferences.ini"
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/TheLongestJourney/Save:/TLJ/Save" \
     --bind="$XDG_DATA_HOME/TheLongestJourney/preferences.ini:/TLJ/preferences.ini" \
@@ -58,7 +56,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/TLJ \
-    ${console:+--console=pipe} \
     --hostname=TheLongestJourney \
     --image="${IMAGE:-TheLongestJourney.img}" \
     --link-journal=no \

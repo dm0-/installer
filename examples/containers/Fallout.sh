@@ -48,8 +48,6 @@ do
         touch "$XDG_DATA_HOME/Fallout/$file"
 done
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/Fallout/SAVEGAME:/fallout/DATA/SAVEGAME" \
     --bind="$XDG_DATA_HOME/Fallout/f1_res.ini:/fallout/f1_res.ini" \
@@ -60,7 +58,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/fallout \
-    ${console:+--console=pipe} \
     --hostname=Fallout \
     --image="${IMAGE:-Fallout.img}" \
     --link-journal=no \

@@ -21,8 +21,11 @@ function create_buildroot() {
         $tar --strip-components=1 -C "$buildroot" -xzf "$output/image.tgz"
         $rm -f "$output/image.tgz"
 
-        # Use the kernel.org mirrors.
-        $sed -i -e '/https.*kernel.org/s/^#*//' "$buildroot/etc/pacman.d/mirrorlist"
+        # Use the kernel.org and rackspace.com mirrors.
+        $sed -i \
+            -e '1,/https.*rackspace/{/https.*rackspace/s/^#*//;}' \
+            -e '/https.*kernel.org/s/^#*//' \
+            "$buildroot/etc/pacman.d/mirrorlist"
 
         # Fetch EROFS utilities from AUR since they're not in community yet.
         if opt read_only && ! opt squash
@@ -54,18 +57,14 @@ then
         pacman --noconfirm --upgrade /home/build/erofs-utils-*.pkg.tar.xz
 fi
 EOF
-
-        # Fix the old pesign option name.
-        test ! -e "$buildroot/etc/popt.d/pesign.popt" ||
-        echo 'pesign alias --certificate --certficate' >> "$buildroot/etc/popt.d/pesign.popt"
 }
 
 function install_packages() {
         opt bootable || opt networkd && packages+=(systemd)
         opt networkd && packages+=(gnutls)
 
-        mkdir -p root/var/{cache,lib}/pacman
-        mount --bind /var/cache/pacman root/var/cache/pacman
+        mkdir -p root/var/lib/pacman
+        mount -o bind,X-mount.mkdir {,root}/var/cache/pacman
         trap -- 'umount root/var/cache/pacman ; trap - RETURN' RETURN
 
         mkdir -p root/usr/local/bin  # Work around a broken post_install.
@@ -102,7 +101,7 @@ then
         opt uefi && test ! -s logo.bmp &&
         sed -i -e '/<svg/,/>/s,>,&<style>text{display:none}</style>,' /usr/share/pixmaps/archlinux.svg &&
         magick -background none /usr/share/pixmaps/archlinux.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '*')"
+        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '[0-9]*')"
         build_systemd_ramdisk
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi

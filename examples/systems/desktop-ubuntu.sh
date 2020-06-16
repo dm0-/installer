@@ -1,50 +1,50 @@
-# This is a standalone Arch Linux workstation image that aims to demonstrate an
+# This is a standalone Ubuntu workstation image that aims to demonstrate an
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.
-#
-# The proprietary NVIDIA drivers are installed here to demonstrate how to use
-# dkms to build kernel modules for an immutable image.
 
 options+=(
-        [distro]=arch
+        [distro]=ubuntu
         [executable]=1  # Generate a VM image for fast testing.
         [networkd]=     # Disable networkd so GNOME can use NetworkManager.
+        [selinux]=1     # Load a targeted SELinux policy in permissive mode.
         [squash]=1      # Use a highly compressed file system to save space.
         [uefi]=1        # Create a UEFI executable that boots into this image.
         [verity]=1      # Prevent the file system from being modified.
 )
 
 packages+=(
-        dracut linux-{hardened,firmware}
+        linux-image-generic dracut
 
         # Utilities
         binutils
+        bzip2
+        console-data
         emacs-nox
         file
+        findutils
         git
         grep
         gzip
         kbd
+        less
         lsof
-        man-{db,pages}
-        p7zip
+        man{-db,pages}
+        p7zip-full
+        procps
         sed
         strace
-        systemd-sysvcompat
         tar
         unzip
-        which
         ## Accounts
-        shadow
         sudo
         ## Hardware
         pciutils
         usbutils
         ## Network
         iproute2
-        iputils
+        iptables-persistent
         net-tools
-        openssh
+        openssh-client
         tcpdump
         traceroute
         wget
@@ -60,44 +60,49 @@ packages+=(
         sshfs
 
         # Host
-        ovmf
-        qemu
+        qemu-kvm
+        systemd-container
 
         # GNOME
         eog
         evince
-        gdm
+        gdm3
         gnome-backgrounds
         gnome-calculator
-        gnome-control-center
         gnome-clocks
+        gnome-control-center
         gnome-screenshot
-        gnome-shell
+        gnome-session
         gnome-terminal
         gucharmap
-        networkmanager
+        network-manager-config-connectivity-ubuntu
 
         # Graphics
-        mesa{,-vdpau} vulkan-{intel,radeon}
-        xf86-video-{amdgpu,intel,nouveau}
+        mesa-{va,vdpau,vulkan}-drivers
+        xserver-xorg-{input-libinput,video-{amdgpu,intel,nouveau}}
 
         # Fonts
-        ttf-dejavu
-        ttf-liberation
+        fonts-dejavu
+        fonts-liberation2
+        fonts-stix
 
         # Browser
         firefox
-        firefox-{extension-https-everywhere,noscript,ublock-origin}
+        xul-ext-ublock-origin
 
         # VLC
-        lib{aacs,bluray}
-        libdvdcss
         vlc
 )
 
-# Build the proprietary NVIDIA drivers using dkms.
-packages_buildroot+=(linux-hardened-headers nvidia-dkms)
-packages+=(nvidia-utils)
+# Install proprietary NVIDIA drivers.  Also update the buildroot for dracut.
+function initialize_buildroot() {
+        local -r driver_version=440
+        packages+=(
+                "linux-modules-nvidia-$driver_version-generic"
+                "xserver-xorg-video-nvidia-$driver_version"
+        )
+        packages_buildroot+=("linux-modules-nvidia-$driver_version-generic")
+}
 
 function customize() {
         store_home_on_var +root
@@ -107,29 +112,9 @@ function customize() {
         # Drop development stuff.
         exclude_paths+=(
                 usr/include
-                usr/{lib,share}/pkgconfig
-                'usr/lib/lib*.a'
+                usr/{'lib*',share}/pkgconfig
+                usr/lib/firmware/{netronome,'*-ucode'}
         )
-
-        # Install unpackaged NVIDIA drivers into the image.
-        cp -pt root/lib/modules/*/kernel/drivers/video \
-            /var/lib/dkms/nvidia/kernel-*/module/nvidia*.ko.xz
-
-        # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        for module in root/lib/modules/*/kernel/drivers/video/nvidia*.ko.xz
-        do
-                unxz "$module" ; module=${module%.xz}
-                /lib/modules/*/build/scripts/sign-file \
-                    sha512 "$keydir/sb.key" "$keydir/sb.crt" "$module"
-        done
-
-        # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
-blacklist nouveau
-options nvidia NVreg_UsePageAttributeTable=1
-options nvidia-drm modeset=1
-softdep nvidia post: nvidia-uvm
-EOF
 
         # Support an executable VM image for quick testing.
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh

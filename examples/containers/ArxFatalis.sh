@@ -26,7 +26,7 @@ function customize_buildroot() {
         script << 'EOF'
 git clone --branch=master https://github.com/arx/ArxLibertatis.git
 mkdir ArxLibertatis/build ; cd ArxLibertatis/build
-git reset --hard 5c8582267c1a31a7b4178290d45ab04d1ff29040
+git reset --hard d5c83857afd9cf3f45b3c18fa037936c14abe26e
 cmake -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec make -j"$(nproc)" all
 EOF
@@ -57,8 +57,6 @@ mkdir -p "$XDG_CONFIG_HOME/arx"
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/arx" ] ||
 mkdir -p "$XDG_DATA_HOME/arx"
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind="$XDG_CONFIG_HOME/arx:/home/$USER/.config/arx" \
     --bind="$XDG_DATA_HOME/arx:/home/$USER/.local/share/arx" \
@@ -69,7 +67,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir="/home/$USER" \
-    ${console:+--console=pipe} \
     --hostname=ArxFatalis \
     --image="${IMAGE:-ArxFatalis.img}" \
     --link-journal=no \

@@ -14,7 +14,7 @@ test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
     x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
 git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
 mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
-git reset --hard c561cd97408c0415a8ef7a9b69a33f2eef3626ea
+git reset --hard 9a8dc4b6ffd828a41aee0c8b130b06c4ca9563a8
 cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec ninja -j"$(nproc)" all
 EOF
@@ -41,8 +41,6 @@ function customize() {
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/VVVVVV" ] ||
 mkdir -p "$XDG_DATA_HOME/VVVVVV"
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/VVVVVV:/home/$USER/.local/share/VVVVVV" \
     --bind=/dev/dri \
@@ -51,7 +49,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/ \
-    ${console:+--console=pipe} \
     --hostname=VVVVVV \
     --image="${IMAGE:-VVVVVV.img}" \
     --link-journal=no \

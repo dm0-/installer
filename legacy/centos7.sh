@@ -40,8 +40,7 @@ function install_packages() {
         opt networkd && packages+=(systemd-networkd systemd-resolved)
         opt selinux && packages+=(selinux-policy-targeted)
 
-        mkdir -p root/var/cache/yum
-        mount --bind /var/cache/yum root/var/cache/yum
+        mount -o bind,x-mount.mkdir {,root}/var/cache/yum
         trap -- 'umount root/var/cache/yum ; trap - RETURN' RETURN
 
         opt arch && mkdir -p root/etc/yum/vars &&

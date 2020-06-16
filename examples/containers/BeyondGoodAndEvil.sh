@@ -40,8 +40,6 @@ EOF
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/BeyondGoodAndEvil" ] ||
 mkdir -p "$XDG_DATA_HOME/BeyondGoodAndEvil"
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind=/dev/dri \
     --bind=/tmp/.X11-unix \
@@ -49,7 +47,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/BGE \
-    ${console:+--console=pipe} \
     --hostname=BeyondGoodAndEvil \
     --image="${IMAGE:-BeyondGoodAndEvil.img}" \
     --link-journal=no \

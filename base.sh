@@ -176,6 +176,8 @@ done
 
 # Format keys as needed for each application.
 cat sign.crt <(echo) sign.key > sign.pem
+${options[verity_sig]:+:} false && openssl \
+    x509 -in verity.crt -out verity.der -outform DER
 if ${options[secureboot]:+:} false
 then
         openssl pkcs12 -export \
@@ -465,9 +467,13 @@ EOF
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants \
             ../home.mount ../root.mount
 
-        test -s root/etc/pam.d/system-auth &&
-        echo >> root/etc/pam.d/system-auth \
-            'session     required      pam_mkhomedir.so'
+        local name ; for name in system-auth common-session
+        do
+                test -s "root/etc/pam.d/$name" &&
+                echo >> "root/etc/pam.d/$name" \
+                    'session     required      pam_mkhomedir.so' &&
+                break || continue
+        done
 
         cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
 C /root - - - - /etc/skel
@@ -723,6 +729,9 @@ function double_display_scale() {
         compgen -G 'root/???/*/consolefonts/latarcyrheb-sun32.*' &&
         sed -i -e '/^FONT=/d' root/etc/vconsole.conf &&
         echo 'FONT="latarcyrheb-sun32"' >> root/etc/vconsole.conf
+
+        test -s root/etc/default/console-setup &&
+        sed -i -e '/^FONTSIZE="/s/"8x16"/"16x32"/' root/etc/default/console-setup
 
         test -s root/usr/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml &&
         cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_display.scale.gschema.override

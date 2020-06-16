@@ -30,6 +30,7 @@ packages+=(
         kbd
         lsof
         man-{db,pages}
+        p7zip
         strace
         tar
         unzip

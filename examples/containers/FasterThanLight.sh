@@ -40,8 +40,6 @@ EOF
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||
 mkdir -p "$XDG_DATA_HOME/FasterThanLight"
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/FasterThanLight:/tmp/save" \
     --bind=/dev/dri \
@@ -50,7 +48,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/FTL \
-    ${console:+--console=pipe} \
     --hostname=FasterThanLight \
     --image="${IMAGE:-FasterThanLight.img}" \
     --link-journal=no \

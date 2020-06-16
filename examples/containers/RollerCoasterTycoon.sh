@@ -43,8 +43,6 @@ do
         mkdir -p "$XDG_DATA_HOME/RollerCoasterTycoon/$dir"
 done
 
-console=$(systemd-nspawn --help | grep -Foe --console=)
-
 exec sudo systemd-nspawn \
     --bind=/dev/dri \
     --bind=/tmp/.X11-unix \
@@ -52,7 +50,6 @@ exec sudo systemd-nspawn \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro=/etc/passwd \
     --chdir=/RCT \
-    ${console:+--console=pipe} \
     --hostname=RollerCoasterTycoon \
     --image="${IMAGE:-RollerCoasterTycoon.img}" \
     --link-journal=no \

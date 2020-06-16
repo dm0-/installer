@@ -123,30 +123,30 @@ CXXFLAGS="$CXXFLAGS -fno-lto"
 FFLAGS="$FFLAGS -fno-lto"
 FCFLAGS="$FCFLAGS -fno-lto"
 EOF
+        $cat << EOF >> "$portage/env/rust-map.conf"
+I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
+RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
+EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
-        echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
-        # Accept libaom-2.0.0 release candidates to fix ARM builds.
+        echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\n<net-libs/libnftnl-1.2\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
+        # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
         # Accept libcap-2.34 to fix build ordering with EAPI 7.
         echo '<sys-libs/libcap-2.35 ~*' >> "$portage/package.accept_keywords/libcap.conf"
-        # Accept libgpiod-1.4.1 since there is no stable version.
-        echo dev-libs/libgpiod >> "$portage/package.accept_keywords/libgpiod.conf"
         # Accept libuv-1.38.0 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
-        # Accept pixman-0.40.0 to fix static libraries.
-        echo '<x11-libs/pixman-0.41 ~*' >> "$portage/package.accept_keywords/pixman.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
-        # Accept sed-4.8 to fix build ordering with EAPI 7.
-        echo '<sys-apps/sed-4.9 ~*' >> "$portage/package.accept_keywords/sed.conf"
+        # Accept rust-1.44.0 to support cross-compiling.
+        echo -e '~dev-lang/rust-1.44.0 ~*\n~virtual/rust-1.44.0 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept util-linux-2.35 to fix build ordering with EAPI 7.
@@ -221,6 +221,9 @@ EOF
         portage="$buildroot/etc/portage"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
+        # Support cross-compiling Rust projects.
+        test "x$(archmap_rust)" = "x$(archmap_rust "$arch")" ||
+        echo 'dev-lang/rust rust-map.conf' >> "$portage/package.env/rust.conf"
         # Link a required library for building the SELinux labeling initrd.
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Turn off extra busybox features to make the labeling initrd smaller.
@@ -777,6 +780,18 @@ function archmap_profile() {
         esac
 }
 
+function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
+    aarch64)  echo aarch64-unknown-linux-gnu ;;
+    armv5*)   echo armv5te-unknown-linux-gnueabi ;;
+    armv7*)   echo armv7-unknown-linux-gnueabihf ;;
+    arm*)     echo arm-unknown-linux-gnueabi ;;
+    i[3-6]86) echo i686-unknown-linux-gnu ;;
+    powerpc)  echo powerpc-unknown-linux-gnu ;;
+    riscv64)  echo riscv64gc-unknown-linux-gnu ;;
+    x86_64)   echo x86_64-unknown-linux-gnu ;;
+    *) return 1 ;;
+esac
+
 function archmap_stage3() {
         local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
@@ -857,24 +872,19 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  #src_compile() {
 EOP
-sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.3.ebuild
+sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.4.ebuild
 ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.91.ebuild manifest
-ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.3.ebuild manifest
+ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.4.ebuild manifest
 EOF
                 ;;
             firefox)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
-=dev-lang/rust-1.44.0
-dev-libs/libgit2
 dev-libs/nspr
 dev-libs/nss
 media-libs/libvpx
 media-libs/libwebp
-=virtual/rust-1.44.0
 EOF
-                echo 'dev-lang/rust ctarget.conf' >> "$buildroot/etc/portage/package.env/rust.conf"
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
-dev-db/sqlite secure-delete
 dev-lang/python sqlite
 media-libs/libepoxy X
 media-libs/libpng apng
@@ -886,7 +896,6 @@ x11-libs/gtk+ X
 EOF
                 echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/bindgen.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
-dev-db/sqlite
 dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
@@ -953,66 +962,9 @@ EOF
 
 EOF
                 script << 'EOG'
-patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- dev-lang/rust/rust-1.44.0.ebuild
-+++ dev-lang/rust/rust-1.44.0.ebuild
-@@ -173,16 +173,19 @@
- }
- 
- src_configure() {
--	local rust_target="" rust_targets="" arch_cflags
-+	local -A rust_targets
-+	local rust_target="" arch_cflags
- 
- 	# Collect rust target names to compile standard libs for all ABIs.
- 	for v in $(multilib_get_enabled_abi_pairs); do
--		rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}))\""
-+		rust_targets+=([$(rust_abi $(get_abi_CHOST ${v##*.}))]=1)
- 	done
- 	if use wasm; then
--		rust_targets="${rust_targets},\"wasm32-unknown-unknown\""
-+		rust_targets+=([wasm32-unknown-unknown]=1)
-+	fi
-+	if [[ ${CTARGET:-${CHOST}} != ${CHOST} ]]; then
-+		rust_targets+=([$(rust_abi ${CTARGET})]=1)
- 	fi
--	rust_targets="${rust_targets#,}"
- 
- 	local tools="\"cargo\","
- 	if use clippy; then
-@@ -219,7 +222,7 @@
- 		[build]
- 		build = "${rust_target}"
- 		host = ["${rust_target}"]
--		target = [${rust_targets}]
-+		target = [$(printf -v t ',"%s"' "${!rust_targets[@]}" ; echo ${t#,})]
- 		cargo = "${rust_stage0_root}/bin/cargo"
- 		rustc = "${rust_stage0_root}/bin/rustc"
- 		docs = $(toml_usex doc)
-@@ -295,6 +298,18 @@
- 		EOF
- 	fi
- 
-+	if [[ ${CTARGET:-${CHOST}} != ${CHOST} ]]; then
-+		rust_target=$(rust_abi ${CTARGET})
-+		grep -Fqx "[target.${rust_target}]" "${S}"/config.toml ||
-+		cat <<- EOF >> "${S}"/config.toml
-+			[target.${rust_target}]
-+			cc = "$(tc-getCC "${CTARGET}")"
-+			cxx = "$(tc-getCXX "${CTARGET}")"
-+			linker = "$(tc-getCC "${CTARGET}")"
-+			ar = "$(tc-getAR "${CTARGET}")"
-+		EOF
-+	fi
-+
- 	einfo "Rust configured with the following settings:"
- 	cat "${S}"/config.toml || die
- }
-EOP
 sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild
 compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
 sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild
-ebuild /var/db/repos/gentoo/dev-lang/rust/rust-1.44.0.ebuild manifest
 ebuild /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild manifest
 EOG
                 ;;
