@@ -6,11 +6,10 @@ options+=(
         [arch]=riscv64   # Target RISC-V emulators.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [executable]=1   # Generate a VM image for fast testing.
-        [bootable]=1     # Build a kernel for this system.
         [networkd]=1     # Let systemd manage the network configuration.
         [secureboot]=    # This is unused until systemd-boot supports RISC-V.
         [uefi]=1         # This is for hacking purposes only.
-        [verity]=1       # Prevent the file system from being modified.
+        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(
@@ -93,21 +92,18 @@ function customize_buildroot() {
         # Disable broken unstable packages.
         echo '>=sys-devel/gcc-10' >> "$portage/package.mask/gcc.conf"
 
-        # Work around the broken aclocal path ordering.
+        # Work around the broken aclocal path ordering (#677002).
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
 
-        # Avoid some Python nonsense.
-        echo 'sys-apps/portage -rsync-verify' >> "$portage/package.use/portage.conf"
-
-        # Disable multilib to prevent BDEPEND from breaking everything.
+        # Disable multilib to stop BDEPEND from breaking everything (#723112).
         $cat << 'EOF' >> "$portage/profile/use.mask"
 # Disable multilib for RISC-V.
 abi_riscv_lp64
 abi_riscv_lp64d
 EOF
 
-        # The multilib subdirectories in RISC-V don't work without split-usr.
+        # The multilib subdirectories don't work with UsrMerge (#728674).
         $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild"
         enter /usr/bin/ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild manifest
 
@@ -227,12 +223,6 @@ menuentry 'Power Off' --id poweroff {
 }
 EOF
 fi
-
-# Override zstd initrd compression since RC kernels don't have the patch.
-eval "$(
-declare -f build_busybox_initrd | $sed 's/zstd.*-22/xz --check=crc32 -9e/'
-declare -f write_base_kernel_config | $sed s/RD_ZSTD/RD_XZ/
-)"
 
 # Override executable image generation to force GRUB into the mix.
 eval "$(declare -f produce_executable_image | $sed '

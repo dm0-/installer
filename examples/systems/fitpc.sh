@@ -3,12 +3,6 @@
 # uncommon instruction set with plenty of other hardware components that are
 # specific to that platform.  Sample bootloader files are prepared that allow
 # booting this system from a GPT/UEFI-formatted disk.
-#
-# Since this is a non-UEFI system that can't have a Secure Boot signature, it
-# might as well skip verity to save CPU cycles.  It should also avoid squashfs
-# compression if storage space isn't an issue to save more cycles.  SELinux
-# should be skipped since it's still unenforceable, and this isn't the platform
-# for working on improving support.
 
 options+=(
         [arch]=i686      # Target AMD Geode LX CPUs.  (Note i686 has no NOPL.)
@@ -17,6 +11,7 @@ options+=(
         [networkd]=1     # Let systemd manage the network configuration.
         [read_only]=1    # Use an efficient packed read-only file system.
         [uefi]=          # This platform does not support UEFI.
+        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(

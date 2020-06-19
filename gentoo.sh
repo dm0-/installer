@@ -130,6 +130,8 @@ EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
+        # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
+        echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
@@ -145,8 +147,8 @@ EOF
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
-        # Accept rust-1.44.0 to support cross-compiling.
-        echo -e '~dev-lang/rust-1.44.0 ~*\n~virtual/rust-1.44.0 ~*' >> "$portage/package.accept_keywords/rust.conf"
+        # Accept rust-1.44 to support cross-compiling.
+        echo -e '<dev-lang/rust-1.45 ~*\n<virtual/rust-1.45 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept util-linux-2.35 to fix build ordering with EAPI 7.
@@ -593,7 +595,8 @@ CONFIG_BLK_DEV_DM=y
 CONFIG_DM_INIT=y
 CONFIG_DM_VERITY=y
 CONFIG_CRYPTO_SHA256=y'
-        opt verity_sig && echo CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG=y
+        opt verity_sig && echo 'CONFIG_CRYPTO_SHA512=y
+CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG=y'
         echo '# Settings for systemd as decided by Gentoo, plus some missing
 CONFIG_COMPAT_32BIT_TIME=y
 CONFIG_DMI=y
@@ -905,19 +908,6 @@ media-libs/libwebp
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
-                $mkdir -p "$portage/patches/media-video/ffmpeg"
-                $cat << 'EOF' > "$portage/patches/media-video/ffmpeg/cross-native.patch"
---- a/configure
-+++ b/configure
-@@ -4733,6 +4733,7 @@
- fi
- 
- if test "$cpu" = host; then
-+    false &&
-     enabled cross_compile &&
-         die "--cpu=host makes no sense when cross-compiling."
- 
-EOF
                 $mkdir -p "$portage/patches/www-client/firefox"
                 test "x${options[arch]}" = xpowerpc &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"

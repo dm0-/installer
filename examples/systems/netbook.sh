@@ -4,12 +4,6 @@
 # starts Linux.  The vmlinuz.uimg and scriptcmd files must be written to the
 # /script directory on the first FAT-formatted MS-DOS partition of an SD card,
 # which will be booted automatically when starting the system.
-#
-# Since this is a non-UEFI system that can't have a Secure Boot signature, it
-# might as well skip verity to save CPU cycles.  It should also avoid squashfs
-# compression if storage space isn't an issue to save more cycles.  SELinux
-# should be skipped since it's still unenforceable, and this isn't the platform
-# for working on improving support.
 
 options+=(
         [arch]=armv5tel  # Target ARM ARM926EJ-S CPUs.

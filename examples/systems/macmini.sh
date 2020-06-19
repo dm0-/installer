@@ -4,12 +4,6 @@
 # for a non-UEFI platform.  It can be booted from USB at the Open Firmware
 # prompt (by holding Command-Option-O-F while booting or by setting the NVRAM
 # variable auto-boot?=false) with the command "boot usb0/disk:2,::tbxi".
-#
-# Since this is a non-UEFI system that can't have a Secure Boot signature, it
-# might as well skip verity to save CPU cycles.  It should also avoid squashfs
-# compression if storage space isn't an issue to save more cycles.  SELinux
-# should be skipped since it's still unenforceable, and this isn't the platform
-# for working on improving support.
 
 options+=(
         [arch]=powerpc   # Target PowerPC G4 CPUs.
@@ -19,6 +13,7 @@ options+=(
         [read_only]=1    # Use an efficient packed read-only file system.
         [squash]=1       # Compress the image while experimenting.
         [uefi]=          # This platform does not support UEFI.
+        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(
@@ -91,12 +86,17 @@ function customize_buildroot() {
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=7450 -maltivec -mabi=altivec -ftree-vectorize&/' \
             "$portage/make.conf"
         echo -e 'CPU_FLAGS_PPC="altivec"\nUSE="$USE altivec ppcsha1"' >> "$portage/make.conf"
-        ## The ffmpeg cross-compilation needs hand-holding here.
-        echo -e 'EXTRA_FFMPEG_CONF="--cpu=g4"\nbigendian="yes"' >> "$portage/env/ffmpeg.conf"
-        echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
 
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
         echo 'VIDEO_CARDS="radeon r200"' >> "$portage/make.conf"
+
+        # The ffmpeg cross-compilation needs assistance for this CPU (#728602).
+        echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
+        echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
+        $mkdir -p "$portage/patches/media-video/ffmpeg-4.3"
+        $curl -L https://github.com/FFmpeg/FFmpeg/commit/3a557c5d88b7b15b5954ba2743febb055549b536.patch > "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
+        test x$(sha256sum "$portage/patches/media-video/ffmpeg-4.3/altivec.patch" | sed -n '1s/ .*//p') = xa7fc883930d72e8b34ad2124222a79d50ec46aded2496114a67f26725732eef1
+        $sed -i -e 's,^-\([^-]\),/\1,;s/^+\([^+]\)/-\1/;s,^/,+,;s/^@@ -\([^ ]*\) +\([^ ]*\) @@/@@ -\2 +\1 @@/' "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \

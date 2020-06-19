@@ -26,7 +26,7 @@ The `install.sh` file is the entry point.  Run it with `bash install.sh -h` to s
 
 The command should usually be given at least one argument: a shell file defining settings for the installation.  There are a few such example files under the `examples` directory.  The file should at least append to the associative array named `options` to define required settings that will override command-line options.  It should append to the `packages` array as well to specify what gets installed into the image.  The installed image can be modified by defining a function `customize` which will run in the build container with the image mounted at `/wd/root`.  For more complex modifications, append to the array `packages_buildroot` to install additional packages into the container, and define a function `customize_buildroot` which runs on the host system after creating the container at `$buildroot`.
 
-The resulting installation artifacts are written to a unique output directory in the current path.  For example, `vmlinuz` (or `vmlinux` on some platforms) is the kernel and `final.img` is the root file system image (containing verity hashes if enabled) that should be written directly to a partition.  If the `uefi` option was enabled, `BOOTX64.EFI` is the UEFI executable (signed for Secure Boot if a certificate and key were given).  If the `executable` option was enabled, `disk.exe` is a disk image that can also be executed as a program.
+The resulting installation artifacts are written to a unique output directory in the current path.  For example, `vmlinuz` (or `vmlinux` on some platforms) is the kernel and `final.img` is the root file system image (containing verity hashes if enabled) that should be written directly to a partition.  If the `uefi` option was enabled, `BOOTX64.EFI` is the UEFI executable (signed for Secure Boot by default).  If the `executable` option was enabled, `disk.exe` is a disk image that can also be executed as a program.
 
 For a quick demonstration, it can technically be run with no options.  In this case, it will produce a Fedora image containing `bash` that can be run in a container.
 
@@ -106,7 +106,7 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30,
 
 **Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits over verity with Secure Boot, but it can be used on platforms that do not support UEFI, making the kernel the root of trust instead of the firmware in those cases.  In addition, the proposed IPE LSM policy can filter based on signed verity devices, so verity signatures can still have a use on UEFI.
 
-  * :star: *Gentoo* supports verity signatures by creating an initrd to handle the userspace component.  (Non-x86 kernels seem to fail to load built-in certificates, which needs further investigation.)
+  * :star: *Gentoo* supports verity signatures by creating an initrd to handle the userspace component.
   * :construction: *Ubuntu* supports verity signatures on non-UEFI systems.  It writes the certificate into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
   * :fire: *Arch* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
   * :fire: *Fedora* and *openSUSE* cannot use verity signatures until they enable `CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG`.
