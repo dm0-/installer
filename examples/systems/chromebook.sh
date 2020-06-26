@@ -10,9 +10,10 @@ options+=(
         [arch]=armv7a    # Target ARM Cortex-A17 CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
+        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [uefi]=          # This platform does not support UEFI.
-        [verity]=1       # Prevent the file system from being modified.
+        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(
@@ -106,10 +107,7 @@ function customize_buildroot() {
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Disable LTO for packages broken with this architecture/ABI.
-        $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
-media-libs/freetype no-lto.conf
-media-libs/libvpx no-lto.conf
-EOF
+        echo 'media-libs/libvpx no-lto.conf' >> "$portage/package.env/no-lto.conf"
 
         # Download an NVRAM file for the wireless driver.
         script << 'EOF'

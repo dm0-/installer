@@ -9,8 +9,8 @@ options+=(
         [arch]=powerpc   # Target PowerPC G4 CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
+        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
-        [read_only]=1    # Use an efficient packed read-only file system.
         [squash]=1       # Compress the image while experimenting.
         [uefi]=          # This platform does not support UEFI.
         [verity_sig]=1   # Require all verity root hashes to be verified.
@@ -95,7 +95,7 @@ function customize_buildroot() {
         echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
         $mkdir -p "$portage/patches/media-video/ffmpeg-4.3"
         $curl -L https://github.com/FFmpeg/FFmpeg/commit/3a557c5d88b7b15b5954ba2743febb055549b536.patch > "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
-        test x$(sha256sum "$portage/patches/media-video/ffmpeg-4.3/altivec.patch" | sed -n '1s/ .*//p') = xa7fc883930d72e8b34ad2124222a79d50ec46aded2496114a67f26725732eef1
+        test x$($sha256sum "$portage/patches/media-video/ffmpeg-4.3/altivec.patch" | $sed -n '1s/ .*//p') = xa7fc883930d72e8b34ad2124222a79d50ec46aded2496114a67f26725732eef1
         $sed -i -e 's,^-\([^-]\),/\1,;s/^+\([^+]\)/-\1/;s,^/,+,;s/^@@ -\([^ ]*\) +\([^ ]*\) @@/@@ -\2 +\1 @@/' "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
 
         # Enable general system settings.
@@ -155,6 +155,7 @@ function customize() {
         exclude_paths+=(
                 usr/lib/firmware
                 usr/local
+                usr/share/qemu/'*'{aarch,arm,efi,riscv,s390,x86_64}'*'
         )
 
         # Support running Intel containers.
@@ -207,7 +208,7 @@ then
         # Write some basic GRUB configuration for boot slot switching.
         sed < kernel_args.txt > kargs.env \
             -e '1s/^/# GRUB Environment Block\nkargs=/' \
-            -e 's/ *\(dm-mod.create=\|DVR=\)"\([^"]*\)".*/\ndmsetup=\1\2/' \
+            -e 's/ *\(dm-mod.create=\|DVR=\)"\([^"]*\)"\(.*\)/\3\ndmsetup=\1\2/' \
             -e 's,/dev/sda ,/dev/sda3 ,g'
         cat << 'EOF' > grub.cfg
 set timeout=5

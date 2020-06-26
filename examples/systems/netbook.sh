@@ -9,9 +9,10 @@ options+=(
         [arch]=armv5tel  # Target ARM ARM926EJ-S CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
+        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
-        [read_only]=1    # Use an efficient packed read-only file system.
         [uefi]=          # This platform does not support UEFI.
+        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(
@@ -125,19 +126,6 @@ function customize_buildroot() {
         fix_package emacs
         packages+=(app-editors/emacs)
         echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
-
-        # Fix the dumb libgpg-error build process for this target.
-        $mkdir -p "$portage/patches/dev-libs/libgpg-error"
-        $cat << EOF > "$portage/patches/dev-libs/libgpg-error/cross.patch"
-diff --git a/src/syscfg/lock-obj-pub.${options[arch]}-unknown-linux-gnueabi.h b/src/syscfg/lock-obj-pub.${options[arch]}-unknown-linux-gnueabi.h
-new file mode 120000
-index 0000000..71a9292
---- /dev/null
-+++ b/src/syscfg/lock-obj-pub.${options[arch]}-unknown-linux-gnueabi.h
-@@ -0,0 +1 @@
-+lock-obj-pub.arm-unknown-linux-gnueabi.h
-\ No newline at end of file
-EOF
 
         # Fix the screen contrast.
         $sed -i -e 's/fbi->contrast = 0x10/fbi->contrast = 0x80/g' \

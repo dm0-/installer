@@ -6,6 +6,7 @@ options+=(
         [arch]=riscv64   # Target RISC-V emulators.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [executable]=1   # Generate a VM image for fast testing.
+        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [secureboot]=    # This is unused until systemd-boot supports RISC-V.
         [uefi]=1         # This is for hacking purposes only.
@@ -51,7 +52,6 @@ packages+=(
 function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
-        echo app-emulation/qemu >> "$buildroot/etc/portage/package.accept_keywords/qemu.conf"
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
 app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 static static-user
 dev-libs/glib static-libs
@@ -81,6 +81,7 @@ EOF
             https://github.com/atishp04/linux/compare/ae83d0b416db002fe95601e7f97f64b59514d936...919538d7e19e085ee376f5d2300e14d8e6345218.patch
         test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
             x014245400e9c839d1a8fbcbbd69ef97791c397c304102361bcbdceb7b0f1202b
+        $sed -i -e '/PATCH 19/,/^From: /d' "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch"
 }
 
 function customize_buildroot() {
@@ -161,8 +162,8 @@ function customize() {
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
         # Build U-Boot to provide UEFI.
-        git clone --branch=v2020.07-rc4 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
-        git -C /root/u-boot reset --hard e411a090cf7162626d54d72dfc4530986c788cdb
+        git clone --branch=v2020.07-rc5 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
+        git -C /root/u-boot reset --hard 868fb9969c85ce5a1b33c6bb713c8158c04acee9
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
@@ -171,11 +172,11 @@ EOF
         make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="${options[host]}-" V=1
 
         # Build OpenSBI with a U-Boot payload for the firmware image.
-        git clone --branch=v0.7 --depth=1 https://github.com/riscv/opensbi.git /root/opensbi
-        git -C /root/opensbi reset --hard 9f1b72ce66d659e91013b358939e832fb27223f5
+        git clone --branch=v0.8 --depth=1 https://github.com/riscv/opensbi.git /root/opensbi
+        git -C /root/opensbi reset --hard a98258d0b537a295f517bbc8d813007336731fa9
         make -C /root/opensbi -j"$(nproc)" all \
-            CROSS_COMPILE="${options[host]}-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=qemu/virt V=1
-        cp -p /root/opensbi/build/platform/qemu/virt/firmware/fw_payload.bin opensbi-uboot.bin
+            CROSS_COMPILE="${options[host]}-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
+        cp -p /root/opensbi/build/platform/generic/firmware/fw_payload.bin opensbi-uboot.bin
         chmod 0644 opensbi-uboot.bin
 
         # Support an executable VM image for quick testing.
@@ -209,7 +210,7 @@ then
 set default=boot-a
 set timeout=3
 menuentry 'Boot A' --id boot-a {
-        linux /linux_a console=ttyS0 earlycon=sbi $(<kernel_args.txt)
+        linux /linux_a $(<kernel_args.txt)
         if test -s /initrd_a ; then initrd /initrd_a ; fi
 }
 menuentry 'U-Boot' --id uboot {

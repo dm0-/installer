@@ -132,6 +132,8 @@ EOF
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
+        # Accept freetype-2.10 to fix LTO on armhf.
+        echo '<media-libs/freetype-2.11 ~*' >> "$portage/package.accept_keywords/freetype.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
@@ -140,6 +142,10 @@ EOF
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
         # Accept libcap-2.34 to fix build ordering with EAPI 7.
         echo '<sys-libs/libcap-2.35 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libgpg-error-1.38 to fix cross-compiling to weird systems.
+        echo '<dev-libs/libgpg-error-1.39 ~*' >> "$portage/package.accept_keywords/gnupg.conf"
+        # Accept libnl-3.5.0 to fix host dependencies.
+        echo '<dev-libs/libnl-3.6 ~*' >> "$portage/package.accept_keywords/libnl.conf"
         # Accept libuv-1.38.0 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
         # Accept pango-1.44.7 to fix host dependencies.
@@ -269,6 +275,8 @@ ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
 ## Support host dependencies in libxml2 correctly (#719088).
 sed -i -e '/^EAPI=/s/=.*/=7/;/^DEPEND="/s/$/"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild manifest
+## Support Linux 5.8 without breaking unpacking other stuff (#729178).
+sed -i -e '/pretend)/s/)/|pkg_setup&/p' /var/db/repos/gentoo/eclass/linux-info.eclass
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -294,7 +302,8 @@ cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
 location = /var/db/repos/crossdev
 EOG
-mkdir -p /usr/"$host"/usr/{bin,lib,lib64,sbin,src}
+mkdir -p /usr/"$host"/usr/{bin,lib,lib64,src}
+ln -fns bin /usr/"$host"/usr/sbin
 ln -fst "/usr/$host" usr/{bin,lib,lib64,sbin}
 crossdev --stable --target "$host"
 
@@ -353,8 +362,9 @@ function install_packages() {
             @world "${packages[@]}" "$@"
 
         # Install the target root from binaries with no build dependencies.
-        mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib,sbin},var}
+        mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib},var}
         mkdir -pm 0700 root/root
+        ln -fns bin root/usr/sbin
         [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
         (cd root ; exec ln -fst . usr/*)
         ln -fns .. "root$ROOT"  # Lazily work around bad packaging.
@@ -436,6 +446,20 @@ then
         if ! test -s vmlinux -o -s vmlinuz
         then
                 local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
+                if opt monolithic
+                then
+                        cat << EOF >> /usr/src/linux/.config
+CONFIG_CMDLINE="$(sed 's/["\]/\\&/g' kernel_args.txt)"
+CONFIG_CMDLINE_FORCE=y
+CONFIG_INITRAMFS_COMPRESSION_ZSTD=y
+CONFIG_INITRAMFS_FORCE=y
+$(test -s initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/wd/initramfs.cpio"
+EOF
+                        make -C /usr/src/linux -j"$(nproc)" olddefconfig \
+                            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                        make -C /usr/src/linux -j"$(nproc)" \
+                            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                fi
                 make -C /usr/src/linux install \
                     ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
                 cp -p /boot/vmlinux-* vmlinux || cp -p /boot/vmlinuz-* vmlinuz
@@ -460,7 +484,7 @@ then
 
         # Import the cross-compiled tools into the initrd root.
         cp -pt "$root/bin" "$ROOT/bin/busybox"
-        local cmd ; for cmd in ash cat losetup mount mountpoint switch_root
+        local cmd ; for cmd in ash cat losetup mount mountpoint sleep switch_root
         do ln -fns busybox "$root/bin/$cmd"
         done
         opt verity && cp -p "$ROOT/sbin/dmsetup.static" "$root/bin/dmsetup"
@@ -478,7 +502,9 @@ opt verity_sig && echo 'keyctl padd user verity:root @u < /verity.sig'
 opt verity && cat << 'EOG' ||
 dmv=" $(cat /proc/cmdline) "
 dmv=${dmv##* \"DVR=} ; dmv=${dmv##* DVR=\"} ; dmv=${dmv%%\"*}
-dmsetup create --concise "$dmv"
+for attempt in 1 2 3 4 0
+do dmsetup create --concise "$dmv" && break || sleep "$attempt"
+done
 mount -no ro /dev/mapper/root /sysroot
 EOG
 echo "mount -n${options[read_only]:+o ro} /dev/loop0 /sysroot")
@@ -490,7 +516,10 @@ EOF
         # Build the initrd.
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
-        zstd --threads=0 --ultra -22 > initrd.img
+        if opt monolithic
+        then cat > initramfs.cpio
+        else zstd --threads=0 --ultra -22 > initrd.img
+        fi
 fi
 
 function write_base_kernel_config() if opt bootable
@@ -788,7 +817,8 @@ function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
     armv5*)   echo armv5te-unknown-linux-gnueabi ;;
     armv7*)   echo armv7-unknown-linux-gnueabihf ;;
     arm*)     echo arm-unknown-linux-gnueabi ;;
-    i[3-6]86) echo i686-unknown-linux-gnu ;;
+    i[3-5]86) echo i586-unknown-linux-gnu ;;
+    i686)     echo i686-unknown-linux-gnu ;;
     powerpc)  echo powerpc-unknown-linux-gnu ;;
     riscv64)  echo riscv64gc-unknown-linux-gnu ;;
     x86_64)   echo x86_64-unknown-linux-gnu ;;
@@ -831,7 +861,7 @@ function fix_package() {
 <app-editors/emacs-28
 media-libs/woff2
 net-libs/webkit-gtk *
-sys-apps/bubblewrap
+sys-apps/bubblewrap *
 sys-apps/xdg-dbus-proxy *
 EOF
                 echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
@@ -885,7 +915,6 @@ EOF
 dev-libs/nspr
 dev-libs/nss
 media-libs/libvpx
-media-libs/libwebp
 EOF
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
 dev-lang/python sqlite
@@ -903,7 +932,6 @@ dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
-media-libs/libwebp
 =www-client/firefox-77.0.1 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
