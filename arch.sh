@@ -99,10 +99,9 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed -i -e '/<svg/,/>/s,>,&<style>text{display:none}</style>,' /usr/share/pixmaps/archlinux.svg &&
-        magick -background none /usr/share/pixmaps/archlinux.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '[0-9]*')"
-        build_systemd_ramdisk
+        sed '/<svg/,/>/s,>,&<style>text{display:none}</style>,' /usr/share/pixmaps/archlinux.svg > /root/logo.svg &&
+        magick -background none /root/logo.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
+        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 

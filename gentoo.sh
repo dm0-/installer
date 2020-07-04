@@ -146,8 +146,10 @@ EOF
         echo '<dev-libs/libgpg-error-1.39 ~*' >> "$portage/package.accept_keywords/gnupg.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
         echo '<dev-libs/libnl-3.6 ~*' >> "$portage/package.accept_keywords/libnl.conf"
-        # Accept libuv-1.38.0 to fix host dependencies.
+        # Accept libuv-1.38.1 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
+        # Accept openh264-2.1.1 to support cross-compiling.
+        echo '<media-libs/openh264-2.2 ~*' >> "$portage/package.accept_keywords/openh264.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
@@ -275,8 +277,6 @@ ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
 ## Support host dependencies in libxml2 correctly (#719088).
 sed -i -e '/^EAPI=/s/=.*/=7/;/^DEPEND="/s/$/"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild manifest
-## Support Linux 5.8 without breaking unpacking other stuff (#729178).
-sed -i -e '/pretend)/s/)/|pkg_setup&/p' /var/db/repos/gentoo/eclass/linux-info.eclass
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -437,12 +437,15 @@ EOF
         sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
 }
 
+# Override ramdisk creation since the Gentoo kernel is patched to support zstd.
+eval "$(declare -f squash | $sed 's/xz.*/if opt monolithic ; then cat > initramfs.cpio ; else zstd --threads=0 --ultra -22 > initrd.img ; fi/')"
+
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed -i -e '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg &&
-        magick -background none /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        build_busybox_initrd
+        sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
+        magick -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
+        test -s $(opt monolithic && echo initramfs.cpio || echo initrd.img) || build_busybox_initrd
         if ! test -s vmlinux -o -s vmlinuz
         then
                 local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
@@ -859,7 +862,7 @@ function fix_package() {
                 echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
 <app-editors/emacs-28
-media-libs/woff2
+media-libs/woff2 *
 net-libs/webkit-gtk *
 sys-apps/bubblewrap *
 sys-apps/xdg-dbus-proxy *
@@ -927,16 +930,83 @@ sys-devel/clang default-libcxx
 x11-libs/gtk+ X
 EOF
                 echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/bindgen.conf"
+                echo "STUPID_TARGET=\"$(archmap_rust ${options[arch]})\"" >> "$portage/env/glslopt.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
-=www-client/firefox-77.0.1 ~*
+=www-client/firefox-78.0.1 ~*
 EOF
-                echo 'www-client/firefox bindgen.conf' >> "$portage/package.env/firefox.conf"
+                echo 'www-client/firefox bindgen.conf glslopt.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
+                $sed -n '/FLAGS=.*-march=geode/q0;$q1' "$portage/make.conf" &&
+                $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
+--- a/build/moz.configure/init.configure
++++ b/build/moz.configure/init.configure
+@@ -940,7 +940,7 @@
+     return namespace(
+         OS_TARGET=os_target,
+         OS_ARCH=os_arch,
+-        INTEL_ARCHITECTURE=target.cpu in ('x86', 'x86_64') or None,
++        INTEL_ARCHITECTURE=None,
+     )
+ 
+ 
+--- a/build/moz.configure/rust.configure
++++ b/build/moz.configure/rust.configure
+@@ -252,6 +252,7 @@
+             (host_or_target.cpu, host_or_target.endianness, host_or_target.os), [])
+ 
+         def find_candidate(candidates):
++            if len([c for c in candidates if c.rust_target == 'i586-unknown-linux-gnu']) >= 1: return 'i586-unknown-linux-gnu'
+             if len(candidates) == 1:
+                 return candidates[0].rust_target
+             elif not candidates:
+--- a/gfx/qcms/transform.cpp
++++ b/gfx/qcms/transform.cpp
+@@ -32,7 +32,6 @@
+ 
+ /* for MSVC, GCC, Intel, and Sun compilers */
+ #if defined(_M_IX86) || defined(__i386__) || defined(__i386) || defined(_M_AMD64) || defined(__x86_64__) || defined(__x86_64)
+-#define X86
+ #endif /* _M_IX86 || __i386__ || __i386 || _M_AMD64 || __x86_64__ || __x86_64 */
+ 
+ /**
+--- a/gfx/skia/skia/include/core/SkPreConfig.h
++++ b/gfx/skia/skia/include/core/SkPreConfig.h
+@@ -85,7 +85,6 @@
+ //////////////////////////////////////////////////////////////////////
+ 
+ #if defined(__i386) || defined(_M_IX86) ||  defined(__x86_64__) || defined(_M_X64)
+-  #define SK_CPU_X86 1
+ #endif
+ 
+ /**
+--- a/media/libsoundtouch/src/STTypes.h
++++ b/media/libsoundtouch/src/STTypes.h
+@@ -157,7 +157,7 @@
+         // data type for sample accumulation: Use double to utilize full precision.
+         typedef double LONG_SAMPLETYPE;
+ 
+-        #ifdef SOUNDTOUCH_ALLOW_X86_OPTIMIZATIONS
++        #if 0
+             // Allow SSE optimizations
+             #define SOUNDTOUCH_ALLOW_SSE       1
+         #endif
+--- a/mozglue/build/SSE.h
++++ b/mozglue/build/SSE.h
+@@ -91,7 +91,7 @@
+  *
+  */
+ 
+-#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
++#if 0
+ 
+ #  ifdef __MMX__
+ // It's ok to use MMX instructions based on the -march option (or
+EOF
                 test "x${options[arch]}" = xpowerpc &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
 --- a/js/src/jit/none/MacroAssembler-none.h
@@ -979,12 +1049,20 @@ EOF
  
 
 EOF
-                script << 'EOG'
-sed -i -e 's/.*lto.*gold/#&/;/eapply_user/ased -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild
-compgen -G '/usr/*/etc/portage/patches/www-client/firefox/ppc.patch' &&
-sed -i -e 's/with\(-intl-api.*\)/without\1 ; export USE_ICU=1/;/final/imozconfig_annotate "too lazy to port to ppc" --disable-webrtc ; sed -i -e /elf-hack/d "${S}"/.mozconfig' /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild
-ebuild /var/db/repos/gentoo/www-client/firefox/firefox-77.0.1.ebuild manifest
-EOG
+                test -s "$portage/patches/www-client/firefox/i586.patch" &&
+                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
+                echo "STUPID_TARGET=\"$(archmap_rust i586)\"" >> "$portage/env/glslopt.conf" &&
+                echo >> "$buildroot/etc/portage/env/rust-map.conf" \
+                    "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-78.0.1.ebuild
+                $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
+sed -i -e "s/TARGET/STUPID_&/" "${S}"/third_party/rust/glslopt/build.rs\
+sed -i -e "s/:{[^}]*/:{/" "${S}"/third_party/rust/glslopt/.cargo-checksum.json\
+sed -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' "$buildroot$which"
+                test -s "$portage/patches/www-client/firefox/ppc.patch" &&
+                $sed -i -e '/final/ised -i -e /elf-hack/d "${S}"/.mozconfig\
+mozconfig_annotate "too lazy to port" --disable-webrtc' "$buildroot$which"
+                enter /usr/bin/ebuild "$which" manifest
                 ;;
             vlc)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"

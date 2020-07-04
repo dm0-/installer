@@ -64,15 +64,16 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || cp -p /boot/*/*/initrd initrd.img
-        build_systemd_ramdisk
+        test -s initrd.img || build_systemd_ramdisk /boot/*/*/initrd
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 
 # Override image generation to drop EROFS support since it's not enabled.
 eval "$(
-declare -f create_root_image {,un}mount_root | $sed '/[^ ].opt/s/read_only/squash/'
-declare -f squash | $sed s/read_only/squash/
+declare -f create_root_image {,un}mount_root | $sed \
+    -e '/if\|size/s/read_only/squash/' \
+    -e 's/! opt ramdisk/{ opt verity || & ; }/'
+declare -f squash | $sed '/!/s/read_only/squash/'
 declare -f kernel_cmdline | $sed /type=erofs/d
 )"
 

@@ -92,10 +92,9 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed -i -e '/<svg/,/>/s,>,&<style>#g885{display:none}</style>,' /usr/share/pixmaps/distribution-logos/light-dual-branding.svg &&
-        magick -background none -size 720x320 /usr/share/pixmaps/distribution-logos/light-dual-branding.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
-        build_systemd_ramdisk
+        sed '/<svg/,/>/s,>,&<style>#g885{display:none}</style>,' /usr/share/pixmaps/distribution-logos/light-dual-branding.svg > /root/logo.svg &&
+        magick -background none -size 720x320 /root/logo.svg -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
+        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
         test -s vmlinuz || cp -pt . /boot/vmlinuz
 fi
 
@@ -117,9 +116,6 @@ eval "$(declare -f relabel squash | $sed 's/ zstd .* 22 / xz /')"
 
 # Override dm-init with userspace since the openSUSE kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
-
-# Override the PAM session file path to automatically create home directories.
-eval "$(declare -f tmpfs_home | $sed s/system-auth/common-session/g)"
 
 function configure_initrd_generation() if opt bootable
 then

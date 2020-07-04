@@ -72,8 +72,7 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || cp -p /boot/initramfs-* initrd.img
-        build_systemd_ramdisk
+        test -s initrd.img || build_systemd_ramdisk /boot/initramfs-*
         test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
 fi
 
@@ -91,7 +90,7 @@ s/\(-name \)\?sd_mod\(.ko.xz -o\)\?/\1crct10dif_common\2 \1crc-t10dif\2 &/')"
 eval "$(declare -f verity | $sed 's/"[^ ]*#opt_params.*"/0/')"
 
 # Override initrd creation to work with old CentOS 7 command options.
-eval "$(declare -f build_systemd_ramdisk relabel |
+eval "$(declare -f build_systemd_ramdisk relabel squash |
 $sed 's/cpio -D \([^ ]*\) \([^|]*\)|/{ cd \1 ; cpio \2 ; } |/')"
 
 # Override the /etc overlay to disable persistent Git support.

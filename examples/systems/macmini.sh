@@ -95,7 +95,7 @@ function customize_buildroot() {
         echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
         $mkdir -p "$portage/patches/media-video/ffmpeg-4.3"
         $curl -L https://github.com/FFmpeg/FFmpeg/commit/3a557c5d88b7b15b5954ba2743febb055549b536.patch > "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
-        test x$($sha256sum "$portage/patches/media-video/ffmpeg-4.3/altivec.patch" | $sed -n '1s/ .*//p') = xa7fc883930d72e8b34ad2124222a79d50ec46aded2496114a67f26725732eef1
+        test x$($sha256sum "$portage/patches/media-video/ffmpeg-4.3/altivec.patch" | $sed -n '1s/ .*//p') = x4c4472f85c55d42f51a50edd4a1facb3dc1550d5e477047b17bb8723b311dd1a
         $sed -i -e 's,^-\([^-]\),/\1,;s/^+\([^+]\)/-\1/;s,^/,+,;s/^@@ -\([^ ]*\) +\([^ ]*\) @@/@@ -\2 +\1 @@/' "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
 
         # Enable general system settings.
@@ -104,7 +104,7 @@ function customize_buildroot() {
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
-            a52 aom dvd libaom mpeg theora vpx x265 \
+            a52 aom dav1d dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \

@@ -1,6 +1,6 @@
 DEFAULT_ARCH=$($uname -m)
-disk=ext4.img
-exclude_paths=({boot,dev,home,media,proc,run,srv,sys,tmp}/'*')
+disk=
+exclude_paths=({boot,dev,media,proc,run,srv,sys,tmp}/'*')
 
 declare -A options
 options[distro]=fedora
@@ -110,6 +110,8 @@ function validate_options() {
         # Validate form, but don't look for a device yet (because hot-plugging exists).
         opt partuuid &&
         [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
+        # A disk only supports the executable header with unused sector zero.
+        opt executable && { ! opt bootable || opt uefi ; }
         # A partition UUID must be set to create a bootable UEFI disk image.
         opt executable && opt uefi && ! opt ramdisk && opt partuuid
         # A partition is required when writing to disk.
@@ -202,21 +204,21 @@ function initialize_buildroot() { : ; }
 function customize_buildroot() { : ; }
 function customize() { : ; }
 
-function create_root_image() if opt selinux || ! opt read_only
+function create_root_image() if ! opt read_only && ! opt ramdisk || opt selinux
 then
-        local -r size=$(opt read_only && echo 10 || echo 4)G
-        $truncate --size="${1:-$size}" "$output/$disk"
+        local -r size=$(opt read_only && echo 10G || echo 3584M)
+        $truncate --size="${1:-$size}" "$output/${disk:=ext4.img}"
         declare -g loop=$($losetup --show --find "$output/$disk")
         trap -- '$losetup --detach "$loop"' EXIT
 fi
 
-function mount_root() if opt selinux || ! opt read_only
+function mount_root() if ! opt read_only && ! opt ramdisk || opt selinux
 then
         mkfs.ext4 -m 0 /dev/loop-root
         mount -o X-mount.mkdir /dev/loop-root root
 fi
 
-function unmount_root() if opt selinux || ! opt read_only
+function unmount_root() if ! opt read_only && ! opt ramdisk || opt selinux
 then
         e4defrag root
         umount root
@@ -311,6 +313,25 @@ then
         mksquashfs root "$disk" -noappend -no-xattrs \
             -comp zstd -Xcompression-level 22 \
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
+elif opt ramdisk && ! opt selinux && ! opt verity
+then
+        test -x root/init || if opt read_only
+        then cat << 'EOF' > root/init ; chmod 0755 root/init
+#!/bin/sh -eux
+mountpoint -q /proc || mount -t proc proc /proc
+mount -o remount,ro /
+exec /usr/lib/systemd/systemd
+EOF
+        else ln -fns usr/lib/systemd/systemd root/init
+        fi
+        find root -mindepth 1 -printf '%P\n' |
+        grep -vxf <(
+                for path in "${exclude_paths[@]//\*/[^/]*}"
+                do path=${path//./\\.} ; echo "${path//\?/[^/]}\(/.*\)\?"
+                done
+        ) |
+        cpio -D root -H newc -o |
+        xz --check=crc32 -9e > initrd.img
 elif opt read_only && ! opt selinux
 then
         local -a args ; local path
@@ -359,7 +380,7 @@ then
             -noattr -nocerts -out verity.sig -outform DER
 
         cat "$disk" verity.img > final.img
-else ln -fn "$disk" final.img
+else test -z "$disk" || ln -fn "$disk" final.img
 fi
 
 function kernel_cmdline() if opt bootable
@@ -380,14 +401,15 @@ then
 
         echo > kernel_args.txt \
             $(opt read_only && echo ro || echo rw) \
-            "root=$root" \
-            "rootfstype=$type" \
+            $(test -s final.img && echo "root=$root" "rootfstype=$type") \
             $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"") \
             $(opt verity_sig && echo dm-verity.require_signatures=1)
 fi
 
 function build_systemd_ramdisk() if opt ramdisk
 then
+        test -s "$1" && local -r base="$1" ||
+        { local -r base=/root/initrd.img ; dracut --force "$base" "$1" ; }
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
         mkdir -p "$root/usr/lib/systemd/system/dev-loop0.device.requires"
         cat << EOF > "$root/usr/lib/systemd/system/losetup-root.service"
@@ -402,10 +424,12 @@ Type=oneshot
 EOF
         ln -fst "$root/usr/lib/systemd/system/dev-loop0.device.requires" ../losetup-root.service
         ln -fn final.img "$root/root.img"
-        cp -p initrd.img initrd.base.img  # Save the unmodified initrd.
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
-        xz --check=crc32 -9e >> initrd.img
+        xz --check=crc32 -9e | cat "$base" - > initrd.img
+elif test -s "$1"
+then cp -p "$1" initrd.img
+else dracut --force initrd.img "$1"
 fi
 
 function tmpfs_var() if opt read_only
@@ -431,6 +455,8 @@ fi
 
 function tmpfs_home() if opt read_only
 then
+        exclude_paths+=(home/'*')
+
         cat << EOF > root/usr/lib/systemd/system/home.mount
 [Unit]
 Description=Mount tmpfs over /home to create new users
@@ -627,7 +653,7 @@ function finalize_packages() {
                             ${gecos:+--comment="$gecos"} \
                             ${groups:+--groups="$groups"} \
                             ${uid:+--uid="$uid"} \
-                            --password= "$name"
+                            --create-home --password= "$name"
                 done
         )
 

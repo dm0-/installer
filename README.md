@@ -68,7 +68,7 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30,
   * :star: *Arch*, *CentOS*, *Fedora*, *openSUSE*, and *Ubuntu* support the bootable option by using the distro kernel (preferring a security-hardened variant where available) and including early microcode updates for all supported CPU types.  This should make the images portable across all hardware supported by the distro and architecture.
   * :warning: *Gentoo* requires a full kernel config to be supplied so it can build Linux tailored to run only on desired targets.  Microcode updates must be specified in the config for the target CPUs.  The resulting system will only be portable to machines that were intentionally configured in the kernel.
 
-**RAM Disk**:  The root file system image can be included in an initrd for a bootable system so that it does not need to be written to a partition.  This option runs the system entirely in RAM.
+**RAM Disk**:  The root file system image can be included in an initrd for a bootable system so that it does not need to be written to a partition.  This option runs the system entirely in RAM.  When not using SquashFS, verity, or SELinux, no file system image is produced; the entire root directory is packed into the initrd directly.
 
   * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support running in RAM.
 

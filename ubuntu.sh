@@ -108,10 +108,9 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed -i -e '/<svg/{s/"22"/"640"/g;s/>/ viewBox="0 0 22 22">/;}' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg &&
-        convert -background none /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || dracut --force initrd.img "$(cd /lib/modules ; compgen -G '[0-9]*')"
-        build_systemd_ramdisk
+        sed '/<svg/{s/"22"/"640"/g;s/>/ viewBox="0 0 22 22">/;}' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg > /root/logo.svg &&
+        convert -background none /root/logo.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /boot/vmlinuz
         if opt verity_sig
         then

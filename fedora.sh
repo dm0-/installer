@@ -77,10 +77,9 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed -i -e '/id="g524[17]"/,/\//{/</,/>/d;}' /usr/share/fedora-logos/fedora_logo.svg &&
-        convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || cp -p /boot/initramfs-* initrd.img
-        build_systemd_ramdisk
+        sed '/id="g524[17]"/,/\//{/</,/>/d;}' /usr/share/fedora-logos/fedora_logo.svg > /root/logo.svg &&
+        convert -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        test -s initrd.img || build_systemd_ramdisk /boot/initramfs-*
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 
