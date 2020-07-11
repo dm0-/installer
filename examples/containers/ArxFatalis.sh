@@ -26,7 +26,7 @@ function customize_buildroot() {
         script << 'EOF'
 git clone --branch=master https://github.com/arx/ArxLibertatis.git
 mkdir ArxLibertatis/build ; cd ArxLibertatis/build
-git reset --hard 5e6f0912c9167f2bf6bb3f6e0027c827e6ec02ea
+git reset --hard 96accec26b9b8bc0b39580f261f0c2d91d25ab55
 cmake -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec make -j"$(nproc)" all
 EOF

@@ -130,6 +130,8 @@ EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
+        # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
+        echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept freetype-2.10 to fix LTO on armhf.
@@ -140,8 +142,8 @@ EOF
         echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\n<net-libs/libnftnl-1.2\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libcap-2.34 to fix build ordering with EAPI 7.
-        echo '<sys-libs/libcap-2.35 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libcap-2.38 to fix build ordering with EAPI 7.
+        echo '<sys-libs/libcap-2.39 ~*' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libgpg-error-1.38 to fix cross-compiling to weird systems.
         echo '<dev-libs/libgpg-error-1.39 ~*' >> "$portage/package.accept_keywords/gnupg.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
@@ -161,6 +163,10 @@ EOF
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept util-linux-2.35 to fix build ordering with EAPI 7.
         echo 'sys-apps/util-linux *' >> "$portage/package.accept_keywords/util-linux.conf"
+        # Accept windowmaker-0.95.9 to fix host dependencies.
+        echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
+        # Accept media-libs/x265-3.4 to fix ARM builds.
+        echo '<media-libs/x265-3.5 ~*' >> "$portage/package.accept_keywords/x265.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -196,7 +202,6 @@ EOF
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
-        echo 'PKG_CONFIG="$CHOST-pkg-config"' >> "$portage/env/cross-pkgconfig.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.7m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
@@ -205,7 +210,6 @@ app-crypt/gnupg cross-libusb.conf
 dev-libs/dbus-glib cross-dbus-glib.conf
 dev-python/pypax cross-python.conf
 media-libs/gstreamer cross-glib-mkenums.conf
-sys-apps/dtc cross-pkgconfig.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf
 x11-wm/windowmaker cross-windowmaker.conf
 EOF
@@ -936,10 +940,9 @@ dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
 media-libs/libvpx
-=www-client/firefox-78.0.1 ~*
+=www-client/firefox-78.0.2 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf glslopt.conf' >> "$portage/package.env/firefox.conf"
-                echo 'www-client/firefox -cpu_flags_arm_neon' >> "$portage/package.use/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
                 $sed -n '/FLAGS=.*-march=geode/q0;$q1' "$portage/make.conf" &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
@@ -1049,12 +1052,17 @@ EOF
  
 
 EOF
+                [[ ${options[arch]} == armv7* ]] &&
+                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
+                echo "STUPID_TARGET=\"thumbv7neon-unknown-linux-gnueabihf\"" >> "$portage/env/glslopt.conf" &&
+                echo >> "$buildroot/etc/portage/env/rust-map.conf" \
+                    "RUST_CROSS_TARGETS=\"$(archmap_llvm ${options[arch]}):thumbv7neon-unknown-linux-gnueabihf:${options[host]}\""
                 test -s "$portage/patches/www-client/firefox/i586.patch" &&
                 echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
                 echo "STUPID_TARGET=\"$(archmap_rust i586)\"" >> "$portage/env/glslopt.conf" &&
                 echo >> "$buildroot/etc/portage/env/rust-map.conf" \
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-78.0.1.ebuild
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-78.0.2.ebuild
                 $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
 sed -i -e "s/TARGET/STUPID_&/" "${S}"/third_party/rust/glslopt/build.rs\
 sed -i -e "s/:{[^}]*/:{/" "${S}"/third_party/rust/glslopt/.cargo-checksum.json\

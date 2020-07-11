@@ -60,7 +60,7 @@ packages+=(
         x11-apps/xrandr
         x11-base/xorg-server
         x11-terms/xterm
-        x11-wm/twm
+        x11-wm/windowmaker
 )
 
 packages_buildroot+=(
@@ -91,7 +91,7 @@ function customize_buildroot() {
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
 
         # Enable general system settings.
-        echo >> "$portage/make.conf" 'USE="$USE' twm \
+        echo >> "$portage/make.conf" 'USE="$USE' \
             curl elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \

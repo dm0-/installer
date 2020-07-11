@@ -162,8 +162,8 @@ function customize() {
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
         # Build U-Boot to provide UEFI.
-        git clone --branch=v2020.07-rc5 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
-        git -C /root/u-boot reset --hard 868fb9969c85ce5a1b33c6bb713c8158c04acee9
+        git clone --branch=v2020.07 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
+        git -C /root/u-boot reset --hard 2f5fbb5b39f7b67044dda5c35e4a4b31685a3109
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0

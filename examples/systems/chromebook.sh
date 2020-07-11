@@ -12,6 +12,7 @@ options+=(
         [bootable]=1     # Build a kernel for this system.
         [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
+        [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=          # This platform does not support UEFI.
         [verity_sig]=1   # Require all verity root hashes to be verified.
 )
@@ -61,7 +62,7 @@ packages+=(
         x11-apps/xrandr
         x11-base/xorg-server
         x11-terms/xterm
-        x11-wm/twm
+        x11-wm/windowmaker
 )
 
 packages_buildroot+=(
@@ -88,7 +89,7 @@ function customize_buildroot() {
         echo 'VIDEO_CARDS="panfrost"' >> "$portage/make.conf"
 
         # Enable general system settings.
-        echo >> "$portage/make.conf" 'USE="$USE' twm \
+        echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
@@ -118,6 +119,12 @@ curl -L "https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/
 test x$(sha256sum "$tmp" | sed -n '1s/ .*//p') = x24a7cdfe790e0cb067b11fd7f13205684bcd4368cfb00ee81574fe983618f906
 exec base64 -d < "$tmp" > /lib/firmware/brcm/brcmfmac4354-sdio.txt
 EOF
+
+        # Install Firefox.
+        fix_package firefox
+        packages+=(www-client/firefox)
+        echo 'EXTRA_EMAKE="OS_TEST=arm"' >> "$portage/env/cross-arm.conf"
+        echo 'dev-libs/nss cross-arm.conf' >> "$portage/package.env/nss.conf"
 
         # Install Emacs as a terminal application.
         fix_package emacs

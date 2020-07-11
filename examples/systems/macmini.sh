@@ -11,7 +11,7 @@ options+=(
         [bootable]=1     # Build a kernel for this system.
         [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
-        [squash]=1       # Compress the image while experimenting.
+        [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=          # This platform does not support UEFI.
         [verity_sig]=1   # Require all verity root hashes to be verified.
 )

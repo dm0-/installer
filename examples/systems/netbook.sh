@@ -9,10 +9,9 @@ options+=(
         [arch]=armv5tel  # Target ARM ARM926EJ-S CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
-        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
+        [read_only]=1    # Use an efficient packed read-only file system.
         [uefi]=          # This platform does not support UEFI.
-        [verity_sig]=1   # Require all verity root hashes to be verified.
 )
 
 packages+=(
@@ -60,7 +59,7 @@ packages+=(
         x11-apps/xrandr
         x11-base/xorg-server
         x11-terms/xterm
-        x11-wm/twm
+        x11-wm/windowmaker
 )
 
 packages_buildroot+=(
@@ -101,7 +100,7 @@ function customize_buildroot() {
         echo 'VIDEO_CARDS="fbdev"' >> "$portage/make.conf"
 
         # Enable general system settings.
-        echo >> "$portage/make.conf" 'USE="$USE' twm \
+        echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
