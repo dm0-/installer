@@ -92,7 +92,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -279,17 +279,17 @@ CONFIG_MTRR=y
 CONFIG_MTRR_SANITIZER=y
 CONFIG_SYSVIPC=y
 CONFIG_ZONE_DMA=y
-## Keyboard, touchpad, and trackpoint
-CONFIG_INPUT_KEYBOARD=y
-CONFIG_INPUT_MOUSE=y
-CONFIG_KEYBOARD_ATKBD=y
-CONFIG_MOUSE_PS2=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
+## Keyboard, touchpad, and trackpoint
+CONFIG_INPUT_KEYBOARD=y
+CONFIG_INPUT_MOUSE=y
+CONFIG_KEYBOARD_ATKBD=y
+CONFIG_MOUSE_PS2=y
 ## Optional USB devices
 CONFIG_SND_USB=y
 CONFIG_HID_GYRATION=m   # wireless mouse and keyboard

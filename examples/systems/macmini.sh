@@ -93,14 +93,14 @@ function customize_buildroot() {
         # The ffmpeg cross-compilation needs assistance for this CPU (#728602).
         echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
         echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
-        $mkdir -p "$portage/patches/media-video/ffmpeg-4.3"
-        $curl -L https://github.com/FFmpeg/FFmpeg/commit/3a557c5d88b7b15b5954ba2743febb055549b536.patch > "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
-        test x$($sha256sum "$portage/patches/media-video/ffmpeg-4.3/altivec.patch" | $sed -n '1s/ .*//p') = x4c4472f85c55d42f51a50edd4a1facb3dc1550d5e477047b17bb8723b311dd1a
-        $sed -i -e 's,^-\([^-]\),/\1,;s/^+\([^+]\)/-\1/;s,^/,+,;s/^@@ -\([^ ]*\) +\([^ ]*\) @@/@@ -\2 +\1 @@/' "$portage/patches/media-video/ffmpeg-4.3/altivec.patch"
+        $mkdir -p "$portage/patches/media-video/ffmpeg"
+        $curl -L https://github.com/FFmpeg/FFmpeg/commit/3a557c5d88b7b15b5954ba2743febb055549b536.patch > "$portage/patches/media-video/ffmpeg/altivec.patch"
+        test x$($sha256sum "$portage/patches/media-video/ffmpeg/altivec.patch" | $sed -n '1s/ .*//p') = x4c4472f85c55d42f51a50edd4a1facb3dc1550d5e477047b17bb8723b311dd1a
+        $sed -i -e 's,^-\([^-]\),/\1,;s/^+\([^+]\)/-\1/;s,^/,+,;s/^@@ -\([^ ]*\) +\([^ ]*\) @@/@@ -\2 +\1 @@/' "$portage/patches/media-video/ffmpeg/altivec.patch"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -219,12 +219,12 @@ else set default=boot-a
 fi
 
 menuentry 'Boot A' --id boot-a {
-        load_env --file /kargs_a kargs dmsetup
+        if test -s /kargs_a ; then load_env --file /kargs_a kargs dmsetup ; fi
         linux /linux_a $kargs "$dmsetup" rootwait
         if test -s /initrd_a ; then initrd /initrd_a ; fi
 }
 menuentry 'Boot B' --id boot-b {
-        load_env --file /kargs_b kargs dmsetup
+        if test -s /kargs_b ; then load_env --file /kargs_b kargs dmsetup ; fi
         linux /linux_b $kargs "$dmsetup" rootwait
         if test -s /initrd_b ; then initrd /initrd_b ; fi
 }

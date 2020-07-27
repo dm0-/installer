@@ -65,12 +65,12 @@ else set default=boot-a
 fi
 
 menuentry 'Boot A' --id boot-a {
-        load_env --file /kargs_a kargs dmsetup
+        if test -s /kargs_a ; then load_env --file /kargs_a kargs dmsetup ; fi
         linux /linux_a $kargs "$dmsetup" rootwait
         if test -s /initrd_a ; then initrd /initrd_a ; fi
 }
 menuentry 'Boot B' --id boot-b {
-        load_env --file /kargs_b kargs dmsetup
+        if test -s /kargs_b ; then load_env --file /kargs_b kargs dmsetup ; fi
         linux /linux_b $kargs "$dmsetup" rootwait
         if test -s /initrd_b ; then initrd /initrd_b ; fi
 }

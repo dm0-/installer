@@ -90,7 +90,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
@@ -346,6 +346,12 @@ CONFIG_PL330_DMA=y
 ## PHY
 CONFIG_PHY_ROCKCHIP_DP=y
 CONFIG_PHY_ROCKCHIP_USB=y
+## Input
+CONFIG_HID=y
+CONFIG_HID_BATTERY_STRENGTH=y
+CONFIG_HID_GENERIC=y
+CONFIG_INPUT=y
+CONFIG_INPUT_EVDEV=y
 ## Keyboard, touchpad, and touchscreen
 CONFIG_HZ_250=y
 CONFIG_INPUT_KEYBOARD=y
@@ -356,12 +362,6 @@ CONFIG_KEYBOARD_GPIO=y
 CONFIG_MOUSE_ELAN_I2C=y
 CONFIG_MOUSE_ELAN_I2C_I2C=y
 CONFIG_TOUCHSCREEN_ELAN=y
-## Input
-CONFIG_HID=y
-CONFIG_HID_BATTERY_STRENGTH=y
-CONFIG_HID_GENERIC=y
-CONFIG_INPUT=y
-CONFIG_INPUT_EVDEV=y
 ## Webcam
 CONFIG_MEDIA_SUPPORT=y
 CONFIG_MEDIA_CAMERA_SUPPORT=y

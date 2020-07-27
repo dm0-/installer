@@ -16,6 +16,7 @@ function create_buildroot() {
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
+        packages_buildroot+=(app-arch/zstd dev-util/debugedit)
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -27,7 +28,7 @@ function create_buildroot() {
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
         $ln -fns "../../var/db/repos/gentoo/profiles/$(archmap_profile)" "$portage/make.profile"
-        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.force,repos.conf}
+        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.{force,mask},repos.conf}
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
@@ -35,7 +36,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE${options[selinux]:+ selinux} system-llvm systemd"
+USE="\$USE${options[selinux]:+ selinux} system-llvm systemd -elogind"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -94,8 +95,6 @@ EOF
 app-admin/setools-9999
 EOF
         $cat << 'EOF' >> "$portage/profile/packages"
-# Don't force installing binary QEMU.
--*app-emulation/qemu-riscv64-bin
 # Don't force building busybox in every Linux profile.
 -*sys-apps/busybox
 # Don't force building a debugger for experimental architectures.
@@ -130,35 +129,37 @@ EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
+        # Accept cpuid2cpuflags-11 to support RDRAND.
+        echo '<app-portage/cpuid2cpuflags-12 ~*' >> "$portage/package.accept_keywords/cpuid2cpuflags.conf"
         # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
         echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept freetype-2.10 to fix LTO on armhf.
         echo '<media-libs/freetype-2.11 ~*' >> "$portage/package.accept_keywords/freetype.conf"
+        # Accept gentoo-functions-0.13 to fix a missing header.
+        echo '<sys-apps/gentoo-functions-0.14 ~*' >> "$portage/package.accept_keywords/gentoo-functions.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
         # Accept iptables-1.8 to fix missing flags.
-        echo -e 'app-eselect/eselect-iptables\n<net-firewall/iptables-1.9\n<net-libs/libnftnl-1.2\nnet-misc/ethertypes' >> "$portage/package.accept_keywords/iptables.conf"
+        echo -e 'app-eselect/eselect-iptables *\n<net-firewall/iptables-1.9\n<net-libs/libnftnl-1.2\nnet-misc/ethertypes *' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libcap-2.38 to fix build ordering with EAPI 7.
-        echo '<sys-libs/libcap-2.39 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libcap-2.41 to fix build ordering with EAPI 7.
+        echo '<sys-libs/libcap-2.42 ~*' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libgpg-error-1.38 to fix cross-compiling to weird systems.
         echo '<dev-libs/libgpg-error-1.39 ~*' >> "$portage/package.accept_keywords/gnupg.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
-        echo '<dev-libs/libnl-3.6 ~*' >> "$portage/package.accept_keywords/libnl.conf"
+        echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
         # Accept libuv-1.38.1 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
-        # Accept openh264-2.1.1 to support cross-compiling.
-        echo '<media-libs/openh264-2.2 ~*' >> "$portage/package.accept_keywords/openh264.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
         # Accept rust-1.44 to support cross-compiling.
-        echo -e '<dev-lang/rust-1.45 ~*\n<virtual/rust-1.45 ~*' >> "$portage/package.accept_keywords/rust.conf"
+        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.45 ~*\n<virtual/rust-1.45 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
         echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept util-linux-2.35 to fix build ordering with EAPI 7.
@@ -172,6 +173,7 @@ EOF
         portage="$buildroot/usr/$host/etc/portage"
         $mkdir -p "${portage%/portage}"
         $cp -at "${portage%/portage}" "$buildroot/etc/portage"
+        test -z "$profile" && $rm -f "$portage/make.profile" ||
         $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
         $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto=jobserver&/' "$portage/make.conf"
         $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
@@ -281,6 +283,9 @@ ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
 ## Support host dependencies in libxml2 correctly (#719088).
 sed -i -e '/^EAPI=/s/=.*/=7/;/^DEPEND="/s/$/"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild manifest
+## Support cross-compiling musl (#732482).
+sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
+for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -294,7 +299,7 @@ fi
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-    @world app-arch/zstd dev-util/debugedit sys-devel/crossdev
+    @world sys-devel/crossdev
 
 # Ensure Python defaults to the version in the profile before continuing.
 sed -i -e '/^[^#]/d' /etc/python-exec/python-exec.conf
@@ -346,8 +351,8 @@ function install_packages() {
 
         # Build the cross-compiled toolchain packages first.
         COLLISION_IGNORE='*' USE=-selinux emerge --jobs=4 --oneshot --verbose \
-            sys-devel/gcc sys-kernel/linux-headers sys-libs/glibc
-        packages+=(sys-devel/gcc sys-libs/glibc)  # Install libstdc++ etc.
+            sys-devel/gcc virtual/libc virtual/os-headers
+        packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
         # These packages must be installed outside the dependency graph.
         emerge --changed-use --jobs=4 --nodeps --oneshot --verbose \
@@ -363,7 +368,7 @@ function install_packages() {
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-            @world "${packages[@]}" "$@"
+            "${packages[@]}" "$@"
 
         # Install the target root from binaries with no build dependencies.
         mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib},var}
@@ -382,8 +387,8 @@ function install_packages() {
             ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
 
         # List everything installed in the image and what was used to build it.
-        qlist -CIRSSUv > packages-buildroot.txt
-        qlist --root=/ -CIRSSUv > packages-host.txt
+        qlist -CIRSSUv > packages-sysroot.txt
+        qlist --root=/ -CIRSSUv > packages-buildroot.txt
         qlist --root=root -CIRSSUv > packages.txt
 }
 
@@ -809,7 +814,8 @@ function archmap_profile() {
         local -r selinux=${options[selinux]:+/selinux}
         case "$native" in
             aarch64)  echo default/linux/arm64/17.0/systemd ;;
-            armv5tel) echo default/linux/arm/17.0/armv5te ;;
+            armv4t*)  echo default/linux/arm/17.0/armv4t ;;
+            armv5te*) echo default/linux/arm/17.0/armv5te ;;
             armv7a)   echo default/linux/arm/17.0/armv7a ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
             powerpc)  echo default/linux/ppc/17.0 ;;
@@ -821,7 +827,8 @@ function archmap_profile() {
 
 function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
     aarch64)  echo aarch64-unknown-linux-gnu ;;
-    armv5*)   echo armv5te-unknown-linux-gnueabi ;;
+    armv4t*)  echo armv4t-unknown-linux-gnueabi ;;
+    armv5te*) echo armv5te-unknown-linux-gnueabi ;;
     armv7*)   echo armv7-unknown-linux-gnueabihf ;;
     arm*)     echo arm-unknown-linux-gnueabi ;;
     i[3-5]86) echo i586-unknown-linux-gnu ;;
@@ -840,6 +847,7 @@ function archmap_stage3() {
 
         local stage3
         case "$native" in
+            armv4tl)  stage3=stage3-armv4tl ;;
             armv5tel) stage3=stage3-armv5tel ;;
             armv7a)   stage3=stage3-armv7a_hardfp ;;
             i[45]86)  stage3=stage3-i486 ;;
@@ -876,6 +884,7 @@ EOF
 dev-util/desktop-file-utils -emacs
 dev-vcs/git -emacs
 EOF
+                echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 script << 'EOF'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
 --- app-editors/emacs/emacs-27.0.91.ebuild
@@ -930,7 +939,8 @@ media-libs/libpng apng
 media-libs/libvpx postproc
 media-libs/mesa X
 media-plugins/alsa-plugins pulseaudio
-sys-devel/clang default-libcxx
+net-misc/curl http2
+sys-devel/clang default-compiler-rt default-libcxx
 x11-libs/gtk+ X
 EOF
                 echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/bindgen.conf"

@@ -51,7 +51,7 @@ packages+=(
 
 function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
-        packages_buildroot+=(app-emulation/qemu)
+        packages_buildroot+=(app-emulation/qemu dev-vcs/git)
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
 app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 static static-user
 dev-libs/glib static-libs
@@ -110,7 +110,7 @@ EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \

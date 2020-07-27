@@ -19,7 +19,7 @@ then
                 [WrapMenus]=YES
         )
         sed -i \
-            -e "/ \(^$(for k in "${!config[@]}" ; do echo -n "\|$k" ; done)\) =/d" \
+            -e "/[ \t]\(^$(for k in "${!config[@]}" ; do echo -n "\|$k" ; done)\) =/d" \
             -e '/^{/'r<(for k in "${!config[@]}" ; do echo "  $k = ${config[$k]};" ; done) \
             -e 's|.*/usr/share/icons|&",\n&/hicolor/scalable/apps|' \
             root/etc/X11/WindowMaker/WindowMaker
