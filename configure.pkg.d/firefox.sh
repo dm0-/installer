@@ -78,7 +78,7 @@ EOF
         # Try to install a search engine for startpage.com by default.
         dir="${dir%%/browser/*}/distribution/searchplugins/common"
         mkdir -p "$dir"
-        curl -L 'https://www.startpage.com/en/opensearch.xml' > "$dir/startpage.xml"
+        curl -L 'https://www.startpage.com/en/opensearch.xml' > "$dir/startpage.xml" &&
         test x$(sha256sum "$dir/startpage.xml" | sed -n '1s/ .*//p') = \
             x50c2b828d22f13dde32662db8796fb670d389651ad27a8946e30363fd5beecc7 ||
         rm -f "$dir/startpage.xml"

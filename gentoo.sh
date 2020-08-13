@@ -16,7 +16,7 @@ function create_buildroot() {
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
-        packages_buildroot+=(app-arch/zstd dev-util/debugedit)
+        packages_buildroot+=(dev-util/debugedit)
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
@@ -51,6 +51,10 @@ sys-kernel/gentoo-sources
 sys-kernel/git-sources
 sys-kernel/linux-headers
 sec-policy/*
+EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/fonts.conf"
+# Accept the latest versions of font packages for build fixes and EAPI 7.
+media-fonts/* ~*
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -94,15 +98,6 @@ EOF
 # These Python tools are not useful, and they pull in horrific dependencies.
 app-admin/setools-9999
 EOF
-        $cat << 'EOF' >> "$portage/profile/packages"
-# Don't force building busybox in every Linux profile.
--*sys-apps/busybox
-# Don't force building a debugger for experimental architectures.
--*sys-devel/gdb
-# Don't force building HFS utilities.
--*sys-fs/hfsutils
--*sys-fs/hfsplusutils
-EOF
         $cat << 'EOF' >> "$portage/profile/use.mask"
 # Mask support for insecure protocols.
 sslv2
@@ -129,14 +124,14 @@ EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
+        # Accept bison-3.6 to fix newer package build requirements.
+        echo 'sys-devel/bison *' >> "$portage/package.accept_keywords/bison.conf"
         # Accept cpuid2cpuflags-11 to support RDRAND.
         echo '<app-portage/cpuid2cpuflags-12 ~*' >> "$portage/package.accept_keywords/cpuid2cpuflags.conf"
         # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
         echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
-        # Accept freetype-2.10 to fix LTO on armhf.
-        echo '<media-libs/freetype-2.11 ~*' >> "$portage/package.accept_keywords/freetype.conf"
         # Accept gentoo-functions-0.13 to fix a missing header.
         echo '<sys-apps/gentoo-functions-0.14 ~*' >> "$portage/package.accept_keywords/gentoo-functions.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
@@ -145,29 +140,33 @@ EOF
         echo -e 'app-eselect/eselect-iptables *\n<net-firewall/iptables-1.9\n<net-libs/libnftnl-1.2\nnet-misc/ethertypes *' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libcap-2.41 to fix build ordering with EAPI 7.
-        echo '<sys-libs/libcap-2.42 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        # Accept libcap-2.42 to fix build ordering with EAPI 7.
+        echo '<sys-libs/libcap-2.43 ~*' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libgpg-error-1.38 to fix cross-compiling to weird systems.
         echo '<dev-libs/libgpg-error-1.39 ~*' >> "$portage/package.accept_keywords/gnupg.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
         echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
         # Accept libuv-1.38.1 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
+        # Accept libxml2-2.9.10 to fix host dependencies.
+        echo -e 'dev-libs/libxml2 *\n<dev-libs/libxslt-1.1.35 ~*' >> "$portage/package.accept_keywords/libxml2.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
-        # Accept rust-1.44 to support cross-compiling.
-        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.45 ~*\n<virtual/rust-1.45 ~*' >> "$portage/package.accept_keywords/rust.conf"
+        # Accept rust-1.45 to support cross-compiling and bootstrapping.
+        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.46 ~*\n<virtual/rust-1.46 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept systemd-245 to fix sysusers for GLEP 81.
-        echo '<sys-apps/systemd-246 ~*' >> "$portage/package.accept_keywords/systemd.conf"
+        echo 'sys-apps/systemd *' >> "$portage/package.accept_keywords/systemd.conf"
         # Accept util-linux-2.35 to fix build ordering with EAPI 7.
         echo 'sys-apps/util-linux *' >> "$portage/package.accept_keywords/util-linux.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
-        # Accept media-libs/x265-3.4 to fix ARM builds.
+        # Accept x265-3.4 to fix ARM builds.
         echo '<media-libs/x265-3.5 ~*' >> "$portage/package.accept_keywords/x265.conf"
+        # Accept xf86-video-fbdev-0.5 to fix host dependencies.
+        echo '<x11-drivers/xf86-video-fbdev-0.6 ~*' >> "$portage/package.accept_keywords/xf86-video-fbdev.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -274,15 +273,9 @@ patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
-## Support the fbdev driver without needing X on the host (#714580).
-sed -i -e 's/^EAPI=.*/EAPI=7/;s/xorg-2/xorg-3/' /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild
-ebuild /var/db/repos/gentoo/x11-drivers/xf86-video-fbdev/xf86-video-fbdev-0.5.0.ebuild manifest
 ## Support host dependencies in psmisc correctly (#715928).
 sed -i -e 's/^DEPEND="[^"]*$/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild
 ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
-## Support host dependencies in libxml2 correctly (#719088).
-sed -i -e '/^EAPI=/s/=.*/=7/;/^DEPEND="/s/$/"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild
-ebuild /var/db/repos/gentoo/dev-libs/libxml2/libxml2-2.9.9-r3.ebuild manifest
 ## Support cross-compiling musl (#732482).
 sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
@@ -314,7 +307,8 @@ EOG
 mkdir -p /usr/"$host"/usr/{bin,lib,lib64,src}
 ln -fns bin /usr/"$host"/usr/sbin
 ln -fst "/usr/$host" usr/{bin,lib,lib64,sbin}
-crossdev --stable --target "$host"
+stable=$(env {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host" portageq envvar ACCEPT_KEYWORDS | grep -Fqs -e '~' -e '**' || echo 1)
+crossdev ${stable:+--stable} --target "$host"
 
 # Install all requirements for building the target image.
 emerge --changed-use --jobs=4 --update --verbose "$@"
@@ -356,7 +350,6 @@ function install_packages() {
 
         # These packages must be installed outside the dependency graph.
         emerge --changed-use --jobs=4 --nodeps --oneshot --verbose \
-            media-fonts/font-util \
             ${options[selinux]:+sec-policy/selinux-base} \
             x11-base/x{cb,org}-proto
 
@@ -873,13 +866,12 @@ function fix_package() {
                 echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
                 echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
-<app-editors/emacs-28
+<app-editors/emacs-28 ~*
 media-libs/woff2 *
 net-libs/webkit-gtk *
 sys-apps/bubblewrap *
 sys-apps/xdg-dbus-proxy *
 EOF
-                echo app-editors/emacs >> "$portage/package.unmask/emacs.conf"
                 $cat << 'EOF' >> "$portage/package.use/emacs.conf"
 dev-util/desktop-file-utils -emacs
 dev-vcs/git -emacs
@@ -887,9 +879,9 @@ EOF
                 echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 script << 'EOF'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- app-editors/emacs/emacs-27.0.91.ebuild
-+++ app-editors/emacs/emacs-27.0.91.ebuild
-@@ -249,6 +249,11 @@
+--- app-editors/emacs/emacs-27.1.ebuild
++++ app-editors/emacs/emacs-27.1.ebuild
+@@ -254,6 +254,11 @@
  		myconf+=" --without-x --without-ns"
  	fi
  
@@ -901,7 +893,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	econf \
  		--program-suffix="-${EMACS_SUFFIX}" \
  		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
-@@ -258,7 +263,7 @@
+@@ -263,7 +268,7 @@
  		--without-compress-install \
  		--without-hesiod \
  		--without-pop \
@@ -910,7 +902,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		--with-file-notification=$(usev inotify || usev gfile || echo no) \
  		$(use_enable acl) \
  		$(use_with dbus) \
-@@ -278,6 +283,9 @@
+@@ -283,6 +288,9 @@
  		$(use_with wide-int) \
  		$(use_with zlib) \
  		${myconf}
@@ -922,7 +914,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  #src_compile() {
 EOP
 sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.4.ebuild
-ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.0.91.ebuild manifest
+ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.1.ebuild manifest
 ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.4.ebuild manifest
 EOF
                 ;;
@@ -930,6 +922,7 @@ EOF
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr
 dev-libs/nss
+<media-libs/harfbuzz-2.7
 media-libs/libvpx
 EOF
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
@@ -949,8 +942,9 @@ EOF
 dev-libs/nspr
 dev-libs/nss
 media-libs/dav1d
+<media-libs/harfbuzz-2.7
 media-libs/libvpx
-=www-client/firefox-78.0.2 ~*
+=www-client/firefox-79.0-r2 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf glslopt.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
@@ -1022,6 +1016,17 @@ EOF
 EOF
                 test "x${options[arch]}" = xpowerpc &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
+--- a/dom/media/AsyncLogger.h
++++ b/dom/media/AsyncLogger.h
+@@ -88,7 +88,7 @@
+   // message struct, and we still want to do power of two allocations to
+   // minimize allocator slop.
+ #if !(defined(XP_LINUX) && !defined(MOZ_WIDGET_ANDROID) && \
+-      (defined(__arm__) || defined(__aarch64__)))
++      (defined(__arm__) || defined(__aarch64__) || defined(__powerpc__)))
+   static_assert(sizeof(MPSCQueue<TracePayload>::Message) <= PAYLOAD_TOTAL_SIZE,
+                 "MPSCQueue internal allocations too big.");
+ #endif
 --- a/js/src/jit/none/MacroAssembler-none.h
 +++ b/js/src/jit/none/MacroAssembler-none.h
 @@ -100,7 +100,7 @@
@@ -1060,7 +1065,6 @@ EOF
  
    bool IsIndirect() const { return 0 != (flags & IS_INDIRECT); }
  
-
 EOF
                 [[ ${options[arch]} == armv7* ]] &&
                 echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
@@ -1072,7 +1076,7 @@ EOF
                 echo "STUPID_TARGET=\"$(archmap_rust i586)\"" >> "$portage/env/glslopt.conf" &&
                 echo >> "$buildroot/etc/portage/env/rust-map.conf" \
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-78.0.2.ebuild
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-79.0-r2.ebuild
                 $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
 sed -i -e "s/TARGET/STUPID_&/" "${S}"/third_party/rust/glslopt/build.rs\
 sed -i -e "s/:{[^}]*/:{/" "${S}"/third_party/rust/glslopt/.cargo-checksum.json\

@@ -75,13 +75,12 @@ EOF
         done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
         $rm -f "$output/grub.mbox"
 
-        # Patch UEFI stub support into Linux 5.7.
+        # Patch UEFI stub support into Linux 5.8.
         $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
         $curl -L > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" \
-            https://github.com/atishp04/linux/compare/ae83d0b416db002fe95601e7f97f64b59514d936...919538d7e19e085ee376f5d2300e14d8e6345218.patch
+            https://github.com/atishp04/linux/compare/92ed301919932f777713b9172e525674157e983d...cb104d785a063716f41cabe4ba5252e56495853a.patch
         test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
-            x014245400e9c839d1a8fbcbbd69ef97791c397c304102361bcbdceb7b0f1202b
-        $sed -i -e '/PATCH 19/,/^From: /d' "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch"
+            xff9a929ce61fc817daf356e17f5c05379de916f8279defc1159e1c7bfbfb4594
 }
 
 function customize_buildroot() {
@@ -89,9 +88,6 @@ function customize_buildroot() {
 
         # Packages just aren't keyworded enough, so accept anything stabilized.
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
-
-        # Disable broken unstable packages.
-        echo '>=sys-devel/gcc-10' >> "$portage/package.mask/gcc.conf"
 
         # Work around the broken aclocal path ordering (#677002).
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"

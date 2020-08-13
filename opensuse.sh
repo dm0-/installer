@@ -36,7 +36,8 @@ function create_buildroot() {
         initialize_buildroot
 
         enter /usr/bin/zypper --non-interactive update
-        enter /usr/bin/zypper --non-interactive install "${packages_buildroot[@]}" "$@"
+        enter /usr/bin/zypper --non-interactive \
+            install --allow-vendor-change "${packages_buildroot[@]}" "$@"
 
         # Let the configuration decide if the system should have documentation.
         $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
