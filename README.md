@@ -107,11 +107,10 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30,
 **Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits over verity with Secure Boot, but it can be used on platforms that do not support UEFI, making the kernel the root of trust instead of the firmware in those cases.  In addition, the proposed IPE LSM policy can filter based on signed verity devices, so verity signatures can still have a use on UEFI.
 
   * :star: *Gentoo* supports verity signatures by creating an initrd to handle the userspace component.
-  * :construction: *Ubuntu* supports verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
-  * :fire: *Fedora* cannot use verity signatures until they update to Linux 5.8.
+  * :construction: *Fedora 31+* and *Ubuntu* support verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
   * :fire: *Arch* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
   * :fire: *openSUSE* cannot use verity signatures until they enable `CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG`.
-  * :skull: *CentOS* is too old to support verity signatures.
+  * :skull: *CentOS* and *Fedora 30* are too old to support verity signatures.
 
 ## To Do
 

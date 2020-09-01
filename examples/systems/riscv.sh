@@ -51,13 +51,14 @@ packages+=(
 
 function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
-        packages_buildroot+=(app-emulation/qemu dev-vcs/git)
+        packages_buildroot+=(app-emulation/qemu)
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 static static-user
+app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
 dev-libs/glib static-libs
 dev-libs/libffi static-libs
 dev-libs/libpcre static-libs
 dev-libs/libxml2 static-libs
+net-libs/libslirp static-libs
 sys-apps/dtc static-libs
 sys-apps/util-linux static-libs
 sys-libs/zlib static-libs
@@ -81,6 +82,14 @@ EOF
             https://github.com/atishp04/linux/compare/92ed301919932f777713b9172e525674157e983d...cb104d785a063716f41cabe4ba5252e56495853a.patch
         test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
             xff9a929ce61fc817daf356e17f5c05379de916f8279defc1159e1c7bfbfb4594
+
+        # Download sources to build a UEFI firmware image.
+        $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
+        test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
+            x17e048ac765e92e15f7436b604452614cf88dc2bcbbaab18cdc024f3fdd4c575
+        $curl -L https://github.com/u-boot/u-boot/archive/v2020.07.tar.gz > "$buildroot/root/u-boot.tgz"
+        test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
+            x616b446e15d1cd1ab6461ebb61ac6655a2b13e902fe0601f36c4affb3949d416
 }
 
 function customize_buildroot() {
@@ -115,7 +124,7 @@ EOF
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
-            branding ipv6 jit lto offensive threads \
+            branding ipv6 jit lto offensive pcap threads \
             dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
@@ -126,6 +135,12 @@ EOF
         # Install Emacs as a terminal application.
         fix_package emacs
         packages+=(app-editors/emacs)
+
+        # Fix sudo with glibc-2.32 (#739016).
+        $mkdir -p "$portage/patches/app-admin/sudo-1.9.2"
+        $curl -L https://www.sudo.ws/repos/sudo/raw-rev/e30482f26924 > "$portage/patches/app-admin/sudo-1.9.2/glibc-2.32.patch"
+        test x$($sha256sum "$portage/patches/app-admin/sudo-1.9.2/glibc-2.32.patch" | $sed -n '1s/ .*//p') = \
+            x2304ee11e6f7cf12f3200ba1148d9d8fb210107311f5b41ee6ed1d2fad952056
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
@@ -158,8 +173,7 @@ function customize() {
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
         # Build U-Boot to provide UEFI.
-        git clone --branch=v2020.07 --depth=1 https://github.com/u-boot/u-boot.git /root/u-boot
-        git -C /root/u-boot reset --hard 2f5fbb5b39f7b67044dda5c35e4a4b31685a3109
+        tar --transform='s,^/*[^/]*,u-boot,' -C /root -xf /root/u-boot.tgz
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
@@ -168,8 +182,7 @@ EOF
         make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="${options[host]}-" V=1
 
         # Build OpenSBI with a U-Boot payload for the firmware image.
-        git clone --branch=v0.8 --depth=1 https://github.com/riscv/opensbi.git /root/opensbi
-        git -C /root/opensbi reset --hard a98258d0b537a295f517bbc8d813007336731fa9
+        tar --transform='s,^/*[^/]*,opensbi,' -C /root -xf /root/opensbi.tgz
         make -C /root/opensbi -j"$(nproc)" all \
             CROSS_COMPILE="${options[host]}-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
         cp -p /root/opensbi/build/platform/generic/firmware/fw_payload.bin opensbi-uboot.bin
@@ -228,13 +241,10 @@ s,mcopy.*X64.EFI.*,&\nmcopy -i esp.img vmlinuz ::/linux_a\ntest -s initrd.img \&
 s/BOOTX64/BOOTRISCV64/g')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
-# XXX: Stuff apparently needed by the experimental UEFI patches to compile 5.7.
-CONFIG_RISCV_SBI_V01=y
-CONFIG_VT=y
-CONFIG_DUMMY_CONSOLE=y
 # Show initialization messages.
 CONFIG_PRINTK=y
 ## Output early printk messages to the console.
+CONFIG_RISCV_SBI_V01=y
 CONFIG_HVC_RISCV_SBI=y
 CONFIG_SERIAL_EARLYCON_RISCV_SBI=y
 # Support ext2/ext3/ext4 (which is not included for read-only images).

@@ -1,8 +1,6 @@
 packages=(glibc-minimal-langpack)
 packages_buildroot=(glibc-minimal-langpack)
 
-options[verity_sig]=
-
 DEFAULT_RELEASE=32
 
 function create_buildroot() {
@@ -16,8 +14,9 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(nss-tools pesign)
         opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt verity && packages_buildroot+=(veritysetup)
         opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
+        opt verity && packages_buildroot+=(veritysetup)
+        opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
         packages_buildroot+=(e2fsprogs)
 
         $mkdir -p "$buildroot"
@@ -79,8 +78,14 @@ then
         opt uefi && test ! -s logo.bmp &&
         sed '/id="g524[17]"/,/\//{/</,/>/d;}' /usr/share/fedora-logos/fedora_logo.svg > /root/logo.svg &&
         convert -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || build_systemd_ramdisk /boot/initramfs-*
+        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
+        if opt verity_sig
+        then
+                local -r v=$(echo /lib/modules/[0-9]*)
+                "$v/build/scripts/extract-vmlinux" "$v/vmlinuz" > vmlinux
+                "$v/build/scripts/insert-sys-cert" -b vmlinux -c "$keydir/verity.der" -s "$v/System.map"
+        fi
 fi
 
 function configure_initrd_generation() if opt bootable
@@ -88,13 +93,6 @@ then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
-
-        # The initrd build script won't run without an ID since Fedora 31.
-        if ! test -s "$buildroot/etc/machine-id"
-        then
-                local -r container_id=$(</proc/sys/kernel/random/uuid)
-                echo "${container_id//-}" > "$buildroot/etc/machine-id"
-        fi
 
         # Load NVMe support before verity so dm-init can find the partition.
         if opt nvme
@@ -117,7 +115,7 @@ Requires=dev-mapper-root.device'
         fi
 
         # Create a generator to handle verity ramdisks since dm-init can't.
-        opt verity && if opt ramdisk
+        opt verity && if opt ramdisk || opt verity_sig
         then
                 local -r gendir=/usr/lib/systemd/system-generators
                 $mkdir -p "$buildroot$gendir"
@@ -140,14 +138,18 @@ DefaultDependencies=no
 After=$device
 Requires=$device
 [Service]
-ExecStart=/usr/sbin/dmsetup create --concise \"$concise\"
+ExecStart=/bin/sh -c \"test -s /wd/verity.sig &&\
+ keyctl padd user verity:root @s < /wd/verity.sig ;\
+ exec dmsetup create --concise '\'\$concise\''\"
 RemainAfterExit=yes
 Type=oneshot"
 mkdir -p "$rundir/dev-dm\x2d0.device.requires"
 ln -fst "$rundir/dev-dm\x2d0.device.requires" ../dmsetup-verity-root.service'
                 $chmod 0755 "$buildroot$gendir/dmsetup-verity-root"
                 echo >> "$buildroot/etc/dracut.conf.d/99-settings.conf" \
-                    "install_optional_items+=\" $gendir/dmsetup-verity-root \""
+                    'install_optional_items+="' \
+                    "$gendir/dmsetup-verity-root" \
+                    /wd/verity.sig '"'
         else
                 local dropin=/usr/lib/systemd/system/dev-dm\\x2d0.device.requires
                 $mkdir -p "$buildroot$dropin"

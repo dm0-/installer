@@ -101,7 +101,7 @@ function customize_buildroot() {
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
-            branding ipv6 jit lto offensive threads \
+            branding ipv6 jit lto offensive pcap threads \
             dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
@@ -120,7 +120,6 @@ function customize_buildroot() {
         # Install Emacs as a terminal application.
         fix_package emacs
         packages+=(app-editors/emacs)
-        echo 'app-editors/emacs -X' >> "$portage/package.use/emacs.conf"
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"

@@ -14,8 +14,8 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
         opt selinux && packages_buildroot+=(app-emulation/qemu)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
-        opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
+        opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         packages_buildroot+=(dev-util/debugedit)
 
         $mkdir -p "$buildroot"
@@ -44,6 +44,10 @@ EOF
 app-crypt/pesign
 sys-boot/vboot-utils
 EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/librsvg.conf"
+# Block forcing Rust onto certain architectures for such a minor library.
+>=gnome-base/librsvg-2.41 -*
+EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
 sys-kernel/gentoo-kernel
@@ -51,10 +55,6 @@ sys-kernel/gentoo-sources
 sys-kernel/git-sources
 sys-kernel/linux-headers
 sec-policy/*
-EOF
-        $cat << 'EOF' >> "$portage/package.accept_keywords/fonts.conf"
-# Accept the latest versions of font packages for build fixes and EAPI 7.
-media-fonts/* ~*
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -86,6 +86,10 @@ EOF
 # Block bad dependencies for restorecond, which is pretty useless these days.
 sys-apps/policycoreutils -dbus
 EOF
+        $cat << 'EOF' >> "$portage/package.use/shadow.conf"
+# Don't use shadow's built in cracklib support since PAM provides it.
+sys-apps/shadow -cracklib
+EOF
         $cat << 'EOF' >> "$portage/package.use/sqlite.conf"
 # Always enable secure delete.  Some things need it.
 dev-db/sqlite secure-delete
@@ -93,6 +97,10 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/squashfs-tools.conf"
 # Support zstd squashfs compression.
 sys-fs/squashfs-tools zstd
+EOF
+        $cat << 'EOF' >> "$portage/package.use/sudo.conf"
+# Prefer gcrypt's digest functions instead of those from sudo or OpenSSL.
+app-admin/sudo gcrypt -ssl
 EOF
         $cat << 'EOF' >> "$portage/profile/package.provided"
 # These Python tools are not useful, and they pull in horrific dependencies.
@@ -124,47 +132,41 @@ EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
-        # Accept bison-3.6 to fix newer package build requirements.
-        echo 'sys-devel/bison *' >> "$portage/package.accept_keywords/bison.conf"
         # Accept cpuid2cpuflags-11 to support RDRAND.
         echo '<app-portage/cpuid2cpuflags-12 ~*' >> "$portage/package.accept_keywords/cpuid2cpuflags.conf"
         # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
         echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
-        # Accept gentoo-functions-0.13 to fix a missing header.
-        echo '<sys-apps/gentoo-functions-0.14 ~*' >> "$portage/package.accept_keywords/gentoo-functions.conf"
+        # Accept font packages with EAPI 7 to fix host dependencies.
+        echo 'media-fonts/* ~*' >> "$portage/package.accept_keywords/fonts.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept iptables-1.8 to fix missing flags.
-        echo -e 'app-eselect/eselect-iptables *\n<net-firewall/iptables-1.9\n<net-libs/libnftnl-1.2\nnet-misc/ethertypes *' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libcap-2.42 to fix build ordering with EAPI 7.
-        echo '<sys-libs/libcap-2.43 ~*' >> "$portage/package.accept_keywords/libcap.conf"
-        # Accept libgpg-error-1.38 to fix cross-compiling to weird systems.
-        echo '<dev-libs/libgpg-error-1.39 ~*' >> "$portage/package.accept_keywords/gnupg.conf"
+        # Accept libcap-2.43 to fix build ordering with EAPI 7.
+        echo '<sys-libs/libcap-2.44 ~*' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
         echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
         # Accept libuv-1.38.1 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
         # Accept libxml2-2.9.10 to fix host dependencies.
-        echo -e 'dev-libs/libxml2 *\n<dev-libs/libxslt-1.1.35 ~*' >> "$portage/package.accept_keywords/libxml2.conf"
+        echo -e 'dev-libs/libxml2 *\ndev-libs/libxslt *' >> "$portage/package.accept_keywords/libxml2.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept psmisc-23.3 to fix host dependencies.
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
-        # Accept rust-1.45 to support cross-compiling and bootstrapping.
-        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.46 ~*\n<virtual/rust-1.46 ~*' >> "$portage/package.accept_keywords/rust.conf"
-        # Accept systemd-245 to fix sysusers for GLEP 81.
-        echo 'sys-apps/systemd *' >> "$portage/package.accept_keywords/systemd.conf"
+        # Accept rust-1.46 to support cross-compiling and bootstrapping.
+        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.47 ~*\n<virtual/rust-1.47 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept util-linux-2.35 to fix build ordering with EAPI 7.
         echo 'sys-apps/util-linux *' >> "$portage/package.accept_keywords/util-linux.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
         # Accept x265-3.4 to fix ARM builds.
         echo '<media-libs/x265-3.5 ~*' >> "$portage/package.accept_keywords/x265.conf"
+        # Accept xcb-util packages with EAPI 7 to fix host dependencies.
+        echo 'x11-libs/xcb-util* ~*' >> "$portage/package.accept_keywords/xcb-util.conf"
         # Accept xf86-video-fbdev-0.5 to fix host dependencies.
         echo '<x11-drivers/xf86-video-fbdev-0.6 ~*' >> "$portage/package.accept_keywords/xf86-video-fbdev.conf"
 
@@ -199,7 +201,6 @@ EOF
 # Cross-compiling portage native extensions is unsupported.
 sys-apps/portage -native-extensions
 EOF
-        echo 'EXTRA_ECONF="--with-dbus-binding-tool=dbus-binding-tool"' >> "$portage/env/cross-dbus-glib.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
@@ -208,7 +209,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
-dev-libs/dbus-glib cross-dbus-glib.conf
 dev-python/pypax cross-python.conf
 media-libs/gstreamer cross-glib-mkenums.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf
@@ -241,6 +241,8 @@ EOF
         echo 'dev-lang/rust rust-map.conf' >> "$portage/package.env/rust.conf"
         # Link a required library for building the SELinux labeling initrd.
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
+        # Preserve bindist in the stage3 to skip pointless rebuilds.
+        echo '*/* bindist' >> "$portage/package.use/bindist.conf"
         # Turn off extra busybox features to make the labeling initrd smaller.
         echo 'sys-apps/busybox -* static' >> "$portage/package.use/busybox.conf"
         # Work around bad dependencies requiring this on the host.
@@ -248,6 +250,8 @@ EOF
         echo 'media-libs/libglvnd X' >> "$portage/package.use/libglvnd.conf"
         # Work around broken SSE2 with multilib on the host.
         echo 'media-libs/libaom -cpu_flags_*' >> "$portage/package.use/libaom.conf"
+        # Disable journal compression to skip the massive cmake dependency.
+        echo 'sys-apps/systemd -lz4' >> "$portage/package.use/systemd.conf"
         # Support building the UEFI boot stub, its logo image, and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
@@ -266,13 +270,17 @@ host=$1 ; shift
 # Fetch the latest package definitions, and fix them.
 emerge-webrsync
 ## Support sysusers (#702624).
-curl -L 'https://bugs.gentoo.org/attachment.cgi?id=599352' > sysusers.patch
-test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xf749a2e2221b31613cdd28f1144cf8656457b663a7603bc82c59aa181bbcc917
-sed -i -e 's/.*USER_ID.*}/&:${ACCT_USER_GROUPS[0]}/;s/printf "m/test ${#ACCT_USER_GROUPS[*]} -lt 2 || &/;s/.*GROUPS.@]/&:1/' sysusers.patch
+curl -L 'https://702624.bugs.gentoo.org/attachment.cgi?id=657394' > sysusers.patch
+test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xcb706e878b6d4bc1eefee3e0a59f4af4515df0acb3c469e6f04ce05be211824c
 patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
+## Support cross-compiling dbus-glib with reliable ordering.
+sed '/^EAPI=/s/6/7/;s/ ltprune//;/prune/d;/^KEYWORDS=/s/=.*/=""/;s/myconf=.*/&--with-dbus-binding-tool=dbus-binding-tool/;/^CDEPEND=/iBDEPEND="dev-libs/dbus-glib"' \
+    /var/db/repos/gentoo/dev-libs/dbus-glib/dbus-glib-0.110.ebuild > /var/db/repos/gentoo/dev-libs/dbus-glib/dbus-glib-0.110-r9999.ebuild
+ebuild /var/db/repos/gentoo/dev-libs/dbus-glib/dbus-glib-0.110-r9999.ebuild manifest
+echo 'dev-libs/dbus-glib **' >> "/usr/$host/etc/portage/package.accept_keywords/dbus-glib.conf"
 ## Support host dependencies in psmisc correctly (#715928).
 sed -i -e 's/^DEPEND="[^"]*$/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild
 ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
@@ -283,8 +291,8 @@ for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebu
 if test "x$*" != "x${*/erofs-utils}"
 then
         mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
-        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=632708' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild
-        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild | sed -n '1s/ .*//p') = x7c960c61869a5809bf8877e70387b804d2bd70d4ee581b54c98e0fb955e29bd4
+        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=657616' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild
+        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild | sed -n '1s/ .*//p') = x80dd41b587c391161e7cacd50b4f2f481b9eb54baa221de221ffbf3a34246f8d
         curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.1.tar.gz' > /var/cache/distfiles/erofs-utils-1.1.tar.gz
         test x$(sha256sum /var/cache/distfiles/erofs-utils-1.1.tar.gz | sed -n '1s/ .*//p') = xa14a30d0d941f6642cad130fbba70a2493fabbe7baa09a8ce7d20745ea3385d6
         ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild manifest --force
@@ -879,10 +887,10 @@ EOF
                 echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 script << 'EOF'
 patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- app-editors/emacs/emacs-27.1.ebuild
-+++ app-editors/emacs/emacs-27.1.ebuild
-@@ -254,6 +254,11 @@
- 		myconf+=" --without-x --without-ns"
+--- app-editors/emacs/emacs-27.1-r1.ebuild
++++ app-editors/emacs/emacs-27.1-r1.ebuild
+@@ -262,6 +262,11 @@
+ 		fi
  	fi
  
 +	CFLAGS= CPPFLAGS= LDFLAGS= ./configure --without-all --without-x-toolkit
@@ -893,7 +901,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  	econf \
  		--program-suffix="-${EMACS_SUFFIX}" \
  		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
-@@ -263,7 +268,7 @@
+@@ -271,7 +276,7 @@
  		--without-compress-install \
  		--without-hesiod \
  		--without-pop \
@@ -902,7 +910,7 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  		--with-file-notification=$(usev inotify || usev gfile || echo no) \
  		$(use_enable acl) \
  		$(use_with dbus) \
-@@ -283,6 +288,9 @@
+@@ -291,6 +296,9 @@
  		$(use_with wide-int) \
  		$(use_with zlib) \
  		${myconf}
@@ -913,17 +921,19 @@ patch -d /var/db/repos/gentoo -p0 << 'EOP'
  
  #src_compile() {
 EOP
-sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.4.ebuild
-ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.1.ebuild manifest
-ebuild /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-2.62.4.ebuild manifest
+sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild
+for ebuild in /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild
+do ebuild "$ebuild" manifest
+done
+ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.1-r1.ebuild manifest
 EOF
                 ;;
             firefox)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr
 dev-libs/nss
-<media-libs/harfbuzz-2.7
-media-libs/libvpx
+<media-libs/harfbuzz-2.7 ~*
+<media-libs/libvpx-1.9 ~*
 EOF
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
 dev-lang/python sqlite
@@ -932,7 +942,6 @@ media-libs/libpng apng
 media-libs/libvpx postproc
 media-libs/mesa X
 media-plugins/alsa-plugins pulseaudio
-net-misc/curl http2
 sys-devel/clang default-compiler-rt default-libcxx
 x11-libs/gtk+ X
 EOF
@@ -941,10 +950,9 @@ EOF
                 $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr
 dev-libs/nss
-media-libs/dav1d
-<media-libs/harfbuzz-2.7
-media-libs/libvpx
-=www-client/firefox-79.0-r2 ~*
+<media-libs/harfbuzz-2.7 ~*
+<media-libs/libvpx-1.9 ~*
+=www-client/firefox-80.0 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf glslopt.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
@@ -952,7 +960,7 @@ EOF
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
 --- a/build/moz.configure/init.configure
 +++ b/build/moz.configure/init.configure
-@@ -940,7 +940,7 @@
+@@ -952,7 +952,7 @@
      return namespace(
          OS_TARGET=os_target,
          OS_ARCH=os_arch,
@@ -963,7 +971,7 @@ EOF
  
 --- a/build/moz.configure/rust.configure
 +++ b/build/moz.configure/rust.configure
-@@ -252,6 +252,7 @@
+@@ -253,6 +253,7 @@
              (host_or_target.cpu, host_or_target.endianness, host_or_target.os), [])
  
          def find_candidate(candidates):
@@ -1018,7 +1026,7 @@ EOF
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
 --- a/dom/media/AsyncLogger.h
 +++ b/dom/media/AsyncLogger.h
-@@ -88,7 +88,7 @@
+@@ -89,7 +89,7 @@
    // message struct, and we still want to do power of two allocations to
    // minimize allocator slop.
  #if !(defined(XP_LINUX) && !defined(MOZ_WIDGET_ANDROID) && \
@@ -1076,7 +1084,7 @@ EOF
                 echo "STUPID_TARGET=\"$(archmap_rust i586)\"" >> "$portage/env/glslopt.conf" &&
                 echo >> "$buildroot/etc/portage/env/rust-map.conf" \
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-79.0-r2.ebuild
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-80.0.ebuild
                 $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
 sed -i -e "s/TARGET/STUPID_&/" "${S}"/third_party/rust/glslopt/build.rs\
 sed -i -e "s/:{[^}]*/:{/" "${S}"/third_party/rust/glslopt/.cargo-checksum.json\

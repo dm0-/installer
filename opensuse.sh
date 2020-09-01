@@ -12,8 +12,8 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(mozilla-nss-tools pesign)
         opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86)
         opt squash && packages_buildroot+=(squashfs)
-        opt verity && packages_buildroot+=(cryptsetup device-mapper)
         opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
+        opt verity && packages_buildroot+=(cryptsetup device-mapper)
         packages_buildroot+=(curl e2fsprogs glib2-tools)
 
         $mkdir -p "$buildroot"

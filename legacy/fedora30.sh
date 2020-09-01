@@ -1,5 +1,7 @@
 declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=30).
 
+options[verity_sig]=
+
 DEFAULT_RELEASE=30
 
 # Override buildroot creation to set the container image file name.

@@ -109,7 +109,7 @@ function customize_buildroot() {
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
-            branding ipv6 jit lto offensive threads \
+            branding ipv6 jit lto offensive pcap threads \
             dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
@@ -122,6 +122,7 @@ function customize_buildroot() {
         echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu *
+net-libs/libslirp *
 sys-firmware/seabios *
 virtual/libusb *
 EOF
@@ -133,10 +134,13 @@ sys-apps/attr static-libs
 sys-libs/zlib static-libs
 EOF
 
-        # Include a graphical Emacs.
+        # Install Emacs as a GUI application.
         fix_package emacs
         packages+=(app-editors/emacs)
-        echo 'app-editors/emacs gtk xwidgets' >> "$portage/package.use/emacs.conf"
+        $cat << 'EOF' >> "$portage/package.use/emacs.conf"
+app-editors/emacs gtk gui xwidgets
+app-emacs/emacs-common-gentoo gui
+EOF
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"

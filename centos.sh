@@ -1,5 +1,7 @@
 . fedora.sh  # Inherit Fedora's RPM functions.
 
+options[verity_sig]=
+
 DEFAULT_RELEASE=8
 
 function create_buildroot() {
@@ -11,8 +13,8 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt verity && packages_buildroot+=(veritysetup)
         opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        opt verity && packages_buildroot+=(veritysetup)
         packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
