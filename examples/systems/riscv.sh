@@ -102,13 +102,6 @@ function customize_buildroot() {
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
 
-        # Disable multilib to stop BDEPEND from breaking everything (#723112).
-        $cat << 'EOF' >> "$portage/profile/use.mask"
-# Disable multilib for RISC-V.
-abi_riscv_lp64
-abi_riscv_lp64d
-EOF
-
         # The multilib subdirectories don't work with UsrMerge (#728674).
         $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild"
         enter /usr/bin/ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild manifest

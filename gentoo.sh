@@ -75,8 +75,6 @@ sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 sys-fs/lvm2 device-mapper-only -thin
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
-# Support installing kernels configured with compressed modules.
-sys-apps/kmod lzma
 # Disable trying to build an initrd since it won't run in a chroot.
 sys-kernel/gentoo-kernel -initramfs
 # Apply patches to support zstd and additional CPU optimizations.
@@ -142,10 +140,12 @@ EOF
         echo 'media-fonts/* ~*' >> "$portage/package.accept_keywords/fonts.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
+        # Accept kmod to default to compression on all arches.
+        echo 'sys-apps/kmod *' >> "$portage/package.accept_keywords/kmod.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
         # Accept libcap-2.43 to fix build ordering with EAPI 7.
-        echo '<sys-libs/libcap-2.44 ~*' >> "$portage/package.accept_keywords/libcap.conf"
+        echo 'sys-libs/libcap *' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
         echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
         # Accept libuv-1.38.1 to fix host dependencies.
@@ -159,12 +159,8 @@ EOF
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
         # Accept rust-1.46 to support cross-compiling and bootstrapping.
         echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.47 ~*\n<virtual/rust-1.47 ~*' >> "$portage/package.accept_keywords/rust.conf"
-        # Accept util-linux-2.35 to fix build ordering with EAPI 7.
-        echo 'sys-apps/util-linux *' >> "$portage/package.accept_keywords/util-linux.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
-        # Accept x265-3.4 to fix ARM builds.
-        echo '<media-libs/x265-3.5 ~*' >> "$portage/package.accept_keywords/x265.conf"
         # Accept xcb-util packages with EAPI 7 to fix host dependencies.
         echo 'x11-libs/xcb-util* ~*' >> "$portage/package.accept_keywords/xcb-util.conf"
         # Accept xf86-video-fbdev-0.5 to fix host dependencies.
@@ -269,10 +265,6 @@ host=$1 ; shift
 
 # Fetch the latest package definitions, and fix them.
 emerge-webrsync
-## Support sysusers (#702624).
-curl -L 'https://702624.bugs.gentoo.org/attachment.cgi?id=657394' > sysusers.patch
-test x$(sha256sum sysusers.patch | sed -n '1s/ .*//p') = xcb706e878b6d4bc1eefee3e0a59f4af4515df0acb3c469e6f04ce05be211824c
-patch -d /var/db/repos/gentoo -p1 < sysusers.patch ; rm -f sysusers.patch
 ## Support cross-compiling hyphen without rebuilding Perl (#708258).
 sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
@@ -287,6 +279,11 @@ ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
 ## Support cross-compiling musl (#732482).
 sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support multilib targets (#739300,#739302,#739304).
+sed -i -e '/^EAPI=/s/6/7/;s/^DEPEND=.*/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-apps/acl/acl-2.2.53.ebuild
+sed -i -e '/^EAPI=/s/6/7/;s/^DEPEND=/B&/;s,D%/},D},g' /var/db/repos/gentoo/sys-apps/attr/attr-2.4.48-r3.ebuild
+sed -i -e '/^EAPI=/s/6/7/;s,{ED%/},{ED},g' /var/db/repos/gentoo/sys-libs/gdbm/gdbm-1.18.1.ebuild
+for ebuild in /var/db/repos/gentoo/sys-{apps/{acl/acl-2.2.53,attr/attr-2.4.48-r3},libs/gdbm/gdbm-1.18.1}.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -572,6 +569,7 @@ CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
 CONFIG_STACKPROTECTOR=y
 CONFIG_STACKPROTECTOR_STRONG=y
 CONFIG_STRICT_KERNEL_RWX=y
+CONFIG_VMAP_STACK=y
 # Signing settings
 CONFIG_MODULE_SIG=y
 CONFIG_MODULE_SIG_ALL=y
@@ -952,7 +950,7 @@ dev-libs/nspr
 dev-libs/nss
 <media-libs/harfbuzz-2.7 ~*
 <media-libs/libvpx-1.9 ~*
-=www-client/firefox-80.0 ~*
+=www-client/firefox-80.0.1-r1 ~*
 EOF
                 echo 'www-client/firefox bindgen.conf glslopt.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
@@ -1084,7 +1082,7 @@ EOF
                 echo "STUPID_TARGET=\"$(archmap_rust i586)\"" >> "$portage/env/glslopt.conf" &&
                 echo >> "$buildroot/etc/portage/env/rust-map.conf" \
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-80.0.ebuild
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-80.0.1-r1.ebuild
                 $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
 sed -i -e "s/TARGET/STUPID_&/" "${S}"/third_party/rust/glslopt/build.rs\
 sed -i -e "s/:{[^}]*/:{/" "${S}"/third_party/rust/glslopt/.cargo-checksum.json\
@@ -1112,12 +1110,12 @@ EOF
 dev-libs/libpcre2 pcre16
 sys-libs/zlib minizip
 EOF
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtgui/qtgui-5.14.2.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-5.14.2.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-5.14.2.ebuild"
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-5.14.2.ebuild"
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-*.ebuild
+                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-*.ebuild
                 script << 'EOF'
-for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*5.14.2*.ebuild
+for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*.ebuild
 do ebuild "$ebuild" manifest
 done
 EOF

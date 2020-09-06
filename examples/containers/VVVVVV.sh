@@ -14,7 +14,7 @@ test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
     x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
 git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
 mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
-git reset --hard c29d7c7d149ccc3d5d297f2679b5a8b89e7ac910
+git reset --hard f014ed6fe84b5ebdcef4d7233287d66b86c3f68d
 cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 exec ninja -j"$(nproc)" all
 EOF
