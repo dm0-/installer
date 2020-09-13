@@ -26,17 +26,14 @@ function create_buildroot() {
         $tar --exclude=etc/resolv.conf -C "$buildroot" -xJf "$output/image.tar.xz"
         $rm -f "$output"/checksum{,.sig} "$output/image.tar.xz"
 
-        # Try to work with the terrible mirrors.
-        echo 'APT::Acquire::Retries "5";' > "$buildroot/etc/apt/apt.conf.d/99-retries"
-
         configure_initrd_generation
         initialize_buildroot
 
         script "${packages_buildroot[@]}" "$@" << 'EOF'
 export DEBIAN_FRONTEND=noninteractive INITRD=No
 apt-get update
-apt-get --assume-yes upgrade --with-new-pkgs
-exec apt-get --assume-yes install "$@"
+apt-get --assume-yes --option=Acquire::Retries=5 upgrade --with-new-pkgs
+exec apt-get --assume-yes --option=Acquire::Retries=5 install "$@"
 EOF
 
         # Fix the old pesign option name.
@@ -60,13 +57,12 @@ function install_packages() {
             root http://archive.ubuntu.com/ubuntu
 
         local -rx DEBIAN_FRONTEND=noninteractive INITRD=No
-        echo 'APT::Acquire::Retries "5";' > root/etc/apt/apt.conf.d/99-retries
         cp -p {,root}/etc/apt/sources.list
         for dir in dev proc sys ; do mount --bind {,root}/"$dir" ; done
         trap -- 'umount root/{dev,proc,sys,var/cache/apt} ; trap - RETURN' RETURN
         chroot root /usr/bin/apt-get update
-        chroot root /usr/bin/apt-get --assume-yes upgrade --with-new-pkgs
-        chroot root /usr/bin/apt-get --assume-yes install "${packages[@]}" "$@"
+        chroot root /usr/bin/apt-get --assume-yes --option=Acquire::Retries=5 upgrade --with-new-pkgs
+        chroot root /usr/bin/apt-get --assume-yes --option=Acquire::Retries=5 install "${packages[@]}" "$@"
 
         dpkg-query --show > packages-buildroot.txt
         dpkg-query --admindir=root/var/lib/dpkg --show > packages.txt
@@ -78,6 +74,13 @@ function distro_tweaks() {
         # The default policy does not differentiate root's home directory.
         test -s root/usr/lib/systemd/system/root.mount &&
         sed -i -e s/admin_home/user_home_dir/g root/usr/lib/systemd/system/root.mount
+
+        # Default to the nftables firewall interface if it was built.
+        local cmd ; for cmd in iptables ip6tables
+        do
+                test -x "root/usr/sbin/$cmd-nft" &&
+                chroot root /usr/bin/update-alternatives --set "$cmd" "/usr/sbin/$cmd-nft"
+        done
 
         test -s root/usr/lib/systemd/system/console-setup.service &&
         ln -fst root/usr/lib/systemd/system/multi-user.target.wants ../console-setup.service

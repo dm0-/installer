@@ -46,7 +46,7 @@ packages+=(
         ## Network
         bind-utils
         iproute
-        iptables-services
+        iptables-{nft,services}
         iputils
         net-tools
         openssh-clients

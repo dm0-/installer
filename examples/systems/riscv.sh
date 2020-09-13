@@ -129,12 +129,6 @@ function customize_buildroot() {
         fix_package emacs
         packages+=(app-editors/emacs)
 
-        # Fix sudo with glibc-2.32 (#739016).
-        $mkdir -p "$portage/patches/app-admin/sudo-1.9.2"
-        $curl -L https://www.sudo.ws/repos/sudo/raw-rev/e30482f26924 > "$portage/patches/app-admin/sudo-1.9.2/glibc-2.32.patch"
-        test x$($sha256sum "$portage/patches/app-admin/sudo-1.9.2/glibc-2.32.patch" | $sed -n '1s/ .*//p') = \
-            x2304ee11e6f7cf12f3200ba1148d9d8fb210107311f5b41ee6ed1d2fad952056
-
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
         enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=riscv \
@@ -261,14 +255,18 @@ CONFIG_UTS_NS=y
 # Support mounting disk images.
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
-# Build basic firewall filter options.
+# Support basic nftables firewall options.
 CONFIG_NETFILTER=y
 CONFIG_NF_CONNTRACK=y
+CONFIG_NF_TABLES=y
+CONFIG_NF_TABLES_IPV4=y
+CONFIG_NF_TABLES_IPV6=y
+CONFIG_NFT_COUNTER=y
+CONFIG_NFT_CT=y
+## Support translating iptables to nftables.
+CONFIG_NFT_COMPAT=y
+CONFIG_NETFILTER_XTABLES=y
 CONFIG_NETFILTER_XT_MATCH_STATE=y
-CONFIG_IP_NF_IPTABLES=y
-CONFIG_IP_NF_FILTER=y
-CONFIG_IP6_NF_IPTABLES=y
-CONFIG_IP6_NF_FILTER=y
 # Support some optional systemd functionality.
 CONFIG_COREDUMP=y
 CONFIG_MAGIC_SYSRQ=y

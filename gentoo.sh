@@ -137,21 +137,17 @@ EOF
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept font packages with EAPI 7 to fix host dependencies.
-        echo 'media-fonts/* ~*' >> "$portage/package.accept_keywords/fonts.conf"
+        echo 'media-fonts/* *' >> "$portage/package.accept_keywords/fonts.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept kmod to default to compression on all arches.
+        # Accept kmod-27 to default to compression on all arches.
         echo 'sys-apps/kmod *' >> "$portage/package.accept_keywords/kmod.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libcap-2.43 to fix build ordering with EAPI 7.
-        echo 'sys-libs/libcap *' >> "$portage/package.accept_keywords/libcap.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
         echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
         # Accept libuv-1.38.1 to fix host dependencies.
         echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
-        # Accept libxml2-2.9.10 to fix host dependencies.
-        echo -e 'dev-libs/libxml2 *\ndev-libs/libxslt *' >> "$portage/package.accept_keywords/libxml2.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
@@ -159,12 +155,12 @@ EOF
         echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
         # Accept rust-1.46 to support cross-compiling and bootstrapping.
         echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.47 ~*\n<virtual/rust-1.47 ~*' >> "$portage/package.accept_keywords/rust.conf"
+        # Accept sudo-1.9.2 to fix glibc-2.32 support.
+        echo '<app-admin/sudo-1.9.3 ~*' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
         # Accept xcb-util packages with EAPI 7 to fix host dependencies.
-        echo 'x11-libs/xcb-util* ~*' >> "$portage/package.accept_keywords/xcb-util.conf"
-        # Accept xf86-video-fbdev-0.5 to fix host dependencies.
-        echo '<x11-drivers/xf86-video-fbdev-0.6 ~*' >> "$portage/package.accept_keywords/xf86-video-fbdev.conf"
+        echo 'x11-libs/xcb-util* *' >> "$portage/package.accept_keywords/xcb-util.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -265,25 +261,14 @@ host=$1 ; shift
 
 # Fetch the latest package definitions, and fix them.
 emerge-webrsync
-## Support cross-compiling hyphen without rebuilding Perl (#708258).
-sed -i -e 's/^DEPEND=".*/&"\nBDEPEND="/' /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild
-ebuild /var/db/repos/gentoo/dev-libs/hyphen/hyphen-2.8.8-r1.ebuild manifest
 ## Support cross-compiling dbus-glib with reliable ordering.
 sed '/^EAPI=/s/6/7/;s/ ltprune//;/prune/d;/^KEYWORDS=/s/=.*/=""/;s/myconf=.*/&--with-dbus-binding-tool=dbus-binding-tool/;/^CDEPEND=/iBDEPEND="dev-libs/dbus-glib"' \
     /var/db/repos/gentoo/dev-libs/dbus-glib/dbus-glib-0.110.ebuild > /var/db/repos/gentoo/dev-libs/dbus-glib/dbus-glib-0.110-r9999.ebuild
 ebuild /var/db/repos/gentoo/dev-libs/dbus-glib/dbus-glib-0.110-r9999.ebuild manifest
 echo 'dev-libs/dbus-glib **' >> "/usr/$host/etc/portage/package.accept_keywords/dbus-glib.conf"
-## Support host dependencies in psmisc correctly (#715928).
-sed -i -e 's/^DEPEND="[^"]*$/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild
-ebuild /var/db/repos/gentoo/sys-process/psmisc/psmisc-23.3-r1.ebuild manifest
 ## Support cross-compiling musl (#732482).
 sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
-## Support multilib targets (#739300,#739302,#739304).
-sed -i -e '/^EAPI=/s/6/7/;s/^DEPEND=.*/&"\nBDEPEND="/' /var/db/repos/gentoo/sys-apps/acl/acl-2.2.53.ebuild
-sed -i -e '/^EAPI=/s/6/7/;s/^DEPEND=/B&/;s,D%/},D},g' /var/db/repos/gentoo/sys-apps/attr/attr-2.4.48-r3.ebuild
-sed -i -e '/^EAPI=/s/6/7/;s,{ED%/},{ED},g' /var/db/repos/gentoo/sys-libs/gdbm/gdbm-1.18.1.ebuild
-for ebuild in /var/db/repos/gentoo/sys-{apps/{acl/acl-2.2.53,attr/attr-2.4.48-r3},libs/gdbm/gdbm-1.18.1}.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -420,6 +405,10 @@ function distro_tweaks() {
         # Perform case-insensitive searches in less by default.
         test -s root/etc/env.d/70less &&
         sed -i -e '/^LESS=/s/[" ]*$/ -i&/' root/etc/env.d/70less
+
+        # Default to the nftables firewall interface if it was built.
+        ROOT=root eselect iptables list |& grep -Fqs xtables-nft-multi &&
+        ROOT=root eselect iptables set xtables-nft-multi
 
         # Link BIOS files where QEMU expects to find them.
         test -d root/usr/share/qemu -a -d root/usr/share/seavgabios &&
@@ -872,7 +861,7 @@ function fix_package() {
                 echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
                 echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
-<app-editors/emacs-28 ~*
+app-editors/emacs *
 media-libs/woff2 *
 net-libs/webkit-gtk *
 sys-apps/bubblewrap *

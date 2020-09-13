@@ -1,4 +1,4 @@
-if local name=iptables ; test -x root/sbin/$name -o -h root/sbin/$name
+if local name=iptables ; compgen -G "root/usr/lib/systemd/system/$name*.service"
 then
         local restore=$(test -s root/usr/lib/systemd/system/$name-restore.service && echo -restore)
 
@@ -29,7 +29,7 @@ EOF
             "../$name$restore.service"
 fi
 
-if local name=ip6tables ; test -x root/sbin/$name -o -h root/sbin/$name
+if local name=ip6tables ; compgen -G "root/usr/lib/systemd/system/$name*.service"
 then
         local restore=$(test -s root/usr/lib/systemd/system/$name-restore.service && echo -restore)
 

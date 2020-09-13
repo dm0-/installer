@@ -79,7 +79,6 @@ function distro_tweaks() {
         sed -i -e 's/try_first_pass/& nullok/' root/etc/pam.d/common-auth
 
         test -s root/etc/sysconfig/selinux-policy &&
-        ln -fns ../sysconfig/selinux-policy root/etc/selinux/config &&
         sed -i \
             -e '/^SELINUX=/s/=.*/=permissive/' \
             -e '/^SELINUXTYPE=/s/=.*/=targeted/' \

@@ -41,6 +41,8 @@ EOF
 pref("browser.ctrlTab.recentlyUsedOrder", false);
 // Never open more browser windows.
 pref("browser.link.open_newwindow.restriction", 0);
+// Fix distribution search plugins.
+pref("browser.search.modernConfig", false);
 // Include a sensible search bar.
 pref("browser.search.openintab", true);
 pref("browser.search.suggest.enabled", false);

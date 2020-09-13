@@ -42,6 +42,7 @@ packages+=(
         usbutils
         ## Network
         iproute2
+        iptables-nft
         iputils
         net-tools
         openssh
