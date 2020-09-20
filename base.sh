@@ -5,9 +5,9 @@ exclude_paths=({boot,dev,media,proc,run,srv,sys,tmp}/'*')
 declare -A options
 options[distro]=fedora
 options[bootable]=    # Include a kernel and init system to boot the image
-options[executable]=  # Create an executable disk image file
+options[gpt]=         # Create a partitioned GPT disk image
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
-options[nvme]=        # Support root on an NVMe disk.
+options[nvme]=        # Support root on an NVMe disk
 options[partuuid]=    # The partition UUID for verity to map into the root FS
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
@@ -93,7 +93,7 @@ function imply_options() {
         opt squash || opt verity && options[read_only]=1
         opt uefi || opt ramdisk && options[bootable]=1
         opt uefi && options[secureboot]=1  # Always sign the UEFI executable.
-        opt executable && opt uefi && ! opt ramdisk && ! opt partuuid &&
+        opt gpt && opt uefi && ! opt ramdisk && ! opt partuuid &&
         options[partuuid]=$(</proc/sys/kernel/random/uuid)
         opt distro || options[distro]=fedora  # This can't be unset.
 }
@@ -110,10 +110,8 @@ function validate_options() {
         # Validate form, but don't look for a device yet (because hot-plugging exists).
         opt partuuid &&
         [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
-        # A disk only supports the executable header with unused sector zero.
-        opt executable && { ! opt bootable || opt uefi ; }
         # A partition UUID must be set to create a bootable UEFI disk image.
-        opt executable && opt uefi && ! opt ramdisk && opt partuuid
+        opt gpt && opt uefi && ! opt ramdisk && opt partuuid
         # A partition is required when writing to disk.
         opt install_to_disk && opt partuuid
         # A UEFI executable is required in order to sign it or save it.
@@ -684,43 +682,35 @@ then
         fi
 fi
 
-function produce_executable_image() if opt executable
+function partition() if opt gpt
 then
+        local -r efi=BOOTX64.EFI
         local -ir bs=512 start=2048
-        local -i esp=0 size=0
+        local -i esp=${options[esp_size]:-0} size=0
 
         # The disk image has a root file system when not using a UEFI ramdisk.
         opt ramdisk && opt uefi || size=$(stat --format=%s final.img)
-        (( size % bs )) && size+=$(( bs - size % bs ))
+        size=$(( size / bs + !!(size % bs) ))
 
         # The disk image has an ESP when using a UEFI binary.
-        opt uefi && esp=$(( $(stat --format=%s BOOTX64.EFI) + 5242880 ))
-        esp=$(( (esp - esp % 1048576) / bs ))
+        opt uefi && ((!esp)) && esp=$(( 5242880 + $(stat --format=%s "$efi") ))
+        esp=$(( esp / bs + !!(esp % bs) ))
 
         # Format a disk image with the appropriate partition layout.
-        truncate --size=$(( size + (start + esp + 33) * bs )) disk.exe
-        if opt ramdisk && opt uefi
-        then
-                echo g \
-                    n 1 $start $(( start + esp - 1 )) \
-                    t c12a7328-f81f-11d2-ba4b-00a0c93ec93b \
-                    w
-        elif opt uefi
-        then
-                echo g \
-                    n 1 $start $(( start + esp - 1 )) \
-                    n 2 $(( start + esp )) $(( size / bs + start + esp - 1 )) \
-                    t 1 c12a7328-f81f-11d2-ba4b-00a0c93ec93b \
-                    t 2 0fc63daf-8483-4772-8e79-3d69d8477de4 \
-                    ${options[partuuid]:+x u 2 "${options[partuuid]}" r} \
-                    w
-        else
-                echo g \
-                    n 1 $start $(( size / bs + start - 1 )) \
-                    t 0fc63daf-8483-4772-8e79-3d69d8477de4 \
-                    ${options[partuuid]:+x u "${options[partuuid]}" r} \
-                    w
-        fi | tr ' ' '\n' | fdisk disk.exe
+        truncate --size=$(( (start + esp + size + 33) * bs )) gpt.img
+        {
+                echo 'label: gpt'
+                (( esp )) && echo \
+                    attrs=NoBlockIOProtocol, \
+                    size="$esp", \
+                    type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, \
+                    'name="EFI System Partition"'
+                opt ramdisk && opt uefi || echo \
+                    size="$size", \
+                    type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, \
+                    ${options[partuuid]:+uuid=${options[partuuid]},} \
+                    name=ROOT-A
+        } | sfdisk --force gpt.img
 
         # Create the ESP without mounting it.
         if opt uefi
@@ -729,23 +719,26 @@ then
                 truncate --size=$(( esp * bs )) esp.img
                 mkfs.vfat -F 32 -n EFI-SYSTEM esp.img
                 mmd -i esp.img ::/EFI ::/EFI/BOOT
-                mcopy -i esp.img BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
-                dd bs=$bs conv=notrunc if=esp.img of=disk.exe seek=$start
+                mcopy -i esp.img "$efi" "::/EFI/BOOT/$efi"
+                dd bs=$bs conv=notrunc if=esp.img of=gpt.img seek=$start
         fi
 
         # Write the root file system if not using a UEFI ramdisk.
         opt ramdisk && opt uefi ||
-        dd bs=$bs conv=notrunc if=final.img of=disk.exe seek=$(( start + esp ))
+        dd bs=$bs conv=notrunc if=final.img of=gpt.img seek=$(( start + esp ))
 
         # Weave the launcher script around the GPT.
-        dd bs=$bs conv=notrunc of=disk.exe << 'EOF'
+        if test -s launch.sh
+        then
+                dd bs=$bs conv=notrunc of=gpt.img << 'EOF'
 #!/bin/bash -eu
 IMAGE=$(readlink /proc/$$/fd/255)
-: << 'THE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT_TO_RUN'
+: << 'THE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT'
 EOF
-        echo $'\nTHE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT_TO_RUN' |
-        cat - launch.sh | dd bs=$bs conv=notrunc of=disk.exe seek=34
-        chmod 0755 disk.exe
+                echo $'\nTHE_PARTITION_TABLE_HAS_ENDED_SO_HERE_IS_THE_SCRIPT' |
+                cat - launch.sh | dd bs=$bs conv=notrunc of=gpt.img seek=34
+                chmod 0755 gpt.img
+        fi
 fi
 
 # OPTIONAL (IMAGE)

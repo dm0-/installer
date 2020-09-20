@@ -1,4 +1,4 @@
-options+=([arch]=i686 [distro]=opensuse [executable]=1 [squash]=1)
+options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
 
 packages+=(
         Mesa-dri{,-nouveau}

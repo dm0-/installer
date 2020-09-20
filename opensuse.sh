@@ -7,7 +7,7 @@ function create_buildroot() {
         local -r image="https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.$DEFAULT_ARCH-lxc.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-default ucode-{amd,intel})
-        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(mozilla-nss-tools pesign)
         opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86)

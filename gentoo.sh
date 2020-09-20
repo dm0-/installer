@@ -8,7 +8,7 @@ function create_buildroot() {
         local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)$([[ $arch == armv7* ]] && echo hf)}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
-        opt executable && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
+        opt gpt && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
         opt ramdisk || opt selinux || opt verity_sig && packages_buildroot+=(app-arch/cpio)
         opt read_only && ! opt squash && packages_buildroot+=(sys-fs/erofs-utils)
         opt secureboot && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
@@ -129,25 +129,19 @@ RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
-        echo -e '<sys-devel/binutils-2.35\n<sys-libs/binutils-libs-2.35' >> "$portage/package.accept_keywords/binutils.conf"
-        # Accept cpuid2cpuflags-11 to support RDRAND.
-        echo '<app-portage/cpuid2cpuflags-12 ~*' >> "$portage/package.accept_keywords/cpuid2cpuflags.conf"
+        echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
         echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
         # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
         echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
-        # Accept font packages with EAPI 7 to fix host dependencies.
-        echo 'media-fonts/* *' >> "$portage/package.accept_keywords/fonts.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept kmod-27 to default to compression on all arches.
-        echo 'sys-apps/kmod *' >> "$portage/package.accept_keywords/kmod.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
         # Accept libnl-3.5.0 to fix host dependencies.
         echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
-        # Accept libuv-1.38.1 to fix host dependencies.
-        echo '<dev-libs/libuv-1.39 ~*' >> "$portage/package.accept_keywords/libuv.conf"
+        # Accept libuv-1.39 to fix host dependencies.
+        echo 'dev-libs/libuv *' >> "$portage/package.accept_keywords/libuv.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
@@ -159,8 +153,6 @@ EOF
         echo '<app-admin/sudo-1.9.3 ~*' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
-        # Accept xcb-util packages with EAPI 7 to fix host dependencies.
-        echo 'x11-libs/xcb-util* *' >> "$portage/package.accept_keywords/xcb-util.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -861,8 +853,6 @@ function fix_package() {
                 echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
                 echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
-app-editors/emacs *
-media-libs/woff2 *
 net-libs/webkit-gtk *
 sys-apps/bubblewrap *
 sys-apps/xdg-dbus-proxy *

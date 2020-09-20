@@ -1,4 +1,4 @@
-options+=([arch]=x86_64 [distro]=fedora [executable]=1 [release]=32 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=32 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio

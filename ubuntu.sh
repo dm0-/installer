@@ -10,7 +10,7 @@ function create_buildroot() {
         local -r image="https://cloud-images.ubuntu.com/minimal/releases/$name/release/ubuntu-$release-minimal-cloudimg-$(archmap)-root.tar.xz"
 
         opt bootable && packages_buildroot+=(dracut linux-image-generic)
-        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86)

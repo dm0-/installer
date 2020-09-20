@@ -164,7 +164,7 @@ then
             ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
 
         # Build the FIT binary from the kernel and DTB.
-        mkimage -f - /root/kernel.itb << EOF
+        tee /root/kernel.its << EOF | mkimage -f - /root/kernel.itb
 /dts-v1/;
 / {
     description = "Gentoo";

@@ -5,7 +5,7 @@
 options+=(
         [arch]=riscv64   # Target RISC-V emulators.
         [distro]=gentoo  # Use Gentoo to build this image from source.
-        [executable]=1   # Generate a VM image for fast testing.
+        [gpt]=1          # Generate a VM disk image for fast testing.
         [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [secureboot]=    # This is unused until systemd-boot supports RISC-V.
@@ -221,11 +221,15 @@ menuentry 'Power Off' --id poweroff {
 EOF
 fi
 
-# Override executable image generation to force GRUB into the mix.
-eval "$(declare -f produce_executable_image | $sed '
-/^ *opt uefi/{s/BOOT[0-9A-Z]*.EFI/vmlinuz/;s/) + /) * 2 + /;}
-s,mcopy.*X64.EFI.*,&\nmcopy -i esp.img vmlinuz ::/linux_a\ntest -s initrd.img \&\& mcopy -i esp.img initrd.img ::/initrd_a\nmcopy -i esp.img grub.cfg ::/grub.cfg,
-s/BOOTX64/BOOTRISCV64/g')"
+# Override image partitioning to additionally stuff GRUB into the ESP.
+options[esp_size]=$(( 24 << 20 ))
+eval "$(declare -f partition | $sed '/BOOTX64/,${
+s/BOOTX64/BOOTRISCV64/g
+/^ *mcopy/a\
+mcopy -i esp.img vmlinuz ::/linux_a\
+test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a\
+mcopy -i esp.img grub.cfg ::/grub.cfg
+}')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
 # Show initialization messages.

@@ -193,9 +193,8 @@ EOF
             /var ext4 defaults,nodev,nofail,nosuid >> root/etc/fstab
 }
 
-# Override the executable image function as a hack to produce a full disk image
-# for convenience since APM is incompatible with an executable file header.
-function produce_executable_image() if opt bootable
+# Override image partitioning to use APM, since it's incompatible with GPT.
+function partition() if opt bootable
 then
         local -ir bs=512 image_size="${options[image_size]:=3959422976}"
         local -ir boot_size=$(( 64 << 20 )) slot_size=$(( 1 << 30 )) slots=2

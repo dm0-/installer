@@ -86,7 +86,7 @@ verity
 kernel_cmdline
 save_boot_files
 produce_uefi_exe
-produce_executable_image
+partition
 EOF
 
 # Write the file system to disk at the given partition.

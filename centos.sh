@@ -9,7 +9,7 @@ function create_buildroot() {
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
-        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)

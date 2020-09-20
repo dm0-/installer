@@ -10,7 +10,7 @@ function create_buildroot() {
         local -r image="$dir/archlinux-bootstrap-$release-$DEFAULT_ARCH.tar.gz"
 
         opt bootable && packages_buildroot+=(dracut intel-ucode linux-firmware linux-hardened)
-        opt executable && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt secureboot && packages_buildroot+=(pesign)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils librsvg imagemagick)

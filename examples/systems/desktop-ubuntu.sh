@@ -4,7 +4,7 @@
 
 options+=(
         [distro]=ubuntu
-        [executable]=1  # Generate a VM image for fast testing.
+        [gpt]=1         # Generate a VM disk image for fast testing.
         [networkd]=     # Disable networkd so GNOME can use NetworkManager.
         [selinux]=1     # Load a targeted SELinux policy in permissive mode.
         [squash]=1      # Use a highly compressed file system to save space.

@@ -8,7 +8,7 @@
 # the resulting immutable image.
 
 options+=(
-        [executable]=1  # Generate a VM image for fast testing.
+        [gpt]=1         # Generate a VM disk image for fast testing.
         [networkd]=     # Disable networkd so GNOME can use NetworkManager.
         [selinux]=1     # Enforce a targeted SELinux policy.
         [squash]=1      # Use a highly compressed file system to save space.
@@ -121,7 +121,7 @@ function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         script << 'EOF'
 git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-git -C rtl8812au reset --hard 006c821ae82f0675d98db5c569a30591f5fc2a70
+git -C rtl8812au reset --hard 07c704c0a7131208a909c3fc36e7daa122b98b16
 exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 EOF
 

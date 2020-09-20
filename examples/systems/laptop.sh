@@ -6,7 +6,7 @@
 
 options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
-        [executable]=1   # Generate a VM image for fast testing.
+        [gpt]=1          # Generate a VM disk image for fast testing.
         [networkd]=1     # Let systemd manage the network configuration.
         [nvme]=1         # Support root on an NVMe disk.
         [selinux]=1      # Load a targeted SELinux policy in permissive mode.
