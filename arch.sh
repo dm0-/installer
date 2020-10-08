@@ -30,10 +30,9 @@ function create_buildroot() {
         # Fetch EROFS utilities from AUR since they're not in community yet.
         if opt read_only && ! opt squash
         then
-                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-3ffbe2a97e7f6f459b8d34391d65422979debda0.tar.gz' > "$output/erofs-utils.tgz"
-                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = xe85e2c7e7d0e7b8e9c8987af7ce7d6844a9a9048e53f1c48d3a3b30b157079b6
+                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-3da5fc5427c1b1869a16a9e98665c1cb7404faa4.tar.gz' > "$output/erofs-utils.tgz"
+                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = x1fbbbcc94d430593d717294b81574bdfcfc04e5bcde6c9c97a9406b2d5105d39
                 $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
-                $sed -i -e 's/1\.0/1.1/g;s/508e[0-9a-f]*/a14a30d0d941f6642cad130fbba70a2493fabbe7baa09a8ce7d20745ea3385d6/' "$output"/erofs-utils/{.SRCINFO,PKGBUILD}
                 packages_buildroot+=(base-devel)
         fi
 
@@ -54,7 +53,7 @@ if test -d erofs-utils
 then
         mv erofs-utils /home/build ; useradd build ; chown -R build /home/build
         su -c 'exec makepkg PKGBUILD' - build
-        pacman --noconfirm --upgrade /home/build/erofs-utils-*.pkg.tar.xz
+        pacman --noconfirm --upgrade /home/build/erofs-utils-*.pkg.tar.zst
 fi
 EOF
 }

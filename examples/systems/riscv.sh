@@ -87,9 +87,9 @@ EOF
         $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
         test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
             x17e048ac765e92e15f7436b604452614cf88dc2bcbbaab18cdc024f3fdd4c575
-        $curl -L https://github.com/u-boot/u-boot/archive/v2020.07.tar.gz > "$buildroot/root/u-boot.tgz"
+        $curl -L https://github.com/u-boot/u-boot/archive/v2020.10.tar.gz > "$buildroot/root/u-boot.tgz"
         test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
-            x616b446e15d1cd1ab6461ebb61ac6655a2b13e902fe0601f36c4affb3949d416
+            x0c022ca6796aa8c0689faae8b515eb62ac84519c31de3153257a9ee0f446618f
 }
 
 function customize_buildroot() {
@@ -97,6 +97,9 @@ function customize_buildroot() {
 
         # Packages just aren't keyworded enough, so accept anything stabilized.
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
+
+        # Disable broken unstable packages.
+        echo '>=sys-apps/systemd-246 -*' >> "$portage/package.accept_keywords/systemd.conf"
 
         # Work around the broken aclocal path ordering (#677002).
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
@@ -124,6 +127,9 @@ function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
+        # Disable LTO for packages broken with this architecture/ABI.
+        echo 'dev-libs/libbsd no-lto.conf' >> "$portage/package.env/no-lto.conf"
 
         # Install Emacs as a terminal application.
         fix_package emacs
@@ -182,7 +188,7 @@ EOF
 exec qemu-system-riscv64 -nographic \
     -L "$PWD" -bios opensbi-uboot.bin \
     -machine virt -cpu rv64 -m 4G \
-    -drive file="${IMAGE:-disk.exe}",format=raw,id=hd0,media=disk \
+    -drive file="${IMAGE:-gpt.img}",format=raw,id=hd0,media=disk \
     -netdev user,id=net0 \
     -object rng-random,id=rng0 \
     -device virtio-blk-device,drive=hd0 \
@@ -222,7 +228,6 @@ EOF
 fi
 
 # Override image partitioning to additionally stuff GRUB into the ESP.
-options[esp_size]=$(( 24 << 20 ))
 eval "$(declare -f partition | $sed '/BOOTX64/,${
 s/BOOTX64/BOOTRISCV64/g
 /^ *mcopy/a\

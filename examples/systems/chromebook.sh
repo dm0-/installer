@@ -10,6 +10,7 @@ options+=(
         [arch]=armv7a    # Target ARM Cortex-A17 CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
+        [gpt]=1          # Generate a ready-to-boot GPT disk image.
         [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [squash]=1       # Use a highly compressed file system to save space.
@@ -220,6 +221,14 @@ EOF
             --config kernel_args.txt --keyblock "$b" --signprivate "$p" \
             --version 1 --vmlinuz /root/kernel.itb
 fi
+
+# Override image partitioning to replace the ESP with a ChromeOS kernel.
+eval "$(declare -f partition | $sed '/BOOTX64/,${
+s/BOOTX64.EFI\|esp.img/kernel.img/g;/272629760/d;s/4194304 *+ *//
+s/uefi/bootable/g;/^ *if opt bootab/,/^ *fi/{/dd/!d;s/dd/opt bootable \&\& &/;}
+s/C12A7328-F81F-11D2-BA4B-00A0C93EC93B/FE3A2A5D-4F32-41A7-B725-ACCC3285A309/g
+s/NoBlockIOProtocol/'\''"50 51 52 54 56"'\''/g
+s/"EFI System Partition"/KERN-A/g;}')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
 # Show initialization messages.

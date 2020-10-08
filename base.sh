@@ -692,9 +692,10 @@ then
         opt ramdisk && opt uefi || size=$(stat --format=%s final.img)
         size=$(( size / bs + !!(size % bs) ))
 
-        # The disk image has an ESP when using a UEFI binary.
-        opt uefi && ((!esp)) && esp=$(( 5242880 + $(stat --format=%s "$efi") ))
-        esp=$(( esp / bs + !!(esp % bs) ))
+        # The image needs an ESP for the UEFI binary, 260MiB minimum size.
+        opt uefi && ((!esp)) && esp=$(( 4194304 + $(stat --format=%s "$efi") ))
+        ! opt esp_size && (( esp && esp < 272629760 )) && esp=272629760
+        esp=$(( ((esp >> 20) + !!(esp & 0xFFFFF)) * 1048576 / bs ))
 
         # Format a disk image with the appropriate partition layout.
         truncate --size=$(( (start + esp + size + 33) * bs )) gpt.img

@@ -8,6 +8,7 @@ options+=(
         [arch]=i686      # Target AMD Geode LX CPUs.  (Note i686 has no NOPL.)
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
+        [gpt]=1          # Generate a ready-to-boot GPT disk image.
         [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [squash]=1       # Use a highly compressed file system to save space.
@@ -67,9 +68,13 @@ packages_buildroot+=(
         # The target hardware requires firmware.
         net-wireless/wireless-regdb
         sys-kernel/linux-firmware
+
+        # Support making a boot partition when creating a GPT disk image.
+        sys-fs/dosfstools
+        sys-fs/mtools
 )
 
-# Build unused GRUB images for this platform for separate manual installation.
+# Build GRUB images for this platform for separate manual installation.
 function initialize_buildroot() {
         echo 'GRUB_PLATFORMS="pc"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
@@ -142,19 +147,29 @@ function customize() {
         # Include a mount point for a writable boot partition.
         mkdir root/boot
 
-        create_gpt_bios_grub_files
+        # Write a script with an example boot command to test with QEMU.
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/sh -eu
+exec qemu-system-i386 -nodefaults \
+    -cpu qemu32,+3dnow,+3dnowext,+clflush,+mmx,+mmxext,-apic,-sse,-sse2 \
+    -m 512M -vga std -nic user,model=e1000 \
+    -device usb-ehci -device usb-kbd -device usb-mouse \
+    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
+    "$@"
+EOF
 }
 
-# Make our own BIOS GRUB files for booting from a GPT disk.  Formatting a disk
-# with fdisk forces the first partition to begin at least 1MiB from the start
-# of the disk, which is the usual size of the boot partition that GRUB requires
-# to install on GPT.  Reconfigure GRUB's boot.img and diskboot.img so the core
-# image can be booted when written directly after the GPT.
+# Override the UEFI function as a hack to make our own BIOS GRUB files for
+# booting from a GPT disk.  Formatting a disk with fdisk forces the first
+# partition to begin at least 1MiB from the start of the disk, which is the
+# usual size of the boot partition that GRUB requires to install on GPT.
+# Reconfigure GRUB's boot.img and diskboot.img so the core image can be booted
+# when written directly after the GPT.
 #
 # Install these files with the following commands:
 #       dd bs=512 conv=notrunc if=core.img of="$disk" seek=34
 #       dd bs=512 conv=notrunc if=boot.img of="$disk"
-function create_gpt_bios_grub_files() if opt bootable
+function produce_uefi_exe() if opt bootable
 then
         # Take the normal boot.img, and make it a protective MBR.
         cp -pt . /usr/lib/grub/i386-pc/boot.img
@@ -172,7 +187,36 @@ then
         # Set boot.img and diskboot.img to load immediately after the GPT.
         dd bs=1 conv=notrunc count=1 if=<(echo -en '\x22') of=boot.img seek=92
         dd bs=1 conv=notrunc count=1 if=<(echo -en '\x23') of=core.img seek=500
+
+        # Write a simple GRUB configuration to automatically boot.
+        cat << EOF > grub.cfg
+set default=boot-a
+set timeout=3
+menuentry 'Boot A' --id boot-a {
+        linux /linux_a $(<kernel_args.txt)
+        if test -s /initrd_a ; then initrd /initrd_a ; fi
+}
+menuentry 'Reboot' --id reboot {
+        reboot
+}
+menuentry 'Power Off' --id poweroff {
+        halt
+}
+EOF
 fi
+
+# Override image partitioning to install the compiled legacy BIOS bootloader.
+eval "$(declare -f partition | $sed '/BOOTX64/,${
+s/BOOTX64.EFI/grub.cfg/g
+s/uefi/bootable/g
+/mmd/d;s,/EFI/BOOT,,g;/^ *mcopy/a\
+mcopy -i esp.img vmlinuz ::/linux_a\
+test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a
+/^ *if test -s launch.sh/{s/if/elif/;i\
+if opt bootable ; then\
+dd bs=$bs conv=notrunc if=core.img of=gpt.img seek=34\
+dd bs=$bs conv=notrunc if=boot.img of=gpt.img
+};}')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
 # Show initialization messages.
@@ -334,4 +378,14 @@ CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
 CONFIG_SND_USB_AUDIO=m  # headsets
 CONFIG_USB_ACM=m        # fit-PC status LED
 CONFIG_USB_HID=m        # mice and keyboards
+# TARGET HARDWARE: QEMU
+## QEMU default graphics
+#CONFIG_DRM=m
+#CONFIG_DRM_FBDEV_EMULATION=y
+#CONFIG_DRM_BOCHS=m
+## QEMU default network
+#CONFIG_NET_VENDOR_INTEL=y
+#CONFIG_E1000=m
+## QEMU default disk
+#CONFIG_ATA_PIIX=y
 EOF

@@ -9,6 +9,7 @@ options+=(
         [arch]=armv5tel  # Target ARM ARM926EJ-S CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
+        [gpt]=1          # Generate a ready-to-boot GPT disk image.
         [networkd]=1     # Let systemd manage the network configuration.
         [read_only]=1    # Use an efficient packed read-only file system.
         [uefi]=          # This platform does not support UEFI.
@@ -69,6 +70,10 @@ packages_buildroot+=(
 
         # Produce a U-Boot script and kernel image in this script.
         dev-embedded/u-boot-tools
+
+        # Support making a boot partition when creating a GPT disk image.
+        sys-fs/dosfstools
+        sys-fs/mtools
 )
 
 function initialize_buildroot() {
@@ -128,6 +133,10 @@ function customize_buildroot() {
         # Fix the screen contrast.
         $sed -i -e 's/fbi->contrast = 0x10/fbi->contrast = 0x80/g' \
             "$buildroot/usr/src/linux/drivers/video/fbdev/wm8505fb.c"
+
+        # Fix passing kernel arguments since Linux 5.8.
+        $sed -i -e 's,^\tcompat.*,&\n\n\tchosen { bootargs = ""; };,' \
+            "$buildroot/usr/src/linux/arch/arm/boot/dts/wm8505.dtsi"
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
@@ -199,8 +208,10 @@ then
         # Write a boot script to start the kernel.
         mkimage -A arm -C none -O linux -T script -d /dev/stdin -n 'Boot script' scriptcmd << EOF
 lcdinit
+textout -1 -1 \"Loading kernel...\" FFFFFF
 fatload mmc 0 0 /script/vmlinuz.uimg
 setenv bootargs $(<kernel_args.txt) rootwait
+textout -1 -1 \"Booting...\" FFFFFF
 bootm 0
 EOF
 
@@ -212,6 +223,40 @@ EOF
             --prefix= \
             fat halt linux loadenv minicmd normal part_gpt reboot test
 fi
+
+# Override image partitioning to install U-Boot files and write a hybrid MBR.
+eval "$(declare -f partition | $sed '/BOOTX64/,${
+s/BOOTX64.EFI/vmlinuz.uimg/g
+s/uefi/bootable/g
+s, ::/EFI , ,g;s,EFI/BOOT,script,g;/^ *mcopy/a\
+mcopy -i esp.img scriptcmd ::/script/scriptcmd
+/^ *if test -s launch.sh/,/^ *fi/{/^ *fi/a\
+if opt bootable ; then write_hybrid_mbr gpt.img $(( esp * bs >> 20 )) ; fi
+};}')"
+
+# Define a helper function to add an ESP DOS partition for the U-Boot firmware.
+function write_hybrid_mbr() {
+        dd bs=1 conv=notrunc count=64 of="$1" seek=446 if=/dev/stdin
+} < <(
+        declare -ir esp_mb="$2"
+
+        # Define the ESP to align with its GPT definition.
+        echo -en "\0\x20\x21\0\xEF$(
+                end=$(( esp_mb + 1 << 11 ))
+                printf '\\x%02X' \
+                    $(( end / 63 % 255 )) $(( end % 63 )) $(( end / 16065 ))
+        )\0\x08\0\0$(
+                for offset in 0 8 16 24
+                do printf '\\x%02X' $(( esp_mb << 11 >> offset & 0xFF ))
+                done
+        )"
+
+        # Stupidly reserve all possible space as GPT.
+        echo -en '\0\0\x02\0\xEE\xFF\xFF\xFF\x01\0\0\0\xFF\xFF\xFF\xFF'
+
+        # No other MBR partitions are required.
+        exec cat /dev/zero
+)
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
 # Show initialization messages.

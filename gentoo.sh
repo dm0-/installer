@@ -68,6 +68,10 @@ gnome-extra/*
 sys-apps/gentoo-systemd-integration
 sys-apps/systemd
 EOF
+        $cat << 'EOF' >> "$portage/package.use/clang.conf"
+# Make clang default to using tools and libraries from its own world.
+sys-devel/clang default-compiler-rt default-libcxx default-lld
+EOF
         $cat << 'EOF' >> "$portage/package.use/cryptsetup.conf"
 # Choose nettle as the crypto backend.
 sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
@@ -132,25 +136,21 @@ EOF
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
         echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
-        # Accept ffmpeg-4.3 to fix cross-compiling with native tuning.
-        echo -e '<media-video/ffmpeg-4.4 ~*\nmedia-libs/nv-codec-headers' >> "$portage/package.accept_keywords/ffmpeg.conf"
+        # Accept ffmpeg-4.3.1 to fix the altivec implementation.
+        echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
-        echo '<sys-boot/grub-2.07' >> "$portage/package.accept_keywords/grub.conf"
+        echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
         # Accept libaom-2.0.0 to fix ARM builds.
         echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libnl-3.5.0 to fix host dependencies.
-        echo 'dev-libs/libnl *' >> "$portage/package.accept_keywords/libnl.conf"
-        # Accept libuv-1.39 to fix host dependencies.
-        echo 'dev-libs/libuv *' >> "$portage/package.accept_keywords/libuv.conf"
+        # Accept libsamplerate-0.1.9 to fix host dependencies.
+        echo '<media-libs/libsamplerate-0.2 ~*' >> "$portage/package.accept_keywords/libsamplerate.conf"
         # Accept pango-1.44.7 to fix host dependencies.
-        echo x11-libs/pango >> "$portage/package.accept_keywords/pango.conf"
+        echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
-        # Accept psmisc-23.3 to fix host dependencies.
-        echo '<sys-process/psmisc-23.4' >> "$portage/package.accept_keywords/psmisc.conf"
         # Accept rust-1.46 to support cross-compiling and bootstrapping.
         echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.47 ~*\n<virtual/rust-1.47 ~*' >> "$portage/package.accept_keywords/rust.conf"
-        # Accept sudo-1.9.2 to fix glibc-2.32 support.
-        echo '<app-admin/sudo-1.9.3 ~*' >> "$portage/package.accept_keywords/sudo.conf"
+        # Accept sudo-1.9.3 to fix glibc-2.32 support.
+        echo '<app-admin/sudo-1.9.4 ~*' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
 
@@ -227,13 +227,8 @@ EOF
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Preserve bindist in the stage3 to skip pointless rebuilds.
         echo '*/* bindist' >> "$portage/package.use/bindist.conf"
-        # Turn off extra busybox features to make the labeling initrd smaller.
-        echo 'sys-apps/busybox -* static' >> "$portage/package.use/busybox.conf"
-        # Work around bad dependencies requiring this on the host.
-        echo 'x11-libs/cairo X' >> "$portage/package.use/cairo.conf"
-        echo 'media-libs/libglvnd X' >> "$portage/package.use/libglvnd.conf"
-        # Work around broken SSE2 with multilib on the host.
-        echo 'media-libs/libaom -cpu_flags_*' >> "$portage/package.use/libaom.conf"
+        # Skip systemd for busybox since the labeling initrd has no real init.
+        echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
         # Disable journal compression to skip the massive cmake dependency.
         echo 'sys-apps/systemd -lz4' >> "$portage/package.use/systemd.conf"
         # Support building the UEFI boot stub, its logo image, and signing tools.
@@ -242,6 +237,14 @@ dev-libs/nss utils
 media-gfx/imagemagick svg xml
 sys-apps/pciutils -udev
 sys-apps/systemd gnuefi
+EOF
+        # Work around bad dependencies requiring X on the host.
+        $cat << 'EOF' >> "$portage/package.use/X.conf"
+media-libs/libepoxy X
+media-libs/libglvnd X
+media-libs/mesa X
+x11-libs/cairo X
+x11-libs/gtk+ X
 EOF
         # Prevent accidentally disabling required modules.
         echo 'dev-libs/libxml2 python' >> "$portage/profile/package.use.force/libxml2.conf"
@@ -261,6 +264,8 @@ echo 'dev-libs/dbus-glib **' >> "/usr/$host/etc/portage/package.accept_keywords/
 ## Support cross-compiling musl (#732482).
 sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support cross-compiling with LLVM on EAPI 7 (#745744).
+sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -906,38 +911,21 @@ ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.1-r1.ebuild manifest
 EOF
                 ;;
             firefox)
-                $cat << 'EOF' >> "$buildroot/etc/portage/package.accept_keywords/firefox.conf"
-dev-libs/nspr
-dev-libs/nss
-<media-libs/harfbuzz-2.7 ~*
-<media-libs/libvpx-1.9 ~*
-EOF
-                $cat << 'EOF' >> "$buildroot/etc/portage/package.use/firefox.conf"
-dev-lang/python sqlite
-media-libs/libepoxy X
-media-libs/libpng apng
-media-libs/libvpx postproc
-media-libs/mesa X
-media-plugins/alsa-plugins pulseaudio
-sys-devel/clang default-compiler-rt default-libcxx
-x11-libs/gtk+ X
-EOF
-                echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/bindgen.conf"
-                echo "STUPID_TARGET=\"$(archmap_rust ${options[arch]})\"" >> "$portage/env/glslopt.conf"
+                echo 'dev-lang/python sqlite' >> "$buildroot/etc/portage/package.use/firefox.conf"
+                echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/firefox.conf"
                 $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
-dev-libs/nspr
-dev-libs/nss
-<media-libs/harfbuzz-2.7 ~*
-<media-libs/libvpx-1.9 ~*
-=www-client/firefox-80.0.1-r1 ~*
+dev-libs/nspr ~*
+dev-libs/nss ~*
+media-libs/libvpx *
+=www-client/firefox-81.0.1 ~*
 EOF
-                echo 'www-client/firefox bindgen.conf glslopt.conf' >> "$portage/package.env/firefox.conf"
+                echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
                 $sed -n '/FLAGS=.*-march=geode/q0;$q1' "$portage/make.conf" &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
 --- a/build/moz.configure/init.configure
 +++ b/build/moz.configure/init.configure
-@@ -952,7 +952,7 @@
+@@ -955,7 +955,7 @@
      return namespace(
          OS_TARGET=os_target,
          OS_ARCH=os_arch,
@@ -948,7 +936,7 @@ EOF
  
 --- a/build/moz.configure/rust.configure
 +++ b/build/moz.configure/rust.configure
-@@ -253,6 +253,7 @@
+@@ -260,6 +260,7 @@
              (host_or_target.cpu, host_or_target.endianness, host_or_target.os), [])
  
          def find_candidate(candidates):
@@ -1053,22 +1041,18 @@ EOF
 EOF
                 [[ ${options[arch]} == armv7* ]] &&
                 echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
-                echo "STUPID_TARGET=\"thumbv7neon-unknown-linux-gnueabihf\"" >> "$portage/env/glslopt.conf" &&
                 echo >> "$buildroot/etc/portage/env/rust-map.conf" \
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm ${options[arch]}):thumbv7neon-unknown-linux-gnueabihf:${options[host]}\""
                 test -s "$portage/patches/www-client/firefox/i586.patch" &&
                 echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
-                echo "STUPID_TARGET=\"$(archmap_rust i586)\"" >> "$portage/env/glslopt.conf" &&
+                echo 'EXTRA_ECONF="--without-system-png"' >> "$portage/env/firefox.conf" &&
                 echo >> "$buildroot/etc/portage/env/rust-map.conf" \
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-80.0.1-r1.ebuild
-                $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
-sed -i -e "s/TARGET/STUPID_&/" "${S}"/third_party/rust/glslopt/build.rs\
-sed -i -e "s/:{[^}]*/:{/" "${S}"/third_party/rust/glslopt/.cargo-checksum.json\
-sed -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' "$buildroot$which"
                 test -s "$portage/patches/www-client/firefox/ppc.patch" &&
-                $sed -i -e '/final/ised -i -e /elf-hack/d "${S}"/.mozconfig\
-mozconfig_annotate "too lazy to port" --disable-webrtc' "$buildroot$which"
+                echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-81.0.1.ebuild
+                $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
+sed -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' "$buildroot$which"
                 enter /usr/bin/ebuild "$which" manifest
                 ;;
             vlc)

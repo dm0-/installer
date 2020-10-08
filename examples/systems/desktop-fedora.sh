@@ -176,7 +176,7 @@ EOF
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
     -cpu host -m 8G -vga std -nic user \
-    -drive file="${IMAGE:-disk.exe}",format=raw,media=disk \
+    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
     "$@"
 EOF
 }

@@ -90,13 +90,9 @@ function customize_buildroot() {
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
         echo 'VIDEO_CARDS="radeon r200"' >> "$portage/make.conf"
 
-        # The ffmpeg cross-compilation needs assistance for this CPU (#728602).
+        # The ffmpeg cross-compilation needs assistance for this CPU.
         echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
         echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
-        $mkdir -p "$portage/patches/media-video/ffmpeg"
-        $curl -L https://github.com/FFmpeg/FFmpeg/commit/3a557c5d88b7b15b5954ba2743febb055549b536.patch > "$portage/patches/media-video/ffmpeg/altivec.patch"
-        test x$($sha256sum "$portage/patches/media-video/ffmpeg/altivec.patch" | $sed -n '1s/ .*//p') = x4c4472f85c55d42f51a50edd4a1facb3dc1550d5e477047b17bb8723b311dd1a
-        $sed -i -e 's,^-\([^-]\),/\1,;s/^+\([^+]\)/-\1/;s,^/,+,;s/^@@ -\([^ ]*\) +\([^ ]*\) @@/@@ -\2 +\1 @@/' "$portage/patches/media-video/ffmpeg/altivec.patch"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
@@ -191,6 +187,17 @@ EOF
         # Try to use a persistent /var partition from a plain file system UUID.
         echo "UUID=${options[var_uuid]:=$(</proc/sys/kernel/random/uuid)}" \
             /var ext4 defaults,nodev,nofail,nosuid >> root/etc/fstab
+
+        # Write a script with an example boot command to test with QEMU.
+        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+#!/bin/sh -eu
+exec qemu-system-ppc -nodefaults \
+    -machine mac99,via=pmu -cpu g4 -m 1G -vga std -nic user,model=sungem \
+    -device pci-ohci -device usb-kbd -device usb-mouse \
+    -prom-env 'boot-device=hd:2,grub.elf' \
+    -drive file="${IMAGE:-apm.img}",format=raw,media=disk \
+    "$@"
+EOF
 }
 
 # Override image partitioning to use APM, since it's incompatible with GPT.
@@ -272,16 +279,6 @@ EOF
         dd bs=$bs conv=notrunc if=final.img of=apm.img seek=$(( 64 + boot_size / bs ))
         mkfs.ext4 -E offset=$(( 64 * bs + boot_size + slot_size * slots )) \
             -F -L var -m 0 -U "${options[var_uuid]}" apm.img
-
-        # Write a script with an example boot command to test with QEMU.
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
-#!/bin/sh -eu
-exec qemu-system-ppc \
-    -machine mac99,via=pmu -cpu g4 -m 1G -vga std -nic user,model=sungem \
-    -prom-env 'boot-device=hd:2,grub.elf' \
-    -drive file="${IMAGE:-apm.img}",format=raw,media=disk \
-    "$@"
-EOF
 fi
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
@@ -419,10 +416,10 @@ CONFIG_USB_ACM=m        # fit-PC status LED
 CONFIG_USB_HID=m        # mice and keyboards
 # TARGET HARDWARE: QEMU
 ## QEMU default graphics
-CONFIG_DRM_BOCHS=m
+#CONFIG_DRM_BOCHS=m
 ## QEMU default disk
-CONFIG_ATA_PIIX=y
+#CONFIG_ATA_PIIX=y
 ## QEMU default serial port
-CONFIG_SERIAL_8250=y
-CONFIG_SERIAL_8250_CONSOLE=y
+#CONFIG_SERIAL_8250=y
+#CONFIG_SERIAL_8250_CONSOLE=y
 EOF

@@ -16,5 +16,7 @@ EOF
 qt-privacy-ask=0
 [core]
 metadata-network-access=0
+[libbluray]
+bluray-region=A
 EOF
 fi
