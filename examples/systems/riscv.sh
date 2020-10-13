@@ -76,12 +76,13 @@ EOF
         done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
         $rm -f "$output/grub.mbox"
 
-        # Patch UEFI stub support into Linux 5.8.
+        # Patch UEFI stub support into Linux 5.9.
         $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
         $curl -L > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" \
-            https://github.com/atishp04/linux/compare/92ed301919932f777713b9172e525674157e983d...cb104d785a063716f41cabe4ba5252e56495853a.patch
+            https://github.com/atishp04/linux/compare/856deb866d16e29bd65952e0289066f6078af773...e0bd30b6f950f9eca34f424f03a62e875a7e63c7.patch
         test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
-            xff9a929ce61fc817daf356e17f5c05379de916f8279defc1159e1c7bfbfb4594
+            x9ff409fff71d5b5167a4ad5d3bbf97e2423cb53ebf2791e614f7097e5c3f37cc
+        $sed -i -e '/^@@ -516/,/^$/d' "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch"
 
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
@@ -100,10 +101,6 @@ function customize_buildroot() {
 
         # Disable broken unstable packages.
         echo '>=sys-apps/systemd-246 -*' >> "$portage/package.accept_keywords/systemd.conf"
-
-        # Work around the broken aclocal path ordering (#677002).
-        echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
-        echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
 
         # The multilib subdirectories don't work with UsrMerge (#728674).
         $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild"
@@ -299,7 +296,4 @@ CONFIG_VIRTIO_CONSOLE=y
 ## QEMU virtio RNG
 CONFIG_HW_RANDOM=y
 CONFIG_HW_RANDOM_VIRTIO=y
-## QEMU default serial port
-CONFIG_SERIAL_8250=y
-CONFIG_SERIAL_8250_CONSOLE=y
 EOF

@@ -134,21 +134,15 @@ EOF
 
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
-        # Accept dtc-1.6.0 to fix host dependencies and pkg-config.
-        echo '<sys-apps/dtc-1.7 ~*' >> "$portage/package.accept_keywords/dtc.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept libaom-2.0.0 to fix ARM builds.
-        echo 'media-libs/libaom ~*' >> "$portage/package.accept_keywords/libaom.conf"
-        # Accept libsamplerate-0.1.9 to fix host dependencies.
-        echo '<media-libs/libsamplerate-0.2 ~*' >> "$portage/package.accept_keywords/libsamplerate.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
-        # Accept rust-1.46 to support cross-compiling and bootstrapping.
-        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.47 ~*\n<virtual/rust-1.47 ~*' >> "$portage/package.accept_keywords/rust.conf"
+        # Accept rust-1.47 to support cross-compiling and bootstrapping.
+        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.48 ~*\n<virtual/rust-1.48 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept sudo-1.9.3 to fix glibc-2.32 support.
         echo '<app-admin/sudo-1.9.4 ~*' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
@@ -190,6 +184,7 @@ EOF
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.7m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
+        echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
@@ -198,6 +193,7 @@ media-libs/gstreamer cross-glib-mkenums.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf
 x11-wm/windowmaker cross-windowmaker.conf
 EOF
+        echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
 dev-libs/icu no-lto.conf
@@ -229,6 +225,8 @@ EOF
         echo '*/* bindist' >> "$portage/package.use/bindist.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
+        # Rust is not built into the stage3, so it can't use system-bootstrap.
+        echo 'dev-lang/rust -system-bootstrap' >> "$portage/package.use/rust.conf"
         # Disable journal compression to skip the massive cmake dependency.
         echo 'sys-apps/systemd -lz4' >> "$portage/package.use/systemd.conf"
         # Support building the UEFI boot stub, its logo image, and signing tools.
@@ -860,7 +858,6 @@ function fix_package() {
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
 net-libs/webkit-gtk *
 sys-apps/bubblewrap *
-sys-apps/xdg-dbus-proxy *
 EOF
                 $cat << 'EOF' >> "$portage/package.use/emacs.conf"
 dev-util/desktop-file-utils -emacs
@@ -917,7 +914,7 @@ EOF
 dev-libs/nspr ~*
 dev-libs/nss ~*
 media-libs/libvpx *
-=www-client/firefox-81.0.1 ~*
+=www-client/firefox-81.0.2 ~*
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
@@ -1050,7 +1047,7 @@ EOF
                     "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
                 test -s "$portage/patches/www-client/firefox/ppc.patch" &&
                 echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-81.0.1.ebuild
+                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-81.0.2.ebuild
                 $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
 sed -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' "$buildroot$which"
                 enter /usr/bin/ebuild "$which" manifest
