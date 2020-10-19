@@ -1,10 +1,16 @@
 # This is an example Gentoo build for a specific target system, the ASUS
 # Chromebook Flip C100P (based on the ARM Cortex-A17 CPU).  It demonstrates
-# cross-compiling for a 32-bit ARM device and generating a nonstandard kernel
-# image format.  A microSD card can be formatted using the ChromeOS GPT GUIDs
-# with the kernel "kernel.img" and root file system "final.img" written to the
-# appropriate partitions, and it can be booted by pressing Ctrl-U on the
-# startup screen while the system is in developer mode.
+# cross-compiling for a 32-bit ARMv7-A device and generating a ChromeOS kernel
+# partition image.
+#
+# The GPT image is modified from the usual UEFI layout to produce an image with
+# a prioritized ChromeOS kernel partition and its root file system.  When the
+# image is booted, it will automatically repartition the disk to have two
+# ChromeOS kernel partitions, two root file system partitions, and a persistent
+# /var partition.  At least a 4GiB microSD card should be used for this.
+#
+# After writing gpt.img to a microSD card, it can be booted by pressing Ctrl-U
+# on the startup screen while the system is in developer mode.
 
 options+=(
         [arch]=armv7a    # Target ARM Cortex-A17 CPUs.
@@ -84,7 +90,12 @@ function customize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv7ve+simd -mtune=cortex-a17 -mfpu=neon-vfpv4 -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo -e 'CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"\nUSE="$USE neon"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/make.conf"
+CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"
+RUST_TARGET="thumbv7neon-unknown-linux-gnueabihf"
+EOF
+        echo >> "$buildroot/etc/portage/env/rust-map.conf" \
+            "RUST_CROSS_TARGETS=\"$(archmap_llvm ${options[arch]}):thumbv7neon-unknown-linux-gnueabihf:${options[host]}\""
 
         # Use the Panfrost driver for the ARM Mali-T760 MP4 GPU.
         echo 'VIDEO_CARDS="panfrost"' >> "$portage/make.conf"
@@ -92,7 +103,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
+            bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
@@ -101,7 +112,7 @@ function customize_buildroot() {
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             branding ipv6 jit lto offensive pcap threads \
-            dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
+            dynamic-loading hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -emacs -fortran -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
@@ -152,6 +163,41 @@ function customize() {
         mkdir -p root/usr/lib/systemd/system/network.target.wants
         ln -fns ../wpa_supplicant-nl80211@.service \
             root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlan0.service
+
+        # Use a persistent /var partition with bare ext4.
+        echo >> root/etc/fstab \
+            "PARTUUID=${options[var_uuid]:=$(</proc/sys/kernel/random/uuid)}" /var ext4 \
+            defaults,nodev,nosuid,x-systemd.growfs,x-systemd.makefs,x-systemd.rw-only 1 2
+
+        # Define a default partition layout: two kernels, two roots, and var.
+        mkdir -p root/usr/lib/repart.d
+        opt esp_size || options[esp_size]=$(( 16 << 20 ))
+        cat << EOF > root/usr/lib/repart.d/15-kern-a.conf
+[Partition]
+Label=KERN-A
+SizeMaxBytes=${options[esp_size]}
+SizeMinBytes=${options[esp_size]}
+Type=FE3A2A5D-4F32-41A7-B725-ACCC3285A309
+EOF
+        cat << EOF > root/usr/lib/repart.d/20-root-a.conf
+[Partition]
+Label=ROOT-A
+SizeMaxBytes=$(( 1 << 30 ))
+SizeMinBytes=$(( 1 << 30 ))
+Type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+EOF
+        sed s/KERN-A/KERN-B/ root/usr/lib/repart.d/15-kern-a.conf \
+            > root/usr/lib/repart.d/25-kern-b.conf
+        sed s/ROOT-A/ROOT-B/ root/usr/lib/repart.d/20-root-a.conf \
+            > root/usr/lib/repart.d/30-root-b.conf
+        cat << EOF > root/usr/lib/repart.d/50-var.conf
+[Partition]
+FactoryReset=on
+Label=var
+SizeMinBytes=$(( 512 << 20 ))
+Type=var
+UUID=${options[var_uuid]}
+EOF
 }
 
 # Override the UEFI function as a hack to produce the ChromeOS kernel partition

@@ -93,7 +93,7 @@ function imply_options() {
         opt squash || opt verity && options[read_only]=1
         opt uefi || opt ramdisk && options[bootable]=1
         opt uefi && options[secureboot]=1  # Always sign the UEFI executable.
-        opt gpt && opt uefi && ! opt ramdisk && ! opt partuuid &&
+        opt gpt && ! opt ramdisk && ! opt partuuid &&
         options[partuuid]=$(</proc/sys/kernel/random/uuid)
         opt distro || options[distro]=fedora  # This can't be unset.
 }
@@ -654,6 +654,33 @@ function finalize_packages() {
                             --create-home --password= "$name"
                 done
         )
+
+        # Work around systemd-repart not handling verity-backing devices yet.
+        if opt verity && ! opt ramdisk && test -d root/usr/lib/repart.d
+        then
+                local -r gendir=/usr/lib/systemd/system-generators
+                mkdir -p "root$gendir"
+                cat << 'EOF' > "root$gendir/repart-verity-root"
+#!/bin/bash -eu
+table=( $(dmsetup table "$(findmnt --noheadings --output=source --raw /)") )
+[[ ${table[2]} == verity ]] || exit 0  # not verity root
+test -e "/sys/dev/block/${table[4]}/partition" || exit 0  # not partitioned
+part=$(sed -n s,^DEVNAME=,/dev/,p "/sys/dev/block/${table[4]}/uevent")
+dev=/dev/$(lsblk --nodeps --noheadings --output=PKNAME "$part")
+test -b "$dev" || exit 0  # failed to find the partition's parent device
+unit=$(systemd-escape --path "$dev").device
+mkdir -p /run/systemd/system/systemd-repart.service.d
+echo > /run/systemd/system/systemd-repart.service.d/verity.conf "\
+# Specify the backing disk of the verity root device.
+[Unit]
+After=$unit
+Wants=$unit
+[Service]
+ExecStart=
+ExecStart=/usr/bin/systemd-repart --dry-run=no $dev"
+EOF
+                chmod 0755 "root$gendir/repart-verity-root"
+        fi
 
         # Save /etc/os-release outside the image after all customizations.
         test ! -s root/etc/os-release || cp -pt . root/etc/os-release

@@ -1,9 +1,13 @@
 # This is an example Gentoo build for a specific target system, the Sylvania
 # SYNET07526-Z netbook (based on the ARM ARM926EJ-S CPU).  It demonstrates
-# cross-compiling for a 32-bit ARM9 device and generating a U-Boot script that
-# starts Linux.  The vmlinuz.uimg and scriptcmd files must be written to the
-# /script directory on the first FAT-formatted MS-DOS partition of an SD card,
-# which will be booted automatically when starting the system.
+# cross-compiling for a 32-bit ARM9 device and generating a U-Boot boot script.
+#
+# The GPT image is modified from the usual UEFI layout to produce an image with
+# a hybrid MBR that defines the ESP as a DOS partition.  The ESP is repurposed
+# as a FAT boot partition required by the U-Boot firmware.
+#
+# After writing gpt.img to an SD card, it will be booted automatically when the
+# system starts with the card inserted.
 
 options+=(
         [arch]=armv5tel  # Target ARM ARM926EJ-S CPUs.
@@ -107,7 +111,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
+            bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
@@ -125,6 +129,9 @@ function customize_buildroot() {
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'media-libs/opus no-lto.conf' >> "$portage/package.env/no-lto.conf"
+
+        # Skip building Rust for this system because of one tiny library.
+        $cp -t "$portage/package.accept_keywords" "$buildroot/etc/portage/package.accept_keywords/librsvg.conf"
 
         # Install Emacs as a terminal application.
         fix_package emacs

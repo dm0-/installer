@@ -1,8 +1,6 @@
 # This is an example Gentoo build for a specific target system, the Lenovo
-# Thinkpad P1 (Gen 2).  It only supports exactly that hardware to demonstrate a
-# minimal targeted build.  The kernel configuration is built from "allnoconfig"
-# so it doesn't include many things that would be taken for granted on other
-# distros.  This file is a work in progress; it will eventually have a desktop.
+# Thinkpad P1 (Gen 2).  It demonstrates native compilation where the build
+# system is the target system, which uses automatic detection of CPU features.
 
 options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
@@ -93,7 +91,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
+            bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \

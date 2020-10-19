@@ -1,8 +1,14 @@
 # This is an example Gentoo build for a specific target system, the first
 # generation Apple Mac mini (based on the PowerPC G4 CPU).  It demonstrates
-# cross-compiling for a 32-bit PPC device and generating a bootable disk image
-# for a non-UEFI platform.  It can be booted from USB at the Open Firmware
-# prompt (by holding Command-Option-O-F while booting or by setting the NVRAM
+# cross-compiling for a 32-bit PPC device and generating an Open Firmware ELF
+# bootloader program.
+#
+# The GPT image is completely replaced with APM so that this system's version
+# of Open Firmware is able to read it.  It formats a 4GiB disk image by default
+# partitioned for two root file systems and a persistent /var partition.
+#
+# After writing apm.img to a USB device, it can be booted at the Open Firmware
+# prompt (by holding Command-Option-O-F at startup or by setting the NVRAM
 # variable auto-boot?=false) with the command "boot usb0/disk:2,::tbxi".
 
 options+=(
@@ -97,7 +103,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
+            bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \

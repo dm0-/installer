@@ -47,7 +47,7 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Feature Support
 
-Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30, 31, and the default 32), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (20.04).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
+Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (31 and the default 32), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (20.04).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
 
 | Status         | Definition                                     |
 | :---:          | :---                                           |
@@ -60,8 +60,8 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30,
 **Cross-building**:  A target architecture can be specified to build an image for a processor different than the build system.
 
   * :star: *Gentoo* supports cross-compiling to any architecture for any image type.
-  * :construction: *CentOS 7*, *Fedora 30*, *openSUSE*, and *Ubuntu* support building i686 containers on x86_64 systems.
-  * :skull: *Arch*, *CentOS 8*, and *Fedora 31+* can only create images for the same architecture as the build system.
+  * :construction: *CentOS 7*, *openSUSE*, and *Ubuntu* support building i686 containers on x86_64 systems.
+  * :skull: *Arch*, *CentOS 8*, and *Fedora* can only create images for the same architecture as the build system.
 
 **Bootable**:  The bootable option produces a kernel and other boot-related files in addition to the root file system.  This option should always be used unless a container is being built.
 
@@ -107,10 +107,10 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30,
 **Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits over verity with Secure Boot, but it can be used on platforms that do not support UEFI, making the kernel the root of trust instead of the firmware in those cases.  In addition, the proposed IPE LSM policy can filter based on signed verity devices, so verity signatures can still have a use on UEFI.
 
   * :star: *Gentoo* supports verity signatures by creating an initrd to handle the userspace component.
-  * :construction: *Fedora 31+* and *Ubuntu* support verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
+  * :construction: *Fedora* and *Ubuntu* support verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
   * :fire: *Arch* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
   * :fire: *openSUSE* cannot use verity signatures until they enable `CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG`.
-  * :skull: *CentOS* and *Fedora 30* are too old to support verity signatures.
+  * :skull: *CentOS* is too old to support verity signatures.
 
 ## To Do
 
@@ -125,5 +125,3 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (30,
 **Provide server examples.**  The only bootable system examples right now are simple standalone workstations.  I should try to generalize some of my server configurations, or set up a network workstation example with LDAP/Kerberos/NFS integration.  Also, something should demonstrate persistent encrypted storage, which servers are going to require.  (Just add one line to `/etc/crypttab` and `/etc/fstab` to mount `/var`.)
 
 **Automate generating a QEMU pflash image for Secure Boot variables with the given certificate.**  This would be useful for generating a VM image that can actually verify Secure Boot signatures when it is enabled.  It would also get the certificate into the platform keyring via `db` so other things can use it in the binary distros.
-
-**Use repart.d in an example.**  The option to produce a minimal GPT disk image can work with systemd-repart for provisioning a complete system installation without separately formatting the disk.

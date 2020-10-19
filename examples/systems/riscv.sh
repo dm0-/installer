@@ -99,9 +99,6 @@ function customize_buildroot() {
         # Packages just aren't keyworded enough, so accept anything stabilized.
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
 
-        # Disable broken unstable packages.
-        echo '>=sys-apps/systemd-246 -*' >> "$portage/package.accept_keywords/systemd.conf"
-
         # The multilib subdirectories don't work with UsrMerge (#728674).
         $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild"
         enter /usr/bin/ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild manifest
@@ -109,7 +106,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
+            bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \

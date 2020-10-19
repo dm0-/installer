@@ -44,10 +44,6 @@ EOF
 app-crypt/pesign
 sys-boot/vboot-utils
 EOF
-        $cat << 'EOF' >> "$portage/package.accept_keywords/librsvg.conf"
-# Block forcing Rust onto certain architectures for such a minor library.
->=gnome-base/librsvg-2.41 -*
-EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
 sys-kernel/gentoo-kernel
@@ -138,11 +134,11 @@ EOF
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
+        # Accept libpng-1.6.37 to fix host dependencies.
+        echo '<media-libs/libpng-1.6.38 ~*' >> "$portage/package.accept_keywords/libpng.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
-        # Accept rust-1.47 to support cross-compiling and bootstrapping.
-        echo -e 'app-eselect/eselect-rust *\n<dev-lang/rust-1.48 ~*\n<virtual/rust-1.48 ~*' >> "$portage/package.accept_keywords/rust.conf"
         # Accept sudo-1.9.3 to fix glibc-2.32 support.
         echo '<app-admin/sudo-1.9.4 ~*' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
@@ -155,7 +151,7 @@ EOF
         test -z "$profile" && $rm -f "$portage/make.profile" ||
         $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
         $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto=jobserver&/' "$portage/make.conf"
-        $cat <(echo -e "\nCHOST=\"$host\"") - << 'EOF' >> "$portage/make.conf"
+        $cat <(echo -e "\nCHOST=\"$host\"\nRUST_TARGET=\"$(archmap_rust "$arch")\"") - << 'EOF' >> "$portage/make.conf"
 ROOT="/usr/$CHOST"
 BINPKG_COMPRESS="zstd"
 BINPKG_COMPRESS_FLAGS="--fast --threads=0"
@@ -214,6 +210,8 @@ EOF
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
+        # Block forcing compiling Rust for native build tools.
+        echo '>=gnome-base/librsvg-2.41 -*' >> "$portage/package.accept_keywords/librsvg.conf"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
@@ -918,7 +916,7 @@ media-libs/libvpx *
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
-                $sed -n '/FLAGS=.*-march=geode/q0;$q1' "$portage/make.conf" &&
+                $sed -n '/^RUST_TARGET="i586-/q0;$q1' "$portage/make.conf" &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
 --- a/build/moz.configure/init.configure
 +++ b/build/moz.configure/init.configure
@@ -1037,14 +1035,10 @@ EOF
  
 EOF
                 [[ ${options[arch]} == armv7* ]] &&
-                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
-                echo >> "$buildroot/etc/portage/env/rust-map.conf" \
-                    "RUST_CROSS_TARGETS=\"$(archmap_llvm ${options[arch]}):thumbv7neon-unknown-linux-gnueabihf:${options[host]}\""
+                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
                 test -s "$portage/patches/www-client/firefox/i586.patch" &&
                 echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
-                echo 'EXTRA_ECONF="--without-system-png"' >> "$portage/env/firefox.conf" &&
-                echo >> "$buildroot/etc/portage/env/rust-map.conf" \
-                    "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
+                echo 'EXTRA_ECONF="--without-system-png"' >> "$portage/env/firefox.conf"
                 test -s "$portage/patches/www-client/firefox/ppc.patch" &&
                 echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
                 local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-81.0.2.ebuild

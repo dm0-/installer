@@ -1,8 +1,11 @@
 # This is an example Gentoo build for a specific target system, the fit-PC Slim
-# (based on the AMD Geode LX 800 CPU).  It demonstrates cross-compiling to an
-# uncommon instruction set with plenty of other hardware components that are
-# specific to that platform.  Sample bootloader files are prepared that allow
-# booting this system from a GPT/UEFI-formatted disk.
+# (based on the AMD Geode LX 800 CPU).  It demonstrates cross-compiling for an
+# i686 processor with uncommon instruction sets and building a legacy PC BIOS
+# bootloader.
+#
+# The GPT image is modified from the usual UEFI layout to produce an image with
+# the bootloader written around the GPT with a protective MBR.  It repurposes
+# the ESP as the boot partition to store kernels and configure the bootloader.
 
 options+=(
         [arch]=i686      # Target AMD Geode LX CPUs.  (Note i686 has no NOPL.)
@@ -87,8 +90,15 @@ function customize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo 'CPU_FLAGS_X86="3dnow 3dnowext mmx mmxext"' >> "$portage/make.conf"
-        echo 'ABI_X86="32 64"' >> "$buildroot/etc/portage/make.conf"  # Portage is bad.
+        $cat << EOF >> "$portage/make.conf"
+CPU_FLAGS_X86="3dnow 3dnowext mmx mmxext"
+RUST_TARGET="$(archmap_rust i586)"
+EOF
+        echo >> "$buildroot/etc/portage/env/rust-map.conf" \
+            "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
+
+        # Work around EAPI 6 multilib package dependencies until they're gone.
+        echo 'ABI_X86="32 64"' >> "$buildroot/etc/portage/make.conf"
 
         # Use the Geode video driver.
         echo -e 'USE="$USE ztv"\nVIDEO_CARDS="geode"' >> "$portage/make.conf"
@@ -96,7 +106,7 @@ function customize_buildroot() {
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
-            bidi fribidi harfbuzz icu idn libidn2 nls truetype unicode \
+            bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
