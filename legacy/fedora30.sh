@@ -4,8 +4,9 @@ options[verity_sig]=
 
 DEFAULT_RELEASE=30
 
-# Override buildroot creation to set the container image file name.
-eval "$(declare -f create_buildroot | $sed 's/cver=.*/cver=1.2/')"
+# Override buildroot creation to set the container image file name and URL.
+eval "$(declare -f create_buildroot | $sed -e 's/cver=.*/cver=1.2/' \
+    -e 's,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,')"
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"

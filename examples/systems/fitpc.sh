@@ -107,7 +107,7 @@ EOF
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \

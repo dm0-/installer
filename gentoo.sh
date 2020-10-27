@@ -132,6 +132,8 @@ EOF
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
+        # Accept fontconfig-2.13.1 to fix host dependencies.
+        echo 'media-libs/fontconfig *' >> "$portage/package.accept_keywords/fontconfig.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
         # Accept libpng-1.6.37 to fix host dependencies.
@@ -176,7 +178,10 @@ EOF
 sys-apps/portage -native-extensions
 EOF
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
+        echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
+        echo 'EXTRA_EMAKE="GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
+        echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.7m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
@@ -185,8 +190,11 @@ EOF
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 dev-python/pypax cross-python.conf
+gnome-base/librsvg cross-glib-mkenums.conf
+media-libs/gst-plugins-base cross-glib-mkenums.conf
 media-libs/gstreamer cross-glib-mkenums.conf
-x11-libs/gtk+ cross-glib-compile-resources.conf
+net-wireless/wpa_supplicant cross-libnl.conf
+x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
 x11-wm/windowmaker cross-windowmaker.conf
 EOF
         echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
@@ -336,11 +344,13 @@ function install_packages() {
             ${options[selinux]:+sec-policy/selinux-base} \
             x11-base/x{cb,org}-proto
 
-        # Cheat systemd/PAM/freetype bootstrapping.
+        # Cheat bootstrapping packages with circular dependencies.
+        local -r use=" $(portageq envvar USE) "
         USE='-* kill truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
-            media-libs/harfbuzz \
-            sys-apps/util-linux \
-            sys-libs/libcap
+            $([[ $use =~ ' pam ' ]] && echo sys-libs/libcap) \
+            $([[ $use =~ ' tiff ' ]] && echo media-libs/libwebp) \
+            $([[ $use =~ ' truetype ' ]] && echo media-libs/harfbuzz) \
+            sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -907,20 +917,35 @@ EOF
                 ;;
             firefox)
                 echo 'dev-lang/python sqlite' >> "$buildroot/etc/portage/package.use/firefox.conf"
-                echo 'BINDGEN_EXTRA_CLANG_ARGS="-target $CHOST --sysroot=$SYSROOT -I/usr/include/c++/v1"' >> "$portage/env/firefox.conf"
-                $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
+                echo 'BINDGEN_CFLAGS="--sysroot=$SYSROOT --target=$CHOST -I/usr/include/c++/v1"' >> "$portage/env/firefox.conf"
+                $cat << EOF >> "$portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr ~*
 dev-libs/nss ~*
 media-libs/libvpx *
-=www-client/firefox-81.0.2 ~*
+www-client/firefox ~*
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
+                $cat << 'EOF' > "$portage/patches/www-client/firefox/rust.patch"
+--- a/build/moz.configure/rust.configure
++++ b/build/moz.configure/rust.configure
+@@ -421,8 +421,9 @@
+ 
+ @depends(rustc, target, c_compiler, rust_supported_targets, arm_target, when=rust_compiler)
+ @checking('for rust target triplet')
++@imports('os')
+ def rust_target_triple(rustc, target, compiler_info, rust_supported_targets, arm_target):
+-    rustc_target = detect_rustc_target(target, compiler_info, arm_target, rust_supported_targets)
++    rustc_target = os.getenv('RUST_TARGET', detect_rustc_target(target, compiler_info, arm_target, rust_supported_targets))
+     assert_rust_compile(target, rustc_target, rustc)
+     return rustc_target
+ 
+EOF
                 $sed -n '/^RUST_TARGET="i586-/q0;$q1' "$portage/make.conf" &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
 --- a/build/moz.configure/init.configure
 +++ b/build/moz.configure/init.configure
-@@ -955,7 +955,7 @@
+@@ -952,7 +952,7 @@
      return namespace(
          OS_TARGET=os_target,
          OS_ARCH=os_arch,
@@ -929,16 +954,6 @@ EOF
      )
  
  
---- a/build/moz.configure/rust.configure
-+++ b/build/moz.configure/rust.configure
-@@ -260,6 +260,7 @@
-             (host_or_target.cpu, host_or_target.endianness, host_or_target.os), [])
- 
-         def find_candidate(candidates):
-+            if len([c for c in candidates if c.rust_target == 'i586-unknown-linux-gnu']) >= 1: return 'i586-unknown-linux-gnu'
-             if len(candidates) == 1:
-                 return candidates[0].rust_target
-             elif not candidates:
 --- a/gfx/qcms/transform.cpp
 +++ b/gfx/qcms/transform.cpp
 @@ -32,7 +32,6 @@
@@ -984,28 +999,6 @@ EOF
 EOF
                 test "x${options[arch]}" = xpowerpc &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
---- a/dom/media/AsyncLogger.h
-+++ b/dom/media/AsyncLogger.h
-@@ -89,7 +89,7 @@
-   // message struct, and we still want to do power of two allocations to
-   // minimize allocator slop.
- #if !(defined(XP_LINUX) && !defined(MOZ_WIDGET_ANDROID) && \
--      (defined(__arm__) || defined(__aarch64__)))
-+      (defined(__arm__) || defined(__aarch64__) || defined(__powerpc__)))
-   static_assert(sizeof(MPSCQueue<TracePayload>::Message) <= PAYLOAD_TOTAL_SIZE,
-                 "MPSCQueue internal allocations too big.");
- #endif
---- a/js/src/jit/none/MacroAssembler-none.h
-+++ b/js/src/jit/none/MacroAssembler-none.h
-@@ -100,7 +100,7 @@
- static constexpr Register WasmJitEntryReturnScratch{Registers::invalid_reg};
- 
- static constexpr uint32_t ABIStackAlignment = 4;
--static constexpr uint32_t CodeAlignment = sizeof(void*);
-+static constexpr uint32_t CodeAlignment = 8;
- static constexpr uint32_t JitStackAlignment = 8;
- static constexpr uint32_t JitStackValueAlignment =
-     JitStackAlignment / sizeof(Value);
 --- a/xpcom/reflect/xptcall/xptcall.h
 +++ b/xpcom/reflect/xptcall/xptcall.h
 @@ -71,6 +71,11 @@
@@ -1034,26 +1027,19 @@ EOF
    bool IsIndirect() const { return 0 != (flags & IS_INDIRECT); }
  
 EOF
-                [[ ${options[arch]} == armv7* ]] &&
-                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
                 test -s "$portage/patches/www-client/firefox/i586.patch" &&
-                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf" &&
                 echo 'EXTRA_ECONF="--without-system-png"' >> "$portage/env/firefox.conf"
                 test -s "$portage/patches/www-client/firefox/ppc.patch" &&
-                echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
-                local -r which=/var/db/repos/gentoo/www-client/firefox/firefox-81.0.2.ebuild
-                $sed -i -e 's/.*lto.*gold/#&/;/eapply_user/a\
-sed -i -e /BINDGEN_EXTRA/d "${S}"/config/makefiles/rust.mk' "$buildroot$which"
-                enter /usr/bin/ebuild "$which" manifest
+                echo 'EXTRA_ECONF="--disable-webrtc --enable-linker=bfd"' >> "$portage/env/firefox.conf"
+                if [[ ${options[arch]} == armv7* || -s "$portage/patches/www-client/firefox/i586.patch" ]]
+                then echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
+                fi
                 ;;
             vlc)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
 dev-qt/qtgui X
-media-libs/libepoxy X
-media-libs/mesa X
 media-plugins/alsa-plugins pulseaudio
-x11-libs/gtk+ X
 x11-libs/libxkbcommon X
 EOF
                 [[ ${options[arch]} =~ 64 ]] &&

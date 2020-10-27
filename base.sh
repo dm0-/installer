@@ -729,7 +729,6 @@ then
         {
                 echo 'label: gpt'
                 (( esp )) && echo \
-                    attrs=NoBlockIOProtocol, \
                     size="$esp", \
                     type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, \
                     'name="EFI System Partition"'

@@ -104,7 +104,7 @@ EOF
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
@@ -273,7 +273,7 @@ eval "$(declare -f partition | $sed '/BOOTX64/,${
 s/BOOTX64.EFI\|esp.img/kernel.img/g;/272629760/d;s/4194304 *+ *//
 s/uefi/bootable/g;/^ *if opt bootab/,/^ *fi/{/dd/!d;s/dd/opt bootable \&\& &/;}
 s/C12A7328-F81F-11D2-BA4B-00A0C93EC93B/FE3A2A5D-4F32-41A7-B725-ACCC3285A309/g
-s/NoBlockIOProtocol/'\''"50 51 52 54 56"'\''/g
+s/size=[^ ,]*esp[^ ,]*,/'\''attrs="50 51 52 54 56"'\'', &/g
 s/"EFI System Partition"/KERN-A/g;}')"
 
 function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }

@@ -1,10 +1,10 @@
 packages=()
 packages_buildroot=()
 
-DEFAULT_RELEASE=20.04
+DEFAULT_RELEASE=20.10
 
 function create_buildroot() {
-        local -Ar releasemap=([20.04]=focal)
+        local -Ar releasemap=([20.04]=focal [20.10]=groovy)
         local -r release=${options[release]:=$DEFAULT_RELEASE}
         local -r name=${releasemap[$release]?Unsupported release version}
         local -r image="https://cloud-images.ubuntu.com/minimal/releases/$name/release/ubuntu-$release-minimal-cloudimg-$(archmap)-root.tar.xz"

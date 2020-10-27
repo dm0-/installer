@@ -15,7 +15,6 @@ options+=(
         [arch]=powerpc   # Target PowerPC G4 CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
-        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=          # This platform does not support UEFI.
@@ -104,7 +103,7 @@ function customize_buildroot() {
         echo >> "$portage/make.conf" 'USE="$USE' \
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng gif imagemagick jbig jpeg jpeg2k png svg webp xpm \
+            apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
@@ -126,7 +125,6 @@ function customize_buildroot() {
 app-emulation/qemu *
 net-libs/libslirp *
 sys-firmware/seabios *
-virtual/libusb *
 EOF
         $cat << 'EOF' >> "$portage/package.use/qemu.conf"
 app-emulation/qemu gtk static-user
@@ -190,9 +188,9 @@ EOF
         mkdir root/boot ; echo >> root/etc/fstab PARTLABEL=bootstrap \
             /boot hfs defaults,noatime,noauto,nodev,noexec,nosuid
 
-        # Try to use a persistent /var partition from a plain file system UUID.
+        # Use a persistent /var partition with bare ext4.
         echo "UUID=${options[var_uuid]:=$(</proc/sys/kernel/random/uuid)}" \
-            /var ext4 defaults,nodev,nofail,nosuid >> root/etc/fstab
+            /var ext4 defaults,nodev,nosuid,x-systemd.growfs,x-systemd.rw-only 1 2 >> root/etc/fstab
 
         # Write a script with an example boot command to test with QEMU.
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh

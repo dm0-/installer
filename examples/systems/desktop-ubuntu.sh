@@ -64,6 +64,7 @@ packages+=(
         systemd-container
 
         # GNOME
+        dmz-cursor-theme
         eog
         evince
         gdm3
@@ -82,13 +83,14 @@ packages+=(
         xserver-xorg-{input-libinput,video-{amdgpu,intel,nouveau}}
 
         # Fonts
+        fonts-cantarell
         fonts-dejavu
         fonts-liberation2
         fonts-stix
 
         # Browser
         firefox
-        xul-ext-ublock-origin
+        webext-ublock-origin-firefox
 
         # VLC
         vlc
@@ -96,7 +98,7 @@ packages+=(
 
 # Install proprietary NVIDIA drivers.  Also update the buildroot for dracut.
 function initialize_buildroot() {
-        local -r driver_version=440
+        local -r driver_version=450
         packages+=(
                 "linux-modules-nvidia-$driver_version-generic"
                 "xserver-xorg-video-nvidia-$driver_version"

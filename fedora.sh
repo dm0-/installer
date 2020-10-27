@@ -1,10 +1,10 @@
 packages=(glibc-minimal-langpack)
-packages_buildroot=(glibc-minimal-langpack)
+packages_buildroot=()
 
-DEFAULT_RELEASE=32
+DEFAULT_RELEASE=33
 
 function create_buildroot() {
-        local -r cver=$(test "x${options[release]-}" = x31 && echo 1.9 || echo 1.6)
+        local -r cver=$(test "x${options[release]-}" = x32 && echo 1.6 || echo 1.2)
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
@@ -17,7 +17,7 @@ function create_buildroot() {
         opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
-        packages_buildroot+=(e2fsprogs)
+        packages_buildroot+=(e2fsprogs openssl systemd)
 
         $mkdir -p "$buildroot"
         $curl -L "${image%-Base*}-${options[release]}-$cver-$DEFAULT_ARCH-CHECKSUM" > "$output/checksum"
@@ -33,8 +33,11 @@ function create_buildroot() {
         configure_initrd_generation
         initialize_buildroot
 
+        $cp -a "$buildroot"/etc/resolv.conf{,.orig}
         enter /usr/bin/dnf --assumeyes upgrade
         enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
+        $rm -f "$buildroot"/etc/resolv.conf
+        $cp -a "$buildroot"/etc/resolv.conf{.orig,}
 
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
@@ -181,8 +184,38 @@ function verify_distro() {
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
 
-        if test "x${options[release]}" = x32
+        if test "x${options[release]}" = x33
         then $gpg --import << 'EOF'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBF4wBvsBEADQmcGbVUbDRUoXADReRmOOEMeydHghtKC9uRs9YNpGYZIB+bie
+bGYZmflQayfh/wEpO2W/IZfGpHPL42V7SbyvqMjwNls/fnXsCtf4LRofNK8Qd9fN
+kYargc9R7BEz/mwXKMiRQVx+DzkmqGWy2gq4iD0/mCyf5FdJCE40fOWoIGJXaOI1
+Tz1vWqKwLS5T0dfmi9U4Tp/XsKOZGvN8oi5h0KmqFk7LEZr1MXarhi2Va86sgxsF
+QcZEKfu5tgD0r00vXzikoSjn3qA5JW5FW07F1pGP4bF5f9J3CZbQyOjTSWMmmfTm
+2d2BURWzaDiJN9twY2yjzkoOMuPdXXvovg7KxLcQerKT+FbKbq8DySJX2rnOA77k
+UG4c9BGf/L1uBkAT8dpHLk6Uf5BfmypxUkydSWT1xfTDnw1MqxO0MsLlAHOR3J7c
+oW9kLcOLuCQn1hBEwfZv7VSWBkGXSmKfp0LLIxAFgRtv+Dh+rcMMRdJgKr1V3FU+
+rZ1+ZAfYiBpQJFPjv70vx+rGEgS801D3PJxBZUEy4Ic4ZYaKNhK9x9PRQuWcIBuW
+6eTe/6lKWZeyxCumLLdiS75mF2oTcBaWeoc3QxrPRV15eDKeYJMbhnUai/7lSrhs
+EWCkKR1RivgF4slYmtNE5ZPGZ/d61zjwn2xi4xNJVs8q9WRPMpHp0vCyMwARAQAB
+tDFGZWRvcmEgKDMzKSA8ZmVkb3JhLTMzLXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
+cmc+iQI4BBMBAgAiBQJeMAb7AhsPBgsJCAcDAgYVCAIJCgsEFgIDAQIeAQIXgAAK
+CRBJ/XdJlXD/MZm2D/9kriL43vd3+0DNMeA82n2v9mSR2PQqKny39xNlYPyy/1yZ
+P/KXoa4NYSCA971LSd7lv4n/h5bEKgGHxZfttfOzOnWMVSSTfjRyM/df/NNzTUEV
+7ORA5GW18g8PEtS7uRxVBf3cLvWu5q+8jmqES5HqTAdGVcuIFQeBXFN8Gy1Jinuz
+AH8rJSdkUeZ0cehWbERq80BWM9dhad5dW+/+Gv0foFBvP15viwhWqajr8V0B8es+
+2/tHI0k86FAujV5i0rrXl5UOoLilO57QQNDZH/qW9GsHwVI+2yecLstpUNLq+EZC
+GqTZCYoxYRpl0gAMbDLztSL/8Bc0tJrCRG3tavJotFYlgUK60XnXlQzRkh9rgsfT
+EXbQifWdQMMogzjCJr0hzJ+V1d0iozdUxB2ZEgTjukOvatkB77DY1FPZRkSFIQs+
+fdcjazDIBLIxwJu5QwvTNW8lOLnJ46g4sf1WJoUdNTbR0BaC7HHj1inVWi0p7IuN
+66EPGzJOSjLK+vW+J0ncPDEgLCV74RF/0nR5fVTdrmiopPrzFuguHf9S9gYI3Zun
+Yl8FJUu4kRO6JPPTicUXWX+8XZmE94aK14RCJL23nOSi8T1eW8JLW43dCBRO8QUE
+Aso1t2pypm/1zZexJdOV8yGME3g5l2W6PLgpz58DBECgqc/kda+VWgEAp7rO2A==
+=EPL3
+-----END PGP PUBLIC KEY BLOCK-----
+EOF
+        else $gpg --import << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBF1RVqsBEADWMBqYv/G1r4PwyiPQCfg5fXFGXV1FCZ32qMi9gLUTv1CX7rYy
@@ -212,37 +245,6 @@ oNadc9uzjqKlOrmrdIR3Bz38SSiWlde5fu6xPqJdmGZRNjXtcyJlbSPVDIloxw==
 =QWRO
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        else $gpg --import << 'EOF'
------BEGIN PGP PUBLIC KEY BLOCK-----
-
-mQINBFxq3QMBEADUhGfCfP1ijiggBuVbR/pBDSWMC3TWbfC8pt7fhZkYrilzfWUM
-fTsikPymSriScONXP6DNyZ5r7tgrIVdVrJvRIqIFRO0mufp9HyfWKDO//Ctyp7OQ
-zYw6NVthO/aWpyFfJpj6s4iZsYGqf9gByV8brBB8v8jEsCtVOj1BU3bMbLkMsRI9
-+WiLjDYyvopqNBQuIe8ogxSxpYdbUz6+jxzfvhRoBzWdjITd//Gjd90kkrBOMWkO
-LTqO133OD1WMT08G5NuQ4KhjYsVvSbBpfdkTcNuP8gBP9LxCQDc+e1eAhZ95g3qk
-XLeKEK9j+F+wuG/OrEAxBsscCxXRUB38QH6CFe3UxGoSMnBi+jEhicudo+ItpFOy
-7rPaYyRh4Pmu4QHcC83bNjp8NI6zTHrBmVuPqkxMn07GMAQav9ezBXj6umqTX4cU
-dsJUavJrJ3u7rT0lhBdiGrQ9zPbL07u2Kn+OXPAC3dKSf7G8TvwNAdry9esGSpi3
-8aa1myQYVZvAlsIBkbN3fb1wvDJE5czVhzwQ77V2t66jxeg0o9/2OZVH3CozD2Zj
-v28LHuW/jnQHtsQ0fUyQYRmHxNEVkW10GGM7fQwxzpxFFS1O/2XEnfMu7yBHZsgL
-SojfUct0FhLhEN/g/IINX9ZCVrzK5/De27CNjYE1cgYD/lTmQ0SyjfKVwwARAQAB
-tDFGZWRvcmEgKDMxKSA8ZmVkb3JhLTMxLXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
-cmc+iQI+BBMBAgAoAhsPBgsJCAcDAgYVCAIJCgsEFgIDAQIeAQIXgAUCXGrkTQUJ
-Es8P/QAKCRBQyzkLPDNZxBmDD/90IFwAfFcQq5ENl7/o2CYQ9k2adTHbV5RoIOWC
-/o9I5/btn1y8WDhPOUNmsgbUqRqz6srlVplg+LkpIj67PVLDBwpVbCJC8o1fztd2
-MryVqdvu562WVhUorII+iW7nfqD0yv55nH9b/JR1qloUa8LpeKw84JgvxF5wVfyR
-id1WjI0DBk2taFR4xCfU5Tb262fbdFj5iB9xskP7oNeS29+SfDjlnybtlFoqr9UA
-nY1uvhBPkGmj45SJkpfP+L+kGYXVaUd29M/q/Pt46X1KDvr6Z0l8bSUEk3zfcNdj
-uEhtHBqSy1UPPAikGX1Q5wGdu7R7+mv/ARqfI6OC44ipoOMNK1Aiu6+slbPYphwX
-ighSz9yYuG0EdWt7akfKR0R04Kuej4LXLWcxTR4l8XDzThYgPP0g+z0XQJrAkVhi
-SrzICeC3K1GPSiUtNAxSTL+qWWgwvQyAPNoPV/OYmY+wUxUnKCZpEWPkL79lh6CM
-bJx/zlrOMzRumSzaOnKW9AOliviH4Rj89OmDifBEsQ0CewdHN9ly6g4ZFJJGYXJ5
-HTb5jdButTC3tDfvH8Z7dtXKdC4iqJCIxj698Xn8UjVefZQ2nbv5eXcZLfHtvbNB
-TTv1vvBV4G7aiHKYRSj7HmxhLBZC8Y/nmFAemOoOYDpR5eUmPmSbFayoLfRsFXmC
-HLs7cw==
-=6hRW
------END PGP PUBLIC KEY BLOCK-----
-EOF
         fi
         $gpg --verify "$1"
         test x$($sed -n '/=/{s/.* //p;q;}' "$1") = x$($sha256sum "$2" | $sed -n '1s/ .*//p')
@@ -254,8 +256,39 @@ function enable_rpmfusion() {
         local key="RPM-GPG-KEY-rpmfusion-free-fedora-${options[release]}"
         local url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
-if test "x${options[release]}" = x32
+if test "x${options[release]}" = x33
 then rpmkeys --import /dev/stdin << 'EOG'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBF2tu8EBEADnI6bmlE7ebLuYSBKJavk7gwX8L2S0lDwtmAFmNcxQ/tAhh5Gx
+2RKEneou12pSxav8MvbKOr4IpJLLmuoQMLYkbQRHovgVfDYdtvK9T8tZH51ACtnC
+KKr9SucnKhWpDk3/n/djV0I2qSesE6QcJVrh66bT/8nbyIFbbiYLOgE88YAX5Wdj
+TkgmYXJ54l1MP/3N64pFlmk6myYCrLh7cibFYLZOW2Xwfq6Go6HOpGn9Cazb+T6m
+LALkVPERu2QkcUhMqy/slD5tFFb7DW1gkwnYiu5PKwThW7laZgmw2yAgDV+JccdK
+D9ZHALmy9GyQ1ZjDptpa5BObE5vazbuAbSndoIqwaMxCrlqhIYdmqz4m/HJ9BaC0
+mRSkT6N9SqytZXFhu5/Ld6+/Ol3b+q28bnV64qQrDH6hgnrRdqCQpm8g7tZFuk5X
+JsB/A+EfI2kE6YXqWaGdEx0XcqOv97n6sRZNweOHX3vSM0eLwmM2dpgc7RvMfcqr
+73ylZ9CnWVUD6cl+wE8SnGnVVqYau2spZFzKVAcfi/Zwvh6wM7/83XC2mkIHmoFR
+OY5aDWFhoFZFgiHHnmDv6kACNmSHb/oYRkvwQ+JhAQu4I9CYw1sxaUDjwtt7a+4I
+mBZM8WuvAVLkqnF+MJetiL15/W834HjCNITV03t9593T6Z1Dxpfv4hy7YwARAQAB
+tFVSUE0gRnVzaW9uIGZyZWUgcmVwb3NpdG9yeSBmb3IgRmVkb3JhICgyMDIwKSA8
+cnBtZnVzaW9uLWJ1aWxkc3lzQGxpc3RzLnJwbWZ1c2lvbi5vcmc+iQJFBBMBCAAv
+FiEE6aSRo94keBTn4Gfq4G+OzdZR/y4FAl2tu8ECGwMECwkIBwMVCAoCHgECF4AA
+CgkQ4G+OzdZR/y4ZQhAAmF5A4XC9ymd94BFwsbbpCnx2YlfmsZwT1QzBu9njjkH7
+MC4THknYe2B/muE5dPu3NseZMzue1Ou4KbMz4wq82731prLRu+iHAxAxJ1qd8whA
+QGuRJAg8+YEXKhpwpD/8P/xJo9IRmPxPM+6mQVTlASv34CEIGff1vJr40tNiU53P
+PZq9SWD3/uG84PQRmGXetfF2K3NkXqzkvQSM68JZiYR2+wMkoO9f72B7LTBrfkwy
+RcFPA7kj65pysB+l2wez03Dh/MyA3LTusd9M6FGiSOUVpQZ+NUFipIisS3vh/Bgp
+zMsj1NSsMLjUDcX8stR8GfVgTxSgWwHTNl75XwTZpJOKMoj97kh9zzLwBhZ1W+xo
+8s2W7YqVnOUl8rPm7ZbOefGkamNg8bhqcyNIEbHqR5QZVzDBT2AxVcB6jsxSHf5b
+sb+KEJff4g6E4fWPA/IYdtJ7DItbVXnkAjqD7ADUh7Xq7pOgfC/4Cledf27x73m+
+sdBvKsEBrroAsX/v4z46mQApszkfjTUAXwj2lUT+ujoktJHXqR71jbY0+8JX6Fyw
+6ZW0emxR++bt9ksLcsNmjOQP9TmQpi2CW4Z+Ol2tlwtlnKAo6ecx4aacHKg+FYuQ
+HTJRq6E6GpCPn1avf1v797RM+3zzw9TYkadfVLIQQ4HYbYzienOgGGporclrtrQ=
+=oOVZ
+-----END PGP PUBLIC KEY BLOCK-----
+EOG
+else rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBFyps4IBEADNQys3kVRoIzE+tbfUSjneQWYYDuONJP3i9tuJjKC6NJJCDBxB
@@ -286,37 +319,6 @@ SvzIApckQfmMKIzPJ4Mju9RmjWOQKA/PFc1RynIhemRfYCfVvCuMVSHxsqsF
 =hrxJ
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-else rpmkeys --import /dev/stdin << 'EOG'
------BEGIN PGP PUBLIC KEY BLOCK-----
-
-mQINBFvEZi0BEADeq0E2/aYDWMYnUBloxAamr/DBo21/Xida69lQg/C8wGB/jz+i
-J9ZDEnLRDGlotBl3lwOhbzwXxk+4azH77+JIuUDiPkBb6e7rld0EMWNykLuWifV0
-Eq7qVBtr1cQfvLMDySvzIBPEGy3IbFnr7H7diR+A0WiwltVLcv4wW/ESRZUChBxy
-TGgQrYk98TGiJGMWlwi7IzopOliAYrc7oM1XyZQlTffhS5b0ygiwIxGOOjVR3waB
-m//0PVj8hZ+kHBgn2hXnLlWBkCRosxHmg+xcosUBgfBqKBPN8M800F6svvZS1msN
-mef7y2QytA9LSpey6mznqKEY8x8+9Ub4FCGiEEw8SoDCU48NpmADr6PXoJAtihEi
-4NuBiqzpabKDR7IfhEWNgVM840OCmizFyT9L++SDZmww8rUHx55VOzVEf4fSRPXY
-gduexRo377+bj+wdpKfrUddkbdxuDVWweq8k5fZz7Y7HYtM60j9WxtUoLF37MNgZ
-5bwrOU2NhLP+aqwyeE86/BqDdKVzxeq+PAaIl1ujTqbmJYJO0Kmt4G+GPhj6TpTq
-+X+Ci+YskPEcp7dqpH38rpuA3ZAVH4tHkW9UFFBHrvnxuOLrrAflondgLTo1xNo6
-E8Qrq7PGCjq/FdVM9tC3hupeKuXz5jaf65qbln4COromTXm5KyNOlWVgMwARAQAB
-tFNSUE0gRnVzaW9uIGZyZWUgcmVwb3NpdG9yeSBmb3IgRmVkb3JhICgzMSkgPHJw
-bWZ1c2lvbi1idWlsZHN5c0BsaXN0cy5ycG1mdXNpb24ub3JnPokCRQQTAQgALxYh
-BFmn/gf2ZMGydofF0m3u8FHEgZN6BQJbxGYtAhsDBAsJCAcDFQgKAh4BAheAAAoJ
-EG3u8FHEgZN6E5EQAN5kzvCyT/Ev6H/rS4QQE6+Zxb9YCGnlUOwPXcwtAqjGl4Hn
-kt9LXnrd4DThLBLEGZUpBe5/oNuZOLWRWvTG7UHR+pBdtxIyqUlxBhiIwSe+Q7rZ
-gehiXl2PhnaBHyTLoFGczNWiqKSIORnSmVg4SXuteG4So0PzRWBD9r2/7P/mZGyd
-wyiH34YUzsedPOO1sER8o+tQ6C9RlRmhZRQ9hBJIymga1FfCms6X5lEFfbsuSjEt
-acLvLJuO7bxfoYPiC2l+psFAitgT7UeEm/KW/Ul2M2YVONu1pRCkEoJzJ4B1ki9/
-MK6Kw9QyQ6KXmOmzckJaInZQrwtcffjsdCjdQgoPUA//PVsysM4dtE7TPx2iRC2S
-Vci0eGT+XV3tUlDDlMLfx6PhpfAddN3okGIWE0Nwc9yNwwn+R2H/Nrw0Q74qiwP7
-uCgzGQBEKOATwJdm/EbtzSOzTgeunrlb1HO+XgjE+VBxp9vdzS/sOecixPyGdjW3
-B1NIHAU1O9tgQcBNSJ4txKEnKHw92HViHLXpOVIIeXW+2bjtgTtTE3TfAYVnyLMn
-uplg21hoH2L+fC281fgV64CzR+QjOiKWJSvub6wzy1a7/xPce8yaE89SwmxxVroS
-Ia81vrdksRmtLwAhgJfh6YoSdxKWdtB+/hz2QwK+lHV368XzdeAuWQQGpX3T
-=NNM4
------END PGP PUBLIC KEY BLOCK-----
-EOG
 fi
 curl -L "$url" > rpmfusion-free.rpm
 curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
@@ -328,8 +330,40 @@ EOF
         key=${key//free/nonfree}
         url=${url//free/nonfree}
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
-if test "x${options[release]}" = x32
+if test "x${options[release]}" = x33
 then rpmkeys --import /dev/stdin << 'EOG'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBF2tvGQBEAC5Q2ePLZZafOkFhYHpGZdRRBCcCd+aiLATofFV8+FjPuPLL/3R
+7fx9RRukL+XKs6K9houj/oYVHmBY7II1mgeRzZHo6KygnM9ph3RKqQDse4TR9+VX
+rctsBRikNc7GViSoiPHLRAJeTrlwYRjPHYfF64nFtcPYfPIlGZkEG8mrHbTjkh36
+NAlqb3XC0cOSsKQV5f4Wn8fAUepYUkTxA74sVHLSDcBRj3fGfizkiHohy4OjNPij
+1VVvfUQXIGYwEDnrd3JF5c2o6B4MfH7h1aN+xG7GJTRswgjQtYUayUOySD5mdZ9u
+lUNfPrIAvwyTnc1IvoJUGlf8wSqz8NmjTHykUU+f6Dldb4JKNavnYaVlmDH4HfK+
+FVdAD/1pG/6HL94clf/g8LR3sQ0KU/UZJKbDA81n1X04OREfqdjr81U84iyKyb8S
++5nwYuJvxoe+wHg+iHAK0CXYel6V1GR51yka8+sETXyEjGvXksPMQDVPGIDzDfPr
+QVijtL3/1Pgkuz1ZvvXmuxD94uV2rBvjKl1NFSWNXId2J+vI5omllGHR3qskOHFa
+My9IQkbV4sMoycW/fP5xbwGhVi5q5Gjo7h6J7TIzyMf4gl6PJTp0AFhOZAMA/dXY
+nLDnw+qz+iq0B3I14JSLvgCH/uSUEMl5970+COK7wmPTU7I3Hq6PMbzvqQARAQAB
+tFhSUE0gRnVzaW9uIG5vbmZyZWUgcmVwb3NpdG9yeSBmb3IgRmVkb3JhICgyMDIw
+KSA8cnBtZnVzaW9uLWJ1aWxkc3lzQGxpc3RzLnJwbWZ1c2lvbi5vcmc+iQJFBBMB
+CAAvFiEEeb24j5u/c5EP1Albair5YZSEPGUFAl2tvGQCGwMECwkIBwMVCAoCHgEC
+F4AACgkQair5YZSEPGW0Ig/+NJf5+KzbRNuFvvGURQI7SYmYtFXkrW4n6rLPWeIV
+UHvd/ko74aMVds7hTWeC0cLpjRMSPuwp9xjqb6NvQaqcUK4IwHzlXocait2HzSl+
+h2jI3/wSQXqNkvNrgD3rkYZZZ/x7EBBTSTRUpFPq3yHA/BBXbZNEvFsXOmFAy5y+
+E5iYnfyjYKHWd0ZwIliWWtK+V5TU54WqHqKF5J2iIDgANkLXiyqx6+LJ6Ng0YfCQ
+fO7IMfwtgUt34AfrHWnq0S9BW0hmtPvcYjTtveQKCeGfdMcpRRJsOrvaDDKo1Wmr
+IcvGO2VwiF9i19ppghXOSy7q51wTlEqtj3PWYhmJYcRq8Jr1SqjGx73QhUPtsF67
+g3vjNEm8PE7pj7vg52BJlzkx6yU+hH5ZNBRM5ll4ZjiX+X7EzKa9so83uszuwoQA
+mScTwyyQDNeflnUwiSgZc7PEv1i0BYIHVK7VjmamhOWZRHaaYFCc//gcmu10TJLn
+ZCGF2ZDkAdUT6EoWBsT/QCgYSFggrjH9lgKqC5ON8+F5DO1RQe84irgz9jjE9+62
+kgQgWZ6F2RZm5/R28DHdAetji50XbnmXgAk/u9u2Hw2bVVJfJ0WpEVcPvA1L86SE
+8i8p1fmzljwRazZAksk5Zh2QfaM0jlMYHWbKpbXQcX19Uerm7D9IkciZvDAmgBYV
+S6Y=
+=rOqq
+-----END PGP PUBLIC KEY BLOCK-----
+EOG
+else rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBFyptB8BEAC2C18FrMlCbotDF+Ki/b1sq+ACh9gl9OziTYCQveo4H/KU6PPV
@@ -358,37 +392,6 @@ jTKf3If3e6unzMNO5945DgvXcx09G0QqgdrRLprT+bj6581YbOnzvZdUqgOaw3M5
 pGdE6wHro7qtbp/HolJYx07l0AW3AW9v+mZSIBXp2UyHXzFN5ycwpgXo+rQ9mFP9
 wzK/najg8b1aC99psZhS/mVVFVQJC5Ozz4j/AMIaXQPaFhAFd6uRQPu7fZX/kjmN
 =U9qR
------END PGP PUBLIC KEY BLOCK-----
-EOG
-else rpmkeys --import /dev/stdin << 'EOG'
------BEGIN PGP PUBLIC KEY BLOCK-----
-
-mQINBFvEZjsBEADo+8aA0e20azf2vU4JJ2rVHnr9RpVUcRYmr/rFEsEeYMIvDAYz
-ssprKuuz89XTe5OR8RSrTIVFOTqYrZYxuQbR35rzr9wpk45szcUMDNzi0L83AemS
-v1JgBF2gSoF9Ajbhbdwxxqje+yn86u0xWWsG4Xu1N/KZE/oyqAYwWzH9nizrSRSv
-SCsjZMk4SwEPB0lp2zTf21k5YwIv05+ubHq5/h9WScjjoA4LCJHIikNptONFemhS
-Ys3Vsacd0g4mAx3AyU8gGaFkQXapwhQWi1/UCbqFT/3S1ZApYthdYBpFwSv7PgUa
-BBJGFzwxrch9NF1wHivO4uzmPK2V8REKt2EgwPUfaAYCabPxxFFsWNOimv1zz3Wb
-2DPZfE1YDjAi4qNfXENkqSReys7ETi2fGw2pr6PQtLJFYLbpKwXVvdr0PuAPPNQo
-kCAuCZKnNitxsxyaGYxN2gq3D6excKpo+3JQAdRTdC+vAFACs41QDLCLBYQUL4zn
-eXR/hkSmyeEDyrkuRztqUxI0eobMOS6KI6c2u+tYhWQY1OH1piV1aOa4OQQKFdZH
-6WQAnbMqafG4lPmEO5cDT4JNRzWfyZXXa750mq6X3r2iRZMlroHoJAMUmF6+r8vP
-AfjC3Haqfbp6HlNpTET8GU8eeeNQM33Qpq1H2tGJPIt3ZVHOTzjjMnvFdwARAQAB
-tFZSUE0gRnVzaW9uIG5vbmZyZWUgcmVwb3NpdG9yeSBmb3IgRmVkb3JhICgzMSkg
-PHJwbWZ1c2lvbi1idWlsZHN5c0BsaXN0cy5ycG1mdXNpb24ub3JnPokCRQQTAQgA
-LxYhBEyrlRp0k9ksrewEIZzmOgNUqGCSBQJbxGY7AhsDBAsJCAcDFQgKAh4BAheA
-AAoJEJzmOgNUqGCSkzwP/35oDsqFQNZGT2PJ3BpLkK/e8INCRsBgUHHzQiGri69v
-OBDt6RoJwKEYfsx7ps0oRhci6NZ5aTJL4g25xBibWB9dvce4c25Kho7VHassxXzv
-j6MrAuFNFHWpNNGXgiBTfMBOqcLxfx550wJyzyUVxxsmjbRm8Irz/ijZXavzyTw5
-xNmZw6a2XH1Zx9bNdv+o5I5pkmdJJGSw6BbI7j5xysV+A5yIFtCnKCwhsXrGRjnR
-9V8MuocAXjzayLWJ4E0daZkJlyR5mhYuae4PR1wt75qj8UesjWTAniQFlWMe52+G
-Iqukb6TvxrLLTdaFi8orpoDG5PsdQ2kfyRQDcK5UMM4X8BC59Bq0NtuIezMio40O
-1wGZFf1tUdGCImf5JtboKRTeAp32uvPjYR1Bbya8Yup6OuCrKDrdOdqKlULFp3H+
-ia8W8hFCaGgvnpNveoBLFcMq6xxorQ4LhEcwnLABs9Y8UnL5Ao2ozijVA7Pkhdep
-dt5CYmEq77bxpQT1tLUt9jp246gZgMQQDZAR6BW+fg3FCpXDWguxF+Xzuf7JuL9O
-V2SKYTbdiljladNZO0sq566U6GJptKhl8pHlihkNyHc6jkQGxnzpzFolTUl66jbc
-f9jO+f+R9C+FDT1fcPPIolYTBRCvYQ9B6c+olHVTNNYUmW36TThsbXiYeqQw4JPA
-=Wn2x
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 fi
@@ -488,5 +491,5 @@ done < <(rpm --root="$PWD/root" -qal "$@")
 
 # WORKAROUNDS
 
-# The Fedora 30 implementation is preserved separately for i686 support.
-test "x${options[release]-}" != x30 || . legacy/fedora30.sh
+# EOL Fedora releases are still available, but they should not be used anymore.
+[[ ${options[release]-} != 3[01] ]] || . "legacy/fedora${options[release]}.sh"
