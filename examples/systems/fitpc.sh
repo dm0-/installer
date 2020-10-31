@@ -12,7 +12,6 @@ options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
         [gpt]=1          # Generate a ready-to-boot GPT disk image.
-        [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
         [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=          # This platform does not support UEFI.

@@ -153,7 +153,13 @@ EOF
         test -z "$profile" && $rm -f "$portage/make.profile" ||
         $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
         $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto=jobserver&/' "$portage/make.conf"
-        $cat <(echo -e "\nCHOST=\"$host\"\nRUST_TARGET=\"$(archmap_rust "$arch")\"") - << 'EOF' >> "$portage/make.conf"
+        $cat <(echo) - << EOF >> "$portage/make.conf"
+CHOST="$host"
+GOARCH="$(archmap_go "$arch")"$(
+[[ $arch == armv[5-7]* ]] && echo -e "\nGOARM=\"${arch:4:1}\"")
+RUST_TARGET="$(archmap_rust "$arch")"
+EOF
+        $cat << 'EOF' >> "$portage/make.conf"
 ROOT="/usr/$CHOST"
 BINPKG_COMPRESS="zstd"
 BINPKG_COMPRESS_FLAGS="--fast --threads=0"
@@ -191,6 +197,7 @@ EOF
 app-crypt/gnupg cross-libusb.conf
 dev-python/pypax cross-python.conf
 gnome-base/librsvg cross-glib-mkenums.conf
+media-libs/gst-plugins-bad cross-glib-mkenums.conf
 media-libs/gst-plugins-base cross-glib-mkenums.conf
 media-libs/gstreamer cross-glib-mkenums.conf
 net-wireless/wpa_supplicant cross-libnl.conf
@@ -268,6 +275,9 @@ echo 'dev-libs/dbus-glib **' >> "/usr/$host/etc/portage/package.accept_keywords/
 ## Support cross-compiling musl (#732482).
 sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support cross-compiling desktop-file-utils with Emacs (#751775).
+sed -i -e 's,.*app-editors/emacs.*",",;s,^BDEPEND=",&emacs? ( app-editors/emacs ),' /var/db/repos/gentoo/dev-util/desktop-file-utils/desktop-file-utils-*.ebuild
+for ebuild in /var/db/repos/gentoo/dev-util/desktop-file-utils/desktop-file-utils-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support cross-compiling with LLVM on EAPI 7 (#745744).
 sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
 ## Support erofs-utils (#701284).
@@ -419,7 +429,7 @@ function distro_tweaks() {
 
         # Set some sensible key behaviors for a bare X session.
         test -x root/usr/bin/startx &&
-        mkdir -p  root/etc/X11/xorg.conf.d &&
+        mkdir -p root/etc/X11/xorg.conf.d &&
         cat << 'EOF' > root/etc/X11/xorg.conf.d/00-keyboard.conf
 Section "InputClass"
         Identifier "system-keyboard"
@@ -779,6 +789,15 @@ function archmap() case "${*:-$DEFAULT_ARCH}" in
     *) return 1 ;;
 esac
 
+function archmap_go() case "${*:-$DEFAULT_ARCH}" in
+    aarch64)  echo arm64 ;;
+    arm*)     echo arm ;;
+    i[3-6]86) echo 386 ;;
+    riscv64)  echo riscv64 ;;
+    x86_64)   echo amd64 ;;
+    *) return 1 ;;
+esac
+
 function archmap_kernel() case "${*:-$DEFAULT_ARCH}" in
     aarch64)  echo arm64 ;;
     arm*)     echo arm ;;
@@ -866,10 +885,6 @@ function fix_package() {
                 $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
 net-libs/webkit-gtk *
 sys-apps/bubblewrap *
-EOF
-                $cat << 'EOF' >> "$portage/package.use/emacs.conf"
-dev-util/desktop-file-utils -emacs
-dev-vcs/git -emacs
 EOF
                 echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 script << 'EOF'

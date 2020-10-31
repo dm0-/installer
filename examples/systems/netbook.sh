@@ -196,6 +196,9 @@ EOF
         # Fix the screen contrast with udev in case of an unpatched kernel.
         echo > root/usr/lib/udev/rules.d/50-wm8505-fb.rules \
             'ACTION=="add", SUBSYSTEM=="platform", DRIVER=="wm8505-fb", ATTR{contrast}="128"'
+
+        # Include a mount point for a writable boot partition.
+        mkdir root/boot
 }
 
 # Override the UEFI function as a hack to produce the U-Boot files.
@@ -275,7 +278,16 @@ CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
+# Support VFAT (which is not included when not using UEFI).
+CONFIG_VFAT_FS=m
+CONFIG_FAT_DEFAULT_UTF8=y
+CONFIG_NLS=m
+CONFIG_NLS_DEFAULT="utf8"
+CONFIG_NLS_CODEPAGE_437=m
+CONFIG_NLS_ISO8859_1=m
+CONFIG_NLS_UTF8=m
 # Support encrypted partitions.
+CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
 # Support FUSE.
