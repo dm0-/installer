@@ -127,8 +127,9 @@ function customize_buildroot() {
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
-        # Disable LTO for packages broken with this architecture/ABI.
-        echo 'media-libs/opus no-lto.conf' >> "$portage/package.env/no-lto.conf"
+        # Stop this package from building unexecutable NEON code (#752069).
+        echo 'EXTRA_ECONF="--disable-intrinsics"' >> "$portage/env/opus.conf"
+        echo 'media-libs/opus opus.conf' >> "$portage/package.env/opus.conf"
 
         # Skip building Rust for this system because of one tiny library.
         $cp -t "$portage/package.accept_keywords" "$buildroot/etc/portage/package.accept_keywords/librsvg.conf"

@@ -655,12 +655,12 @@ function finalize_packages() {
                 done
         )
 
-        # Work around systemd-repart not handling verity-backing devices yet.
+        # Work around systemd-repart not finding the storage device.
         if opt verity && ! opt ramdisk && test -d root/usr/lib/repart.d
         then
                 local -r gendir=/usr/lib/systemd/system-generators
                 mkdir -p "root$gendir"
-                cat << 'EOF' > "root$gendir/repart-verity-root"
+                cat << 'EOF' > "root$gendir/repart-disk-wait"
 #!/bin/bash -eu
 table=( $(dmsetup table "$(findmnt --noheadings --output=source --raw /)") )
 [[ ${table[2]} == verity ]] || exit 0  # not verity root
@@ -670,16 +670,10 @@ dev=/dev/$(lsblk --nodeps --noheadings --output=PKNAME "$part")
 test -b "$dev" || exit 0  # failed to find the partition's parent device
 unit=$(systemd-escape --path "$dev").device
 mkdir -p /run/systemd/system/systemd-repart.service.d
-echo > /run/systemd/system/systemd-repart.service.d/verity.conf "\
-# Specify the backing disk of the verity root device.
-[Unit]
-After=$unit
-Wants=$unit
-[Service]
-ExecStart=
-ExecStart=/usr/bin/systemd-repart --dry-run=no $dev"
+echo -e "[Unit]\nAfter=$unit\nWants=$unit" \
+    > /run/systemd/system/systemd-repart.service.d/wait.conf
 EOF
-                chmod 0755 "root$gendir/repart-verity-root"
+                chmod 0755 "root$gendir/repart-disk-wait"
         fi
 
         # Save /etc/os-release outside the image after all customizations.

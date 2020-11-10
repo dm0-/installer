@@ -128,23 +128,45 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept a52dec-0.7.4 to fix host dependencies.
+        echo '<media-libs/a52dec-0.7.5 ~*' >> "$portage/package.accept_keywords/a52dec.conf"
+        # Accept acl-2.2.53 to fix host dependencies.
+        echo -e 'sys-apps/acl *\nsys-apps/attr *' >> "$portage/package.accept_keywords/acl.conf"
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept fontconfig-2.13.1 to fix host dependencies.
         echo 'media-libs/fontconfig *' >> "$portage/package.accept_keywords/fontconfig.conf"
+        # Accept gdbm-1.18.1 to fix host dependencies.
+        echo '<sys-libs/gdbm-1.18.2 ~*' >> "$portage/package.accept_keywords/gdbm.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
+        # Accept libidn-1.36 to fix host dependencies.
+        echo 'net-dns/libidn *' >> "$portage/package.accept_keywords/libidn.conf"
+        # Accept libpcap-1.9.1 to fix host dependencies.
+        echo 'net-libs/libpcap *' >> "$portage/package.accept_keywords/libpcap.conf"
         # Accept libpng-1.6.37 to fix host dependencies.
         echo '<media-libs/libpng-1.6.38 ~*' >> "$portage/package.accept_keywords/libpng.conf"
+        # Accept libusb-1.0.23 to fix host dependencies.
+        echo '<dev-libs/libusb-1.0.24 ~*' >> "$portage/package.accept_keywords/libusb.conf"
+        # Accept libvpx-1.9.0 to fix debuginfo stripping.
+        echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
+        # Accept popt-1.18 to fix host dependencies.
+        echo '<dev-libs/popt-1.19 ~*' >> "$portage/package.accept_keywords/popt.conf"
+        # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
+        echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
+        # Accept speex-1.2.0 to fix host dependencies.
+        echo -e '<media-libs/speex-1.2.1 ~*\n<media-libs/speexdsp-1.2.1 ~*' >> "$portage/package.accept_keywords/speex.conf"
         # Accept sudo-1.9.3 to fix glibc-2.32 support.
-        echo '<app-admin/sudo-1.9.4 ~*' >> "$portage/package.accept_keywords/sudo.conf"
+        echo 'app-admin/sudo *' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
+        # Accept X11 stuff to fix host dependencies and build ordering.
+        echo -e 'x11-libs/libXau ~*\nx11-libs/libXtst ~*\nx11-libs/libxshmfence ~*\nx11-misc/notification-daemon ~*' >> "$portage/package.accept_keywords/x11.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -226,7 +248,7 @@ EOF
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
         # Block forcing compiling Rust for native build tools.
-        echo '>=gnome-base/librsvg-2.41 -*' >> "$portage/package.accept_keywords/librsvg.conf"
+        echo -e '<gnome-base/librsvg-2.41 *\n>=gnome-base/librsvg-2.41 -*' >> "$portage/package.accept_keywords/librsvg.conf"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
@@ -259,6 +281,20 @@ x11-libs/gtk+ X
 EOF
         # Prevent accidentally disabling required modules.
         echo 'dev-libs/libxml2 python' >> "$portage/profile/package.use.force/libxml2.conf"
+
+        # Write a portage script for querying USE flags later.
+        $cat << 'EOF' > "$buildroot/usr/bin/using"
+#!/usr/bin/env python3
+import portage, sys
+def using(atom, flag):
+    settings = portage.config(clone=portage.settings)
+    matches = portage.portdb.match(atom)
+    if len(matches) >= 1:
+        settings.setcpv(portage.best(matches), mydb=portage.portdb)
+    return flag in settings.get('PORTAGE_USE', '').split()
+sys.exit(0 if len(sys.argv) == 3 and using(sys.argv[1], sys.argv[2]) else 1)
+EOF
+        $chmod 0755 "$buildroot/usr/bin/using"
 
         initialize_buildroot
 
@@ -349,17 +385,17 @@ function install_packages() {
             sys-devel/gcc virtual/libc virtual/os-headers
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
-        # These packages must be installed outside the dependency graph.
+        # This package must be installed outside the dependency graph.
+        opt selinux &&
         emerge --changed-use --jobs=4 --nodeps --oneshot --verbose \
-            ${options[selinux]:+sec-policy/selinux-base} \
-            x11-base/x{cb,org}-proto
+            sec-policy/selinux-base
 
         # Cheat bootstrapping packages with circular dependencies.
-        local -r use=" $(portageq envvar USE) "
-        USE='-* kill truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
-            $([[ $use =~ ' pam ' ]] && echo sys-libs/libcap) \
-            $([[ $use =~ ' tiff ' ]] && echo media-libs/libwebp) \
-            $([[ $use =~ ' truetype ' ]] && echo media-libs/harfbuzz) \
+        USE='-* kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
+            $(using media-libs/freetype harfbuzz && echo media-libs/harfbuzz) \
+            $(using media-libs/libwebp tiff && using media-libs/tiff webp && echo media-libs/libwebp) \
+            $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && echo sys-fs/cryptsetup) \
+            $(using sys-libs/libcap pam && using sys-libs/pam filecaps && echo sys-libs/libcap) \
             sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
@@ -936,7 +972,6 @@ EOF
                 $cat << EOF >> "$portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr ~*
 dev-libs/nss ~*
-media-libs/libvpx *
 www-client/firefox ~*
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
@@ -1054,7 +1089,6 @@ EOF
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
 dev-qt/qtgui X
-media-plugins/alsa-plugins pulseaudio
 x11-libs/libxkbcommon X
 EOF
                 [[ ${options[arch]} =~ 64 ]] &&
