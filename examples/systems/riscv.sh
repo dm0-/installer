@@ -100,8 +100,8 @@ function customize_buildroot() {
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
 
         # The multilib subdirectories don't work with UsrMerge (#728674).
-        $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild"
-        enter /usr/bin/ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7.ebuild manifest
+        $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild"
+        enter /usr/bin/ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild manifest
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \

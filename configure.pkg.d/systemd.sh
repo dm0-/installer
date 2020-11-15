@@ -76,3 +76,14 @@ EOF
             root/etc/systemd/resolved.conf
         ln -fst root/etc ../run/systemd/resolve/resolv.conf
 fi
+
+# Sync the clock with NTP by default when networkd is enabled.
+if opt networkd && test -s root/usr/lib/systemd/system/systemd-timesyncd.service
+then
+        test -s root/usr/lib/systemd/system/dbus-org.freedesktop.timesync1.service ||
+        ln -fns systemd-timesyncd.service \
+            root/usr/lib/systemd/system/dbus-org.freedesktop.timesync1.service
+        mkdir -p root/usr/lib/systemd/system/sysinit.target.wants
+        ln -fst root/usr/lib/systemd/system/sysinit.target.wants \
+            ../systemd-timesyncd.service
+fi

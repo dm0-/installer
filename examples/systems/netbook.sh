@@ -94,6 +94,9 @@ EOF
         # Build ARM U-Boot GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
         echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
+
+        # Improve Linux's support for this system.
+        write_kernel_patch
 }
 
 function customize_buildroot() {
@@ -137,14 +140,6 @@ function customize_buildroot() {
         # Install Emacs as a terminal application.
         fix_package emacs
         packages+=(app-editors/emacs)
-
-        # Fix the screen contrast.
-        $sed -i -e 's/fbi->contrast = 0x10/fbi->contrast = 0x80/g' \
-            "$buildroot/usr/src/linux/drivers/video/fbdev/wm8505fb.c"
-
-        # Fix passing kernel arguments since Linux 5.8.
-        $sed -i -e 's,^\tcompat.*,&\n\n\tchosen { bootargs = ""; };,' \
-            "$buildroot/usr/src/linux/arch/arm/boot/dts/wm8505.dtsi"
 
         # Configure the kernel by only enabling this system's settings.
         write_minimal_system_kernel_configuration > "$output/config"
@@ -212,9 +207,8 @@ then
             ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
 
         # Build a U-Boot kernel image with the bundled DTB.
-        local -r data=$(mktemp)
-        cat /usr/src/linux/arch/arm/boot/zImage "$dtb" > "$data"
-        mkimage -A arm -C none -O linux -T kernel -a 0x8000 -d "$data" -e 0x8000 -n Linux vmlinuz.uimg
+        cat /usr/src/linux/arch/arm/boot/zImage "$dtb" > /root/bundle
+        mkimage -A arm -C none -O linux -T kernel -a 0x8000 -d /root/bundle -e 0x8000 -n Linux vmlinuz.uimg
 
         # Write a boot script to start the kernel.
         mkimage -A arm -C none -O linux -T script -d /dev/stdin -n 'Boot script' scriptcmd << EOF
@@ -352,11 +346,15 @@ CONFIG_USB_DEFAULT_PERSIST=y
 CONFIG_USB_EHCI_HCD=y
 CONFIG_USB_EHCI_HCD_PLATFORM=y
 CONFIG_USB_UHCI_HCD=y
+## Ethernet
+CONFIG_NETDEVICES=y
+CONFIG_ETHERNET=y
+CONFIG_NET_VENDOR_VIA=y
+CONFIG_VIA_VELOCITY=y
 ## Wifi
 CONFIG_CFG80211=y
 CONFIG_MAC80211=y
 CONFIG_MAC80211_RC_MINSTREL=y
-CONFIG_NETDEVICES=y
 CONFIG_WLAN=y
 CONFIG_WLAN_VENDOR_RALINK=y
 CONFIG_RT2X00=y
@@ -386,4 +384,51 @@ CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
 CONFIG_SND_USB_AUDIO=m  # headsets
 CONFIG_USB_ACM=m        # fit-PC status LED
 CONFIG_USB_HID=m        # mice and keyboards
+EOF
+
+function write_kernel_patch() {
+        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
+        $cat > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/wm8505.patch"
+} << 'EOF'
+Define /chosen to fix passing kernel arguments since Linux 5.8.
+
+Add the Ethernet device.
+
+Set the default screen contrast so it is readable before udev starts.
+
+--- a/arch/arm/boot/dts/wm8505.dtsi
++++ b/arch/arm/boot/dts/wm8505.dtsi
+@@ -10,6 +10,8 @@
+ 	#size-cells = <1>;
+ 	compatible = "wm,wm8505";
+ 
++	chosen { bootargs = ""; };
++
+ 	cpus {
+ 		#address-cells = <0>;
+ 		#size-cells = <0>;
+@@ -290,5 +292,12 @@
+ 			clocks = <&clksdhc>;
+ 			bus-width = <4>;
+ 		};
++
++		ethernet@d8004000 {
++			compatible = "via,velocity-vt6110";
++			reg = <0xd8004000 0x400>;
++			interrupts = <10>;
++			no-eeprom;
++		};
+ 	};
+ };
+--- a/drivers/video/fbdev/wm8505fb.c
++++ b/drivers/video/fbdev/wm8505fb.c
+@@ -342,7 +342,7 @@
+ 	fbi->fb.screen_buffer		= fb_mem_virt;
+ 	fbi->fb.screen_size		= fb_mem_len;
+ 
+-	fbi->contrast = 0x10;
++	fbi->contrast = 0x80;
+ 	ret = wm8505fb_set_par(&fbi->fb);
+ 	if (ret) {
+ 		dev_err(&pdev->dev, "Failed to set parameters\n");
 EOF

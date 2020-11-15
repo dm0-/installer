@@ -134,35 +134,33 @@ EOF
         echo -e 'sys-apps/acl *\nsys-apps/attr *' >> "$portage/package.accept_keywords/acl.conf"
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking.
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
+        # Accept db-5.3.28 to fix host dependencies.
+        echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept fontconfig-2.13.1 to fix host dependencies.
         echo 'media-libs/fontconfig *' >> "$portage/package.accept_keywords/fontconfig.conf"
         # Accept gdbm-1.18.1 to fix host dependencies.
-        echo '<sys-libs/gdbm-1.18.2 ~*' >> "$portage/package.accept_keywords/gdbm.conf"
+        echo 'sys-libs/gdbm *' >> "$portage/package.accept_keywords/gdbm.conf"
+        # Accept gdk-pixbuf-2.42.0 to fix host dependencies.
+        echo '<x11-libs/gdk-pixbuf-2.43 ~*' >> "$portage/package.accept_keywords/gdk-pixbuf.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept libidn-1.36 to fix host dependencies.
-        echo 'net-dns/libidn *' >> "$portage/package.accept_keywords/libidn.conf"
-        # Accept libpcap-1.9.1 to fix host dependencies.
-        echo 'net-libs/libpcap *' >> "$portage/package.accept_keywords/libpcap.conf"
         # Accept libpng-1.6.37 to fix host dependencies.
-        echo '<media-libs/libpng-1.6.38 ~*' >> "$portage/package.accept_keywords/libpng.conf"
+        echo 'media-libs/libpng *' >> "$portage/package.accept_keywords/libpng.conf"
         # Accept libusb-1.0.23 to fix host dependencies.
-        echo '<dev-libs/libusb-1.0.24 ~*' >> "$portage/package.accept_keywords/libusb.conf"
+        echo 'dev-libs/libusb *' >> "$portage/package.accept_keywords/libusb.conf"
         # Accept libvpx-1.9.0 to fix debuginfo stripping.
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
         # Accept pango-1.44.7 to fix host dependencies.
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept popt-1.18 to fix host dependencies.
-        echo '<dev-libs/popt-1.19 ~*' >> "$portage/package.accept_keywords/popt.conf"
+        echo 'dev-libs/popt *' >> "$portage/package.accept_keywords/popt.conf"
         # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
         echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
         # Accept speex-1.2.0 to fix host dependencies.
         echo -e '<media-libs/speex-1.2.1 ~*\n<media-libs/speexdsp-1.2.1 ~*' >> "$portage/package.accept_keywords/speex.conf"
-        # Accept sudo-1.9.3 to fix glibc-2.32 support.
-        echo 'app-admin/sudo *' >> "$portage/package.accept_keywords/sudo.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
         # Accept X11 stuff to fix host dependencies and build ordering.
