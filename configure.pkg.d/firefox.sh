@@ -23,6 +23,8 @@ pref("browser.urlbar.speculativeConnect.enabled", false);
 pref("datareporting.healthreport.uploadEnabled", false);
 // Never give up laptop battery information.
 pref("dom.battery.enabled", false);
+// Require HTTPS by default.
+pref("dom.security.https_only_mode", true);
 // Remove useless Pocket stuff.
 pref("extensions.pocket.enabled", false);
 // Never send location data.
@@ -41,8 +43,6 @@ EOF
 pref("browser.ctrlTab.recentlyUsedOrder", false);
 // Never open more browser windows.
 pref("browser.link.open_newwindow.restriction", 0);
-// Fix distribution search plugins.
-pref("browser.search.modernConfig", false);
 // Include a sensible search bar.
 pref("browser.search.openintab", true);
 pref("browser.search.suggest.enabled", false);
@@ -77,16 +77,8 @@ pref("pdfjs.spreadModeOnLoad", 1);
 pref("widget.content.allow-gtk-dark-theme", true);
 EOF
 
-        # Try to install a search engine for startpage.com by default.
-        dir="${dir%%/browser/*}/distribution/searchplugins/common"
-        mkdir -p "$dir"
-        curl -L 'https://www.startpage.com/en/opensearch.xml' > "$dir/startpage.xml" &&
-        test x$(sha256sum "$dir/startpage.xml" | sed -n '1s/ .*//p') = \
-            x50c2b828d22f13dde32662db8796fb670d389651ad27a8946e30363fd5beecc7 ||
-        rm -f "$dir/startpage.xml"
-
         # Mozilla is weird about some settings.  Write a policy file for them.
-        cat << 'EOF' > "${dir%/searchplugins/common}/policies.json"
+        cat << 'EOF' > "${dir%%/browser/*}/distribution/policies.json"
 {
   "policies": {
     "DisableAppUpdate": true,

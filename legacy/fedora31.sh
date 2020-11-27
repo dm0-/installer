@@ -1,9 +1,8 @@
 declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=31).
 
-DEFAULT_RELEASE=31
-
-# Override buildroot creation to set the container image file name.
-eval "$(declare -f create_buildroot | $sed 's/cver=.*/cver=1.9/')"
+# Override buildroot creation to set the container image file name and URL.
+eval "$(declare -f create_buildroot | $sed -e 's/cver=.*/cver=1.9/' \
+    -e 's,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,')"
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
@@ -129,3 +128,6 @@ rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
 }
+
+[[ ${options[release]} -ge $DEFAULT_RELEASE ]] ||
+. "legacy/fedora$(( --DEFAULT_RELEASE )).sh"

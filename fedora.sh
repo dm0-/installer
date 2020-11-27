@@ -492,4 +492,5 @@ done < <(rpm --root="$PWD/root" -qal "$@")
 # WORKAROUNDS
 
 # EOL Fedora releases are still available, but they should not be used anymore.
-[[ ${options[release]-} != 3[01] ]] || . "legacy/fedora${options[release]}.sh"
+[[ ${options[release]:-$DEFAULT_RELEASE} -ge $(( DEFAULT_RELEASE - 1 )) ]] ||
+. "legacy/fedora$(( DEFAULT_RELEASE -= 2 )).sh"

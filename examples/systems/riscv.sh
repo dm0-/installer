@@ -75,6 +75,8 @@ EOF
         do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
         done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
         $rm -f "$output/grub.mbox"
+        echo 'GRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
+        echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
 
         # Patch UEFI stub support into Linux 5.9.
         $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
@@ -108,19 +110,19 @@ function customize_buildroot() {
             curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
-            alsa flac libsamplerate mp3 ogg pulseaudio sndfile sound speex vorbis \
+            alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
-            branding ipv6 jit lto offensive pcap threads \
+            aio branding ipv6 jit lto offensive pcap threads \
             dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'dev-libs/libbsd no-lto.conf' >> "$portage/package.env/no-lto.conf"
