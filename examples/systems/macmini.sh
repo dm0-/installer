@@ -26,6 +26,7 @@ packages+=(
         app-arch/cpio
         app-arch/tar
         app-arch/unzip
+        app-editors/emacs
         app-shells/bash
         dev-util/strace
         dev-vcs/git
@@ -97,7 +98,7 @@ function customize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            curl dbus elfutils gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            curl dbus elfutils emacs gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
@@ -105,21 +106,18 @@ function customize_buildroot() {
             bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
-            cairo gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
+            cairo gtk gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
             aio branding ipv6 jit lto offensive pcap threads \
-            dynamic-loading hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -debug -emacs -fortran -geolocation -gstreamer -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
+            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
+            -cups -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -gtk -gtk2 -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Work around the endianness test being invalidated by LTO (#754654).
         echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
         echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
-
-        # The Rust version of librsvg has broken rendering on big-endian CPUs.
-        $cp -t "$portage/package.accept_keywords" "$buildroot/etc/portage/package.accept_keywords/librsvg.conf"
 
         # Install QEMU to run graphical virtual machines and Intel programs.
         packages+=(app-emulation/qemu sys-firmware/seabios)
@@ -130,7 +128,7 @@ net-libs/libslirp *
 sys-firmware/seabios *
 EOF
         $cat << 'EOF' >> "$portage/package.use/qemu.conf"
-app-emulation/qemu gtk static-user
+app-emulation/qemu static-user
 dev-libs/glib static-libs
 dev-libs/libpcre static-libs
 sys-apps/attr static-libs
@@ -138,10 +136,9 @@ sys-libs/zlib static-libs
 EOF
 
         # Install Emacs as a GUI application.
-        fix_package emacs
-        packages+=(app-editors/emacs)
+        fix_package webkit-gtk
         $cat << 'EOF' >> "$portage/package.use/emacs.conf"
-app-editors/emacs gtk gui xwidgets
+app-editors/emacs gui xwidgets
 app-emacs/emacs-common-gentoo gui
 EOF
 

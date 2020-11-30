@@ -14,7 +14,7 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
         opt selinux && packages_buildroot+=(app-emulation/qemu)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
-        opt uefi && packages_buildroot+=(media-gfx/imagemagick x11-themes/gentoo-artwork)
+        opt uefi && packages_buildroot+=('<gnome-base/librsvg-2.41' media-gfx/imagemagick x11-themes/gentoo-artwork)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         packages_buildroot+=(dev-util/debugedit)
 
@@ -57,6 +57,12 @@ EOF
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
 EOF
+        $cat << 'EOF' >> "$portage/package.unmask/gtk.conf"
+# Unmask pango since the alleged font issues are not a problem.
+x11-libs/pango
+# Unmask adwaita-icon-theme because Rust works everywhere.
+x11-themes/adwaita-icon-theme
+EOF
         $cat << 'EOF' >> "$portage/package.unmask/systemd.conf"
 # Unmask systemd when SELinux is enabled.
 gnome-base/*
@@ -74,15 +80,16 @@ sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 # Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
 sys-fs/lvm2 device-mapper-only -thin
 EOF
+        $cat << 'EOF' >> "$portage/package.use/gtk.conf"
+# Disable old dead GTK+ 2 by default.  It uses different flag names sometimes.
+*/* -gtk2
+app-crypt/pinentry -gtk
+EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Disable trying to build an initrd since it won't run in a chroot.
 sys-kernel/gentoo-kernel -initramfs
 # Apply patches to support zstd and additional CPU optimizations.
 sys-kernel/gentoo-sources experimental
-EOF
-        $cat << 'EOF' >> "$portage/package.use/policycoreutils.conf"
-# Block bad dependencies for restorecond, which is pretty useless these days.
-sys-apps/policycoreutils -dbus
 EOF
         $cat << 'EOF' >> "$portage/package.use/shadow.conf"
 # Don't use shadow's built in cracklib support since PAM provides it.
@@ -134,6 +141,10 @@ EOF
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept db-5.3.28 to fix host dependencies (#736870).
         echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
+        # Accept desktop-file-utils-0.26 to fix host dependencies.
+        echo '<dev-util/desktop-file-utils-0.27 ~*' >> "$portage/package.accept_keywords/desktop-file-utils.conf"
+        # Accept emacs-27.1 to fix cross-compiling.
+        echo '<app-editors/emacs-27.2 ~*' >> "$portage/package.accept_keywords/emacs.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept gdk-pixbuf-2.42.0 to fix host dependencies.
@@ -141,12 +152,11 @@ EOF
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
         # Accept librsvg-2.48 to fix security issues.
-        echo 'gnome-base/librsvg *' >> "$portage/package.accept_keywords/librsvg.conf"
+        echo -e 'gnome-base/librsvg *\nx11-themes/adwaita-icon-theme *' >> "$portage/package.accept_keywords/librsvg.conf"
         # Accept libvpx-1.9.0 to fix debuginfo stripping (#746152).
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
-        echo x11-libs/pango >> "$portage/package.unmask/pango.conf"
         # Accept policycoreutils-3.1 to fix host dependencies.
         echo -e 'sys-apps/policycoreutils ~*\nsys-apps/selinux-python ~*\nsys-apps/semodule-utils ~*\nsys-libs/libselinux ~*\nsys-libs/libsemanage ~*\nsys-libs/libsepol ~*' >> "$portage/package.accept_keywords/policycoreutils.conf"
         # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
@@ -238,8 +248,6 @@ EOF
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
-        # Block forcing compiling Rust for native build tools.
-        echo -e '<gnome-base/librsvg-2.41 *\n>=gnome-base/librsvg-2.41 -*' > "$portage/package.accept_keywords/librsvg.conf"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
@@ -297,11 +305,11 @@ emerge-webrsync
 ## Support cross-compiling musl (#732482).
 sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
-## Support cross-compiling desktop-file-utils with Emacs (#751775).
-sed -i -e 's,.*app-editors/emacs.*",",;s,^BDEPEND=",&emacs? ( app-editors/emacs ),' /var/db/repos/gentoo/dev-util/desktop-file-utils/desktop-file-utils-*.ebuild
-for ebuild in /var/db/repos/gentoo/dev-util/desktop-file-utils/desktop-file-utils-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support cross-compiling with LLVM on EAPI 7 (#745744).
 sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
+## Support cross-compiling glib-networking (#757483).
+sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild
+for ebuild in /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -380,6 +388,7 @@ function install_packages() {
         USE='-* kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
             $(using media-libs/freetype harfbuzz && echo media-libs/harfbuzz) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && echo media-libs/libwebp) \
+            $(using sys-apps/dbus selinux && using sys-apps/policycoreutils dbus && echo sys-apps/dbus) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && echo sys-fs/cryptsetup) \
             $(using sys-libs/libcap pam && using sys-libs/pam filecaps && echo sys-libs/libcap) \
             sys-apps/util-linux
@@ -899,97 +908,6 @@ function archmap_stage3() {
 function fix_package() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
         case "$*" in
-            emacs)
-                echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/emacs.conf"
-                echo 'USE="$USE emacs gzip-el"' >> "$portage/make.conf"
-                echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
-                echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
-                $cat << 'EOF' >> "$portage/package.accept_keywords/emacs.conf"
-net-libs/webkit-gtk *
-sys-apps/bubblewrap *
-EOF
-                echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
-                script << 'EOF'
-patch -d /var/db/repos/gentoo -p0 << 'EOP'
---- app-editors/emacs/emacs-27.1-r2.ebuild
-+++ app-editors/emacs/emacs-27.1-r2.ebuild
-@@ -3,7 +3,7 @@
- 
- EAPI=7
- 
--inherit autotools elisp-common flag-o-matic readme.gentoo-r1
-+inherit autotools elisp-common flag-o-matic readme.gentoo-r1 toolchain-funcs
- 
- if [[ ${PV##*.} = 9999 ]]; then
- 	inherit git-r3
-@@ -262,6 +262,15 @@
- 		fi
- 	fi
- 
-+	# Configure a CBUILD directory when cross-compiling to make tools.
-+	# Also don't try to execute the binary for dumping during the build.
-+	if tc-is-cross-compiler; then
-+		mkdir "${S}-build" && pushd "${S}-build" >/dev/null || die
-+		ECONF_SOURCE="${S}" econf_build --without-all --without-x-toolkit
-+		popd >/dev/null || die
-+		myconf+=" --with-dumping=none"
-+	fi
-+
- 	econf \
- 		--program-suffix="-${EMACS_SUFFIX}" \
- 		--includedir="${EPREFIX}"/usr/include/${EMACS_SUFFIX} \
-@@ -273,6 +282,7 @@
- 		--without-pop \
- 		--with-dumping=pdumper \
- 		--with-file-notification=$(usev inotify || usev gfile || echo no) \
-+		--with-pdumper \
- 		$(use_enable acl) \
- 		$(use_with dbus) \
- 		$(use_with dynamic-loading modules) \
-@@ -293,10 +303,19 @@
- 		${myconf}
- }
- 
--#src_compile() {
--#	# Disable sandbox when dumping. For the unbelievers, see bug #131505
--#	emake RUN_TEMACS="SANDBOX_ON=0 LD_PRELOAD= env ./temacs"
--#}
-+src_compile() {
-+	if tc-is-cross-compiler; then
-+		# Build native tools for compiling lisp etc.
-+		emake -C "${S}-build" src
-+		# Save native build tools in the cross-directory.
-+		emake lib  # Cross-compile dependencies first for timestamps.
-+		cp "${S}-build"/lib-src/make-{docfile,fingerprint} lib-src || die
-+		# Specify the native Emacs to compile lisp.
-+		emake -C lisp all EMACS="${S}-build/src/emacs"
-+	fi
-+
-+	emake
-+}
- 
- src_install() {
- 	emake DESTDIR="${D}" NO_BIN_LINK=t BLESSMAIL_TARGET= install
-@@ -400,6 +419,11 @@
- 	use aqua && DOC_CONTENTS+="\\n\\n${EMACS_SUFFIX^}.app is in
- 		\"${EPREFIX}/Applications/Gentoo\". You may want to copy or symlink
- 		it into /Applications by yourself."
-+	tc-is-cross-compiler && DOC_CONTENTS+="\\n\\nEmacs did not write a portable
-+		dump file due to being cross-compiled. To create this file at run
-+		time, execute the following command:\\nemacs
-+		--batch --eval='(dump-emacs-portable
-+		\"/usr/libexec/emacs/${FULL_VERSION}/${CHOST}/emacs.pdmp\")'"
- 	readme.gentoo_create_doc
- }
- 
-EOP
-sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild
-for ebuild in /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild
-do ebuild "$ebuild" manifest
-done
-ebuild /var/db/repos/gentoo/app-editors/emacs/emacs-27.1-r2.ebuild manifest
-EOF
-                ;;
             firefox)
                 echo 'dev-lang/python sqlite' >> "$buildroot/etc/portage/package.use/firefox.conf"
                 echo 'BINDGEN_CFLAGS="--sysroot=$SYSROOT --target=$CHOST -I/usr/include/c++/v1"' >> "$portage/env/firefox.conf"
@@ -1112,6 +1030,7 @@ EOF
                 $cat << 'EOF' >> "$portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
 dev-qt/qtgui -dbus
+dev-qt/qtwidgets -gtk
 sys-libs/zlib minizip
 EOF
                 $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
@@ -1127,6 +1046,16 @@ EOF
                     -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \
                     -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' \
                     "$buildroot/var/db/repos/gentoo/eclass/qt5-build.eclass"
+                ;;
+            webkit-gtk)
+                echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/webkit-gtk.conf"
+                echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
+                echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
+                $cat << 'EOF' >> "$portage/package.accept_keywords/webkit-gtk.conf"
+net-libs/webkit-gtk *
+sys-apps/bubblewrap *
+EOF
+                echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 ;;
         esac
 }
