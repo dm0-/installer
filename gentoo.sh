@@ -118,6 +118,7 @@ sslv3
 EOF
 
         # Permit selectively toggling important features.
+        echo 'sys-fs/lvm2 -static' >> "$portage/profile/package.use.mask/static.conf"
         echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
         echo -e '-cet\n-system-llvm\n-systemd' >> "$portage/profile/use.mask"
 
@@ -136,13 +137,13 @@ RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
         # Accept a52dec-0.7.4 to fix host dependencies.
-        echo '<media-libs/a52dec-0.7.5 ~*' >> "$portage/package.accept_keywords/a52dec.conf"
+        echo 'media-libs/a52dec *' >> "$portage/package.accept_keywords/a52dec.conf"
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking (#734598).
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept db-5.3.28 to fix host dependencies (#736870).
         echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
         # Accept desktop-file-utils-0.26 to fix host dependencies.
-        echo '<dev-util/desktop-file-utils-0.27 ~*' >> "$portage/package.accept_keywords/desktop-file-utils.conf"
+        echo 'dev-util/desktop-file-utils *' >> "$portage/package.accept_keywords/desktop-file-utils.conf"
         # Accept emacs-27.1 to fix cross-compiling.
         echo '<app-editors/emacs-27.2 ~*' >> "$portage/package.accept_keywords/emacs.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
@@ -157,12 +158,10 @@ EOF
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
-        # Accept policycoreutils-3.1 to fix host dependencies.
-        echo -e 'sys-apps/policycoreutils ~*\nsys-apps/selinux-python ~*\nsys-apps/semodule-utils ~*\nsys-libs/libselinux ~*\nsys-libs/libsemanage ~*\nsys-libs/libsepol ~*' >> "$portage/package.accept_keywords/policycoreutils.conf"
         # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
         echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
         # Accept speex-1.2.0 to fix host dependencies.
-        echo -e '<media-libs/speex-1.2.1 ~*\n<media-libs/speexdsp-1.2.1 ~*' >> "$portage/package.accept_keywords/speex.conf"
+        echo -e 'media-libs/speex *\nmedia-libs/speexdsp *' >> "$portage/package.accept_keywords/speex.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
         # Accept X11 stuff to fix host dependencies and build ordering.
@@ -211,14 +210,12 @@ EOF
         echo 'EXTRA_EMAKE="GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
-        echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/python3.7m"' >> "$portage/env/cross-python.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
-dev-python/pypax cross-python.conf
 gnome-base/librsvg cross-glib-mkenums.conf
 media-libs/gst-plugins-bad cross-glib-mkenums.conf
 media-libs/gst-plugins-base cross-glib-mkenums.conf
@@ -378,11 +375,6 @@ function install_packages() {
         COLLISION_IGNORE='*' USE=-selinux emerge --jobs=4 --oneshot --verbose \
             sys-devel/gcc virtual/libc virtual/os-headers
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
-
-        # This package must be installed outside the dependency graph.
-        opt selinux &&
-        emerge --changed-use --jobs=4 --nodeps --oneshot --verbose \
-            sec-policy/selinux-base
 
         # Cheat bootstrapping packages with circular dependencies.
         USE='-* kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
@@ -860,7 +852,7 @@ function archmap_profile() {
             armv7a)   echo default/linux/arm/17.0/armv7a ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
             powerpc)  echo default/linux/ppc/17.0 ;;
-            riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d ;;
+            riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d/systemd ;;
             x86_64)   echo default/linux/amd64/17.1$nomulti/hardened$selinux ;;
             *) return 1 ;;
         esac

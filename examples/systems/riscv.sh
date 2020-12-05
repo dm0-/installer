@@ -54,7 +54,7 @@ function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_7 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
+app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_8 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
 dev-libs/glib static-libs
 dev-libs/libffi static-libs
 dev-libs/libpcre static-libs
@@ -85,7 +85,8 @@ EOF
             https://github.com/atishp04/linux/compare/856deb866d16e29bd65952e0289066f6078af773...e0bd30b6f950f9eca34f424f03a62e875a7e63c7.patch
         test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
             x9ff409fff71d5b5167a4ad5d3bbf97e2423cb53ebf2791e614f7097e5c3f37cc
-        $sed -i -e '/^@@ -516/,/^$/d' "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch"
+        $sed -i -e '/^+.*early_ioremap_setup/,/bootmem/s/parse_early_param/jump_label_init/;/^@@ -516/,/^$/d' \
+            "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch"
 
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
@@ -113,7 +114,7 @@ function customize_buildroot() {
             apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
-            bzip2 gzip lz4 lzma lzo xz zlib zstd \
+            brotli bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \

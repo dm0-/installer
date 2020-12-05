@@ -127,7 +127,10 @@ function configure_initrd_generation() if opt bootable
 then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
-        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+hostonly="no"
+reproducible="yes"
+EOF
 
         # Load NVMe support before verity so dm-init can find the partition.
         if opt nvme

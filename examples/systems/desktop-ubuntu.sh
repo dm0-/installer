@@ -64,7 +64,7 @@ packages+=(
         systemd-container
 
         # GNOME
-        dmz-cursor-theme
+        adwaita-icon-theme-full
         eog
         evince
         gdm3

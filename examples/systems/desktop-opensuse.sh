@@ -71,6 +71,7 @@ packages+=(
         systemd-container
 
         # GNOME
+        adwaita-icon-theme
         bolt
         colord
         eog

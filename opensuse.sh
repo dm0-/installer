@@ -86,7 +86,6 @@ function distro_tweaks() {
 
         sed -i -e '1,/ PS1=/s/ PS1="/&$? /' root/etc/bash.bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.alias
-        rmdir root/etc/skel/bin
 }
 
 function save_boot_files() if opt bootable
@@ -121,7 +120,10 @@ function configure_initrd_generation() if opt bootable
 then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
-        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+hostonly="no"
+reproducible="yes"
+EOF
 
         # Create a generator to handle verity since dm-init isn't enabled.
         if opt verity

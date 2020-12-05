@@ -111,7 +111,10 @@ function configure_initrd_generation() if opt bootable
 then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
-        echo 'hostonly="no"' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+hostonly="no"
+reproducible="yes"
+EOF
 
         # Create a generator to handle verity since dm-init isn't enabled.
         if opt verity

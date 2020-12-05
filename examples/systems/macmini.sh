@@ -103,7 +103,7 @@ function customize_buildroot() {
             apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             a52 aom dav1d dvd libaom mpeg theora vpx x265 \
-            bzip2 gzip lz4 lzma lzo xz zlib zstd \
+            brotli bzip2 gzip lz4 lzma lzo xz zlib zstd \
             acl caps cracklib fprint hardened pam seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
             cairo gtk gtk3 libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc \
