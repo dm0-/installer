@@ -22,9 +22,16 @@ The installer can produce an executable disk image for testing each of these con
 
 ## Usage
 
-The `install.sh` file is the entry point.  Run it with `bash install.sh -h` to see its full help text.  Since it performs operations such as starting containers and overwriting partitions, it must be run as root.
+The `install.sh` file is the entry point.  Run it with the `-h` option to see its full help text.  Since it performs operations such as starting containers and overwriting partitions, it must be run as root.
 
-The command should usually be given at least one argument: a shell file defining settings for the installation.  There are a few such example files under the `examples` directory.  The file should at least append to the associative array named `options` to define required settings that will override command-line options.  It should append to the `packages` array as well to specify what gets installed into the image.  The installed image can be modified by defining a function `customize` which will run in the build container with the image mounted at `/wd/root`.  For more complex modifications, append to the array `packages_buildroot` to install additional packages into the container, and define a function `customize_buildroot` which runs on the host system after creating the container at `$buildroot`.
+The command should usually be given at least one argument: a shell file defining settings for the installation.  There are a few of these files under the `examples` directory for reference.  Their definitions override those from the distro or global level, but there are six optional definitions that are system-specific.
+
+  - `options`: an associative array of major settings (e.g. distro, architecture, image format)
+  - `packages_buildroot`: an array of package names to install into the build container
+  - `packages`: an array of package names to install into the final image
+  - `initialize_buildroot`: a function that will run on the build system after the container is extracted to `$buildroot` but before any package management commands are run (which is useful to configure repositories or to copy files from the host into the container)
+  - `customize_buildroot`: a function that will run in the container after `packages_buildroot` is installed and the empty target image is mounted at `/wd/root` but before `packages` is installed (which is useful to create an initial image layout or to reconfigure tools for the target installation)
+  - `customize`: a function that will run in the container after `packages` is installed into `/wd/root` (which is useful for any customization of the final root file system, such as to add local users or to modify default configuration files)
 
 The resulting installation artifacts are written to a unique output directory in the current path.  For example, `vmlinuz` (or `vmlinux` on some platforms) is the kernel and `final.img` is the root file system image (containing verity hashes if enabled) that should be written directly to a partition.  If the `uefi` option was enabled, `BOOTX64.EFI` is the UEFI executable (signed for Secure Boot by default).  If the `gpt` option was enabled, `gpt.img` is a full disk image (which is optionally executable if a command was written to `launch.sh`).
 
@@ -39,7 +46,7 @@ For a bootable system example with no configuration file, use `-S` to compress t
 
 Some other options are available to modify image settings for testing, such as `-d` to pick a distro, `-p` to add packages, and `-a` to add a user account with no password for access to the system.
 
-    bash -x install.sh -KSVZ -d centos -p 'kbd man-db passwd sudo vim-minimal' -a user::wheel
+    bash -x install.sh -KV -d ubuntu -p 'kbd man-db nano sudo' -a admin::sudo
 
 ## License
 

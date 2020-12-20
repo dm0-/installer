@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 packages=(aaa_base branding-openSUSE openSUSE-release)
 packages_buildroot=()
 
@@ -31,16 +32,16 @@ function create_buildroot() {
         $sed -i -e 's/^[# ]*\(autoAgreeWithLicenses\) *=.*/\1 = yes/' \
             "$buildroot/etc/zypp/zypper.conf"
 
+        # Let the configuration decide if the system should have documentation.
+        $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
+
         configure_initrd_generation
         enable_selinux_repo
-        initialize_buildroot
+        initialize_buildroot "$@"
 
         enter /usr/bin/zypper --non-interactive update
         enter /usr/bin/zypper --non-interactive \
-            install --allow-vendor-change "${packages_buildroot[@]}" "$@"
-
-        # Let the configuration decide if the system should have documentation.
-        $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
+            install --allow-vendor-change "${packages_buildroot[@]}"
 }
 
 function install_packages() {

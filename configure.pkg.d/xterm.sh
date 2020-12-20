@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 test -s root/usr/share/X11/app-defaults/XTerm &&
 cat <(echo) - << 'EOF' >> root/usr/share/X11/app-defaults/XTerm
 ! Set some sensible defaults.

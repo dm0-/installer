@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 declare -f verify_distro &> /dev/null  # Use ([distro]=centos [release]=7).
 
 packages=()
@@ -25,14 +26,15 @@ function create_buildroot() {
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
         $rm -f "$output/image.tar.xz"
 
-        configure_initrd_generation
-        initialize_buildroot
-
-        enter /usr/bin/yum --assumeyes upgrade
-        enter /usr/bin/yum --assumeyes install "${packages_buildroot[@]}" "$@"
-
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/yum.conf"
+
+        configure_initrd_generation
+        initialize_buildroot "$@"
+
+        enter /usr/bin/yum --assumeyes --setopt=tsflags=nodocs upgrade
+        enter /usr/bin/yum --assumeyes --setopt=tsflags=nodocs \
+            install "${packages_buildroot[@]}"
 }
 
 function install_packages() {

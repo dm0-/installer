@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Unit configuration should happen in /usr while building the image.
 rm -fr root/etc/systemd/system/*
 

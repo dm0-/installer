@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is an example Gentoo build to try RISC-V on an emulator.  There are some
 # things that still need to be implemented in upstream projects, particularly
 # around UEFI support.  Secure Boot cannot be enforced with the current setup.
@@ -51,61 +52,10 @@ packages+=(
 )
 
 function initialize_buildroot() {
-        # Build a static RISC-V QEMU in case the host system's QEMU is too old.
-        packages_buildroot+=(app-emulation/qemu)
-        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_8 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
-dev-libs/glib static-libs
-dev-libs/libffi static-libs
-dev-libs/libpcre static-libs
-dev-libs/libxml2 static-libs
-net-libs/libslirp static-libs
-sys-apps/dtc static-libs
-sys-apps/util-linux static-libs
-sys-libs/zlib static-libs
-x11-libs/pixman static-libs
-EOF
-
-        # Build RISC-V UEFI GRUB for bootloader testing.
-        packages_buildroot+=(sys-boot/grub)
-        $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
-        test x$($sha256sum "$output/grub.mbox" | $sed -n '1s/ .*//p') = \
-            x32d142f8af7a0d4c1bf3cb0455e8cb9b4107125a04678da0f471044d90f28137
-        $mkdir -p "$buildroot/etc/portage/patches/sys-boot/grub"
-        local -i p ; for p in 1 2 3
-        do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
-        done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
-        $rm -f "$output/grub.mbox"
-        echo 'GRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
-        echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
-
-        # Patch UEFI stub support into Linux 5.9.
-        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
-        $curl -L > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" \
-            https://github.com/atishp04/linux/compare/856deb866d16e29bd65952e0289066f6078af773...e0bd30b6f950f9eca34f424f03a62e875a7e63c7.patch
-        test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch" | $sed -n '1s/ .*//p') = \
-            x9ff409fff71d5b5167a4ad5d3bbf97e2423cb53ebf2791e614f7097e5c3f37cc
-        $sed -i -e '/^+.*early_ioremap_setup/,/bootmem/s/parse_early_param/jump_label_init/;/^@@ -516/,/^$/d' \
-            "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/riscv-uefi.patch"
-
-        # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
-        test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
-            x17e048ac765e92e15f7436b604452614cf88dc2bcbbaab18cdc024f3fdd4c575
-        $curl -L https://github.com/u-boot/u-boot/archive/v2020.10.tar.gz > "$buildroot/root/u-boot.tgz"
-        test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
-            x0c022ca6796aa8c0689faae8b515eb62ac84519c31de3153257a9ee0f446618f
-}
-
-function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Packages just aren't keyworded enough, so accept anything stabilized.
         echo 'ACCEPT_KEYWORDS="*"' >> "$portage/make.conf"
-
-        # The multilib subdirectories don't work with UsrMerge (#728674).
-        $sed -i -e 's/^multilib_layout/&() { : ; } ; x/' "$buildroot/var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild"
-        enter /usr/bin/ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild manifest
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
@@ -122,16 +72,59 @@ function customize_buildroot() {
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
-        # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+        # Build a static RISC-V QEMU in case the host system's QEMU is too old.
+        packages_buildroot+=(app-emulation/qemu)
+        echo '<app-emulation/qemu-5.3 ~*' >> "$buildroot/etc/portage/package.accept_keywords/qemu.conf"
+        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
+app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_8 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
+dev-libs/glib static-libs
+dev-libs/libffi static-libs
+dev-libs/libpcre static-libs
+dev-libs/libxml2 static-libs
+net-libs/libslirp static-libs
+sys-apps/dtc static-libs
+sys-apps/util-linux static-libs
+sys-libs/zlib static-libs
+x11-libs/pixman static-libs
+EOF
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'dev-libs/libbsd no-lto.conf' >> "$portage/package.env/no-lto.conf"
 
+        # Build RISC-V UEFI GRUB for bootloader testing.
+        packages_buildroot+=(sys-boot/grub)
+        $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
+        test x$($sha256sum "$output/grub.mbox" | $sed -n '1s/ .*//p') = \
+            x32d142f8af7a0d4c1bf3cb0455e8cb9b4107125a04678da0f471044d90f28137
+        $mkdir -p "$buildroot/etc/portage/patches/sys-boot/grub"
+        local -i p ; for p in 1 2 3
+        do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
+        done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
+        $rm -f "$output/grub.mbox"
+        echo 'GRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
+        echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
+
+        # Download sources to build a UEFI firmware image.
+        $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
+        test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
+            x17e048ac765e92e15f7436b604452614cf88dc2bcbbaab18cdc024f3fdd4c575
+        $curl -L https://github.com/u-boot/u-boot/archive/v2020.10.tar.gz > "$buildroot/root/u-boot.tgz"
+        test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
+            x0c022ca6796aa8c0689faae8b515eb62ac84519c31de3153257a9ee0f446618f
+}
+
+function customize_buildroot() {
+        # Build less useless stuff on the host from bad dependencies.
+        echo >> /etc/portage/make.conf 'USE="$USE' \
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
+        # The multilib subdirectories don't work with UsrMerge (#728674).
+        sed -i -e 's/^multilib_layout/&() { : ; } ; x/' /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild
+        ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild manifest
+
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=riscv \
+        write_minimal_system_kernel_configuration > config
+        make -C /usr/src/linux allnoconfig ARCH=riscv \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -230,7 +223,7 @@ test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a\
 mcopy -i esp.img grub.cfg ::/grub.cfg
 }')"
 
-function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
 ## Output early printk messages to the console.

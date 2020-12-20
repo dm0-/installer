@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=30).
 
 options[verity_sig]=

@@ -1,3 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game VVVVVV.
+#
+# It fetches the free game assets and compiles the engine from Git.  Persistent
+# game data paths are bound into the home directory of the calling user, so the
+# container is interchangeable with a native installation of the game.
+
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
 
 packages+=(
@@ -6,18 +13,21 @@ packages+=(
 )
 
 packages_buildroot+=(cmake gcc-c++ git-core ninja-build SDL2_mixer-devel)
+
 function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
-        script << 'EOF'
-curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
-test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
-    x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
-git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
-mkdir VVVVVV/desktop_version/build ; cd VVVVVV/desktop_version/build
-git reset --hard 9f5f697dda4a5eb26eecfffed92fb8445905b746
-cmake -GNinja -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
-exec ninja -j"$(nproc)" all
-EOF
+        echo tsflags=nodocs >> /etc/dnf/dnf.conf
+
+        # Fetch the game assets.
+        curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
+        test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
+            x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
+
+        # Build the game engine before installing packages into the image.
+        git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
+        git -C VVVVVV reset --hard 04da8085a38c9e88ec2c478eb7c074293021f806
+        cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \
+            -DCMAKE_INSTALL_PREFIX:PATH=/usr
+        ninja -C VVVVVV/desktop_version/build -j"$(nproc)" all
 }
 
 function customize() {

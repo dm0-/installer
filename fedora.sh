@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 packages=(glibc-minimal-langpack)
 packages_buildroot=()
 
@@ -30,17 +31,18 @@ function create_buildroot() {
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
         $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
 
-        configure_initrd_generation
-        initialize_buildroot
-
-        $cp -a "$buildroot"/etc/resolv.conf{,.orig}
-        enter /usr/bin/dnf --assumeyes upgrade
-        enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
-        $rm -f "$buildroot"/etc/resolv.conf
-        $cp -a "$buildroot"/etc/resolv.conf{.orig,}
-
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
+
+        configure_initrd_generation
+        initialize_buildroot "$@"
+
+        $cp -a "$buildroot"/etc/resolv.conf{,.orig}
+        enter /usr/bin/dnf --assumeyes --setopt=tsflags=nodocs upgrade
+        enter /usr/bin/dnf --assumeyes --setopt=tsflags=nodocs \
+            install "${packages_buildroot[@]}"
+        $rm -f "$buildroot"/etc/resolv.conf
+        $cp -a "$buildroot"/etc/resolv.conf{.orig,}
 }
 
 function install_packages() {

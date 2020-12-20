@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 packages=()
 packages_buildroot=()
 
@@ -36,7 +37,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE${options[selinux]:+ selinux} system-llvm systemd -elogind"
+USE="\$USE bindist${options[selinux]:+ selinux} system-icu system-llvm systemd -elogind"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -70,10 +71,6 @@ gnome-extra/*
 sys-apps/gentoo-systemd-integration
 sys-apps/systemd
 EOF
-        $cat << 'EOF' >> "$portage/package.use/clang.conf"
-# Make clang default to using tools and libraries from its own world.
-sys-devel/clang default-compiler-rt default-libcxx default-lld
-EOF
         $cat << 'EOF' >> "$portage/package.use/cryptsetup.conf"
 # Choose nettle as the crypto backend.
 sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
@@ -81,7 +78,7 @@ sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 sys-fs/lvm2 device-mapper-only -thin
 EOF
         $cat << 'EOF' >> "$portage/package.use/gtk.conf"
-# Disable old dead GTK+ 2 by default.  It uses different flag names sometimes.
+# Disable EOL GTK+ 2 by default.  It uses different flag names sometimes.
 */* -gtk2
 app-crypt/pinentry -gtk
 EOF
@@ -90,6 +87,12 @@ EOF
 sys-kernel/gentoo-kernel -initramfs
 # Apply patches to support zstd and additional CPU optimizations.
 sys-kernel/gentoo-sources experimental
+EOF
+        $cat << 'EOF' >> "$portage/package.use/llvm.conf"
+# Make clang use its own linker by default.
+sys-devel/clang default-lld
+# Build gold support for LLVM to match binutils.
+sys-devel/llvm gold
 EOF
         $cat << 'EOF' >> "$portage/package.use/shadow.conf"
 # Don't use shadow's built in cracklib support since PAM provides it.
@@ -118,9 +121,8 @@ sslv3
 EOF
 
         # Permit selectively toggling important features.
-        echo 'sys-fs/lvm2 -static' >> "$portage/profile/package.use.mask/static.conf"
         echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
-        echo -e '-cet\n-system-llvm\n-systemd' >> "$portage/profile/use.mask"
+        echo -e '-cet\n-clang\n-system-llvm\n-systemd' >> "$portage/profile/use.mask"
 
         # Write build environment modifiers for later use.
         echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
@@ -136,23 +138,19 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept a52dec-0.7.4 to fix host dependencies.
-        echo 'media-libs/a52dec *' >> "$portage/package.accept_keywords/a52dec.conf"
         # Accept binutils-2.34 to fix host dependencies and RISC-V linking (#734598).
         echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept db-5.3.28 to fix host dependencies (#736870).
         echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
-        # Accept desktop-file-utils-0.26 to fix host dependencies.
-        echo 'dev-util/desktop-file-utils *' >> "$portage/package.accept_keywords/desktop-file-utils.conf"
         # Accept emacs-27.1 to fix cross-compiling.
         echo '<app-editors/emacs-27.2 ~*' >> "$portage/package.accept_keywords/emacs.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
-        # Accept gdk-pixbuf-2.42.0 to fix host dependencies.
-        echo '<x11-libs/gdk-pixbuf-2.43 ~*' >> "$portage/package.accept_keywords/gdk-pixbuf.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept librsvg-2.48 to fix security issues.
+        # Accept gtk+-3.24.24 to fix host dependencies.
+        echo '<x11-libs/gtk+-3.25 ~*' >> "$portage/package.accept_keywords/gtk.conf"
+        # Accept librsvg-2.40 and librsvg-2.48 to support choosing C or Rust.
         echo -e 'gnome-base/librsvg *\nx11-themes/adwaita-icon-theme *' >> "$portage/package.accept_keywords/librsvg.conf"
         # Accept libvpx-1.9.0 to fix debuginfo stripping (#746152).
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
@@ -160,12 +158,10 @@ EOF
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
         echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
-        # Accept speex-1.2.0 to fix host dependencies.
-        echo -e 'media-libs/speex *\nmedia-libs/speexdsp *' >> "$portage/package.accept_keywords/speex.conf"
+        # Accept webkit-gtk-2.30.4 to fix host dependencies.
+        echo -e '<net-libs/webkit-gtk-2.30.5 ~*\nsys-apps/bubblewrap *' >> "$portage/package.accept_keywords/webkit-gtk.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
-        # Accept X11 stuff to fix host dependencies and build ordering.
-        echo -e 'x11-libs/libXau ~*\nx11-libs/libXtst ~*\nx11-libs/libxshmfence ~*\nx11-misc/notification-daemon ~*' >> "$portage/package.accept_keywords/x11.conf"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -189,7 +185,7 @@ PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
 SYSROOT="$ROOT"
-USE="$USE -kmod -multiarch -static -static-libs"
+USE="$USE -bindist -kmod -multiarch -static -static-libs"
 EOF
         $cat << 'EOF' >> "$portage/package.use/kill.conf"
 # Use the kill command from util-linux to minimize systemd dependencies.
@@ -252,10 +248,10 @@ EOF
         echo 'dev-lang/rust rust-map.conf' >> "$portage/package.env/rust.conf"
         # Link a required library for building the SELinux labeling initrd.
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
-        # Preserve bindist in the stage3 to skip pointless rebuilds.
-        echo '*/* bindist' >> "$portage/package.use/bindist.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
+        # Handle bad default requirements.
+        echo 'media-libs/freetype png' >> "$portage/package.use/freetype.conf"
         # Rust is not built into the stage3, so it can't use system-bootstrap.
         echo 'dev-lang/rust -system-bootstrap' >> "$portage/package.use/rust.conf"
         # Disable journal compression to skip the massive cmake dependency.
@@ -292,9 +288,9 @@ sys.exit(0 if len(sys.argv) == 3 and using(sys.argv[1], sys.argv[2]) else 1)
 EOF
         $chmod 0755 "$buildroot/usr/bin/using"
 
-        initialize_buildroot
+        initialize_buildroot "$@"
 
-        script "$host" "${packages_buildroot[@]}" "$@" << 'EOF'
+        script "$host" "${packages_buildroot[@]}" << 'EOF'
 host=$1 ; shift
 
 # Fetch the latest package definitions, and fix them.
@@ -304,9 +300,16 @@ sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support cross-compiling with LLVM on EAPI 7 (#745744).
 sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
-## Support cross-compiling glib-networking (#757483).
-sed -i -e s/gnome2_giomodule_cache_update/:/g /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild
-for ebuild in /var/db/repos/gentoo/net-libs/glib-networking/glib-networking-*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support cross-compiling Git (#759004).
+sed -i -e '/^DEPEND/,/BDEPEND/{/emacs/{x;d;};/BDEPEND/G;}' /var/db/repos/gentoo/dev-vcs/git/git-2.2[4-9].*.ebuild
+for ebuild in /var/db/repos/gentoo/dev-vcs/git/git-2.2[4-9].*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support compiling basic qt5 packages in a sysroot.
+sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' /var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
+sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' /var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
+sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' /var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-*.ebuild
+sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' /var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-*.ebuild
+for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*.ebuild ; do ebuild "$ebuild" manifest ; done
+sed -i -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' /var/db/repos/gentoo/eclass/qt5-build.eclass
 ## Support erofs-utils (#701284).
 if test "x$*" != "x${*/erofs-utils}"
 then
@@ -909,18 +912,24 @@ dev-libs/nss ~*
 www-client/firefox ~*
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
+                echo 'www-client/firefox -clang' >> "$portage/package.use/firefox.conf"
                 $mkdir -p "$portage/patches/www-client/firefox"
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/rust.patch"
 --- a/build/moz.configure/rust.configure
 +++ b/build/moz.configure/rust.configure
-@@ -421,8 +421,9 @@
- 
- @depends(rustc, target, c_compiler, rust_supported_targets, arm_target, when=rust_compiler)
- @checking('for rust target triplet')
+@@ -491,12 +491,13 @@
+     rustc, target, c_compiler, rust_supported_targets, arm_target, when=rust_compiler
+ )
+ @checking("for rust target triplet")
 +@imports('os')
- def rust_target_triple(rustc, target, compiler_info, rust_supported_targets, arm_target):
--    rustc_target = detect_rustc_target(target, compiler_info, arm_target, rust_supported_targets)
-+    rustc_target = os.getenv('RUST_TARGET', detect_rustc_target(target, compiler_info, arm_target, rust_supported_targets))
+ def rust_target_triple(
+     rustc, target, compiler_info, rust_supported_targets, arm_target
+ ):
+-    rustc_target = detect_rustc_target(
++    rustc_target = os.getenv('RUST_TARGET', detect_rustc_target(
+         target, compiler_info, arm_target, rust_supported_targets
+-    )
++    ))
      assert_rust_compile(target, rustc_target, rustc)
      return rustc_target
  
@@ -929,11 +938,11 @@ EOF
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
 --- a/build/moz.configure/init.configure
 +++ b/build/moz.configure/init.configure
-@@ -955,7 +955,7 @@
+@@ -991,7 +991,7 @@
      return namespace(
          OS_TARGET=os_target,
          OS_ARCH=os_arch,
--        INTEL_ARCHITECTURE=target.cpu in ('x86', 'x86_64') or None,
+-        INTEL_ARCHITECTURE=target.cpu in ("x86", "x86_64") or None,
 +        INTEL_ARCHITECTURE=None,
      )
  
@@ -1005,9 +1014,9 @@ EOF
                 echo 'EXTRA_ECONF="--without-system-png"' >> "$portage/env/firefox.conf"
                 test -s "$portage/patches/www-client/firefox/ppc.patch" &&
                 echo 'EXTRA_ECONF="--disable-webrtc --enable-linker=bfd"' >> "$portage/env/firefox.conf"
-                if [[ ${options[arch]} =~ ^(arm|i[3-6]86|x86) ]]  # LTO causes ICE segfaults now.
-                then echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
-                fi
+                [[ ${options[arch]} =~ ^(arm|i[3-6]86|x86) ]] &&  # LTO causes ICE segfaults now.
+                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
+                echo 'www-client/firefox -clang' >> "$portage/profile/package.use.force/firefox.conf"
                 ;;
             vlc)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
@@ -1025,28 +1034,10 @@ dev-qt/qtgui -dbus
 dev-qt/qtwidgets -gtk
 sys-libs/zlib minizip
 EOF
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-*.ebuild
-                $sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' "$buildroot"/var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-*.ebuild
-                script << 'EOF'
-for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*.ebuild
-do ebuild "$ebuild" manifest
-done
-EOF
-                $sed -i \
-                    -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \
-                    -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' \
-                    "$buildroot/var/db/repos/gentoo/eclass/qt5-build.eclass"
                 ;;
             webkit-gtk)
-                echo 'media-libs/harfbuzz icu' >> "$buildroot/etc/portage/package.use/webkit-gtk.conf"
-                echo 'MYCMAKEARGS="-DUSE_LD_GOLD:BOOL=OFF"' >> "$portage/env/no-gold.conf"
-                echo 'net-libs/webkit-gtk no-gold.conf' >> "$portage/package.env/webkit-gtk.conf"
-                $cat << 'EOF' >> "$portage/package.accept_keywords/webkit-gtk.conf"
-net-libs/webkit-gtk *
-sys-apps/bubblewrap *
-EOF
+                echo 'MYCMAKEARGS="-DDBUS_PROXY_EXECUTABLE:FILEPATH=/usr/bin/xdg-dbus-proxy"' >> "$portage/env/cmake.conf"
+                echo 'net-libs/webkit-gtk cmake.conf' >> "$portage/package.env/webkit-gtk.conf"
                 echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 ;;
         esac

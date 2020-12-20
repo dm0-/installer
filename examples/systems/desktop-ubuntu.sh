@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is a standalone Ubuntu workstation image that aims to demonstrate an
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.
@@ -98,7 +99,7 @@ packages+=(
 
 # Install proprietary NVIDIA drivers.  Also update the buildroot for dracut.
 function initialize_buildroot() {
-        local -r driver_version=450
+        local -r driver_version=455
         packages+=(
                 "linux-modules-nvidia-$driver_version-generic"
                 "xserver-xorg-video-nvidia-$driver_version"

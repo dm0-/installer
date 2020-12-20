@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 packages=()
 packages_buildroot=()
 
@@ -27,9 +28,9 @@ function create_buildroot() {
         $rm -f "$output"/checksum{,.sig} "$output/image.tar.xz"
 
         configure_initrd_generation
-        initialize_buildroot
+        initialize_buildroot "$@"
 
-        script "${packages_buildroot[@]}" "$@" << 'EOF'
+        script "${packages_buildroot[@]}" << 'EOF'
 export DEBIAN_FRONTEND=noninteractive INITRD=No
 apt-get update
 apt-get --assume-yes --option=Acquire::Retries=5 upgrade --with-new-pkgs
@@ -111,7 +112,7 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed '/<svg/{s/"22"/"640"/g;s/>/ viewBox="0 0 22 22">/;}' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg > /root/logo.svg &&
+        sed '/<svg/{s/"22"/"480"/g;s/>/ viewBox="0 0 22 22">/;}' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg > /root/logo.svg &&
         convert -background none /root/logo.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
         test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /boot/vmlinuz

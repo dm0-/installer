@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game Fallout.  A single
+# argument is required, the path to an Inno Setup installer from GOG.
+#
+# Since the game is only for Windows, this simply installs a 32-bit Wine
+# container and extracts files from the installer.  Persistent game data is
+# saved by mounting a path from the calling user's XDG data directory as an
+# overlay over the game's Wine drive path and binding configuration files.
+
 options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
 
 packages+=(
@@ -6,9 +15,13 @@ packages+=(
 )
 
 packages_buildroot+=(innoextract)
-function customize_buildroot() {
-        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
+
+function initialize_buildroot() {
         $cp "${1:-setup_fallout_2.1.0.18.exe}" "$output/install.exe"
+}
+
+function customize_buildroot() {
+        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
 }
 
 function customize() {

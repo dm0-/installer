@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game Grim Fandango.  A
+# single argument is required, the path to a Linux installer from GOG.
+#
+# The container installs dependencies not included with the game.  Persistent
+# game data paths are bound into the calling user's XDG data directory, so the
+# players have their own private save files.
+
 options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
 
 packages+=(
@@ -8,9 +16,13 @@ packages+=(
 )
 
 packages_buildroot+=(unzip)
-function customize_buildroot() {
-        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
+
+function initialize_buildroot() {
         $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.sh"
+}
+
+function customize_buildroot() {
+        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
 }
 
 function customize() {

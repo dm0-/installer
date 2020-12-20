@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game Psychonauts.  A
+# single argument is required, the path to a self-extracing Linux installer.
+#
+# The container installs dependencies not included with the game.  Persistent
+# game data paths are bound into the home directory of the calling user, so the
+# container is interchangeable with a native installation of the game.
+
 options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
 
 packages+=(
@@ -9,10 +17,13 @@ packages+=(
 )
 
 packages_buildroot+=(expect)
-function customize_buildroot() {
-        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
+
+function initialize_buildroot() {
         $cp "${1:-psychonauts-linux-05062013-bin}" "$output/install"
-        $chmod 0755 "$output/install"
+}
+
+function customize_buildroot() {
+        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
 }
 
 function customize() {
@@ -26,6 +37,7 @@ function customize() {
         )
 
         cp install root/install
+        chmod 0755 root/install
         expect << 'EOF'
 set timeout -1
 spawn chroot root /install

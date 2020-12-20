@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 local dir
 if dir=$(compgen -G 'root/usr/lib*/firefox/browser')
 then
@@ -43,6 +44,8 @@ EOF
 pref("browser.ctrlTab.recentlyUsedOrder", false);
 // Never open more browser windows.
 pref("browser.link.open_newwindow.restriction", 0);
+// Don't make notification buttons about new browser features.
+pref("browser.messaging-system.whatsNewPanel.enabled", false);
 // Include a sensible search bar.
 pref("browser.search.openintab", true);
 pref("browser.search.suggest.enabled", false);

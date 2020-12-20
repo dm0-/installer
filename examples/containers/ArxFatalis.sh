@@ -1,3 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game Arx Fatalis.  A
+# single argument is required, the path to an installer that arx-install-data
+# knows how to extract.
+#
+# It actually compiles the modernized GPL engine Arx Libertatis and only needs
+# the proprietary game assets.  Persistent game data paths are bound into the
+# home directory of the calling user, so the container is interchangeable with
+# a native installation of the game.
+#
+# This script implements an option to demonstrate supporting the proprietary
+# NVIDIA drivers on the host system.
+
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
 
 packages+=(
@@ -9,27 +22,38 @@ packages+=(
         SDL2
 )
 
-# Support an option for running on a host with proprietary video drivers.
-function initialize_buildroot() if opt nvidia
-then
-        enable_rpmfusion +nonfree
-        packages+=(xorg-x11-drv-nvidia-libs)
-else packages+=(libGL mesa-dri-drivers)
-fi
+packages_buildroot+=(
+        # Programs to fetch/configure/build Arx Libertatis
+        cmake gcc-c++ git-core ninja-build
+        # Library dependencies
+        {boost,freetype,glm,libepoxy,openal-soft,SDL2}-devel
+        # Utility dependencies
+        ImageMagick inkscape optipng
+        # Runtime dependencies of arx-install-data
+        findutils innoextract
+)
 
-packages_buildroot+=({boost,freetype,glm,libepoxy,openal-soft,SDL2}-devel)
-packages_buildroot+=(cmake gcc-c++ git-core ImageMagick inkscape make optipng)
-packages_buildroot+=(findutils innoextract)
-function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+function initialize_buildroot() {
         $cp "${1:-setup_arx_fatalis_1.21_(21994).exe}" "$output/install.exe"
-        script << 'EOF'
-git clone --branch=master https://github.com/arx/ArxLibertatis.git
-mkdir ArxLibertatis/build ; cd ArxLibertatis/build
-git reset --hard 20e8f2ac1ec94af9305a956a34cd6231a58b3fb6
-cmake -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
-exec make -j"$(nproc)" all
-EOF
+
+        # Support an option for running on a host with proprietary drivers.
+        if opt nvidia
+        then
+                enable_rpmfusion +nonfree
+                packages+=(xorg-x11-drv-nvidia-libs)
+        else packages+=(libGL mesa-dri-drivers)
+        fi
+}
+
+function customize_buildroot() {
+        echo tsflags=nodocs >> /etc/dnf/dnf.conf
+
+        # Build the game engine before installing packages into the image.
+        git clone --branch=master https://github.com/arx/ArxLibertatis.git
+        git -C ArxLibertatis reset --hard 20e8f2ac1ec94af9305a956a34cd6231a58b3fb6
+        cmake -GNinja -S ArxLibertatis -B ArxLibertatis/build \
+            -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr
+        ninja -C ArxLibertatis/build -j"$(nproc)" all
 }
 
 function customize() {
@@ -42,7 +66,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        make -C ArxLibertatis/build install DESTDIR="$PWD/root"
+        DESTDIR="$PWD/root" ninja -C ArxLibertatis/build install
         root/usr/bin/arx-install-data --data-dir=root/usr/share/games/arx --source=install.exe
         rm -f install.exe
 

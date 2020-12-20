@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 shopt -s nullglob
 
@@ -63,13 +64,13 @@ validate_options
 output=$($mktemp --directory --tmpdir="$PWD" output.XXXXXXXXXX)
 buildroot="$output/buildroot"
 
-create_buildroot
-customize_buildroot "$@"
+create_buildroot "$@"
 create_root_image
 script_with_keydb << EOF
 $(declare -p disk exclude_paths options packages)
 $(declare -f)
 mount_root
+customize_buildroot
 install_packages \${options[packages]-}
 tmpfs_var
 tmpfs_home

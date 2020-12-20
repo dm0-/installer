@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 packages=()
 packages_buildroot=()
 
@@ -30,16 +31,16 @@ function create_buildroot() {
         # Fetch EROFS utilities from AUR since they're not in community yet.
         if opt read_only && ! opt squash
         then
-                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-3da5fc5427c1b1869a16a9e98665c1cb7404faa4.tar.gz' > "$output/erofs-utils.tgz"
-                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = x1fbbbcc94d430593d717294b81574bdfcfc04e5bcde6c9c97a9406b2d5105d39
+                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-636f3ca16ff3ecc8716ae10f24d083a2f51d4850.tar.gz' > "$output/erofs-utils.tgz"
+                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = xba048db076edf5443b760a8d284c3bd6ef384abfc47d1c97d24a493fe95f4409
                 $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
                 packages_buildroot+=(base-devel)
         fi
 
         configure_initrd_generation
-        initialize_buildroot
+        initialize_buildroot "$@"
 
-        script "${packages_buildroot[@]}" "$@" << 'EOF'
+        script "${packages_buildroot[@]}" << 'EOF'
 pacman-key --init
 pacman-key --populate archlinux
 pacman --noconfirm --sync --needed --refresh{,} --sysupgrade{,} "$@"

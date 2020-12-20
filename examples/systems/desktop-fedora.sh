@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is a standalone workstation image that includes Firefox, VLC (supporting
 # DVDs and Blu-ray discs), the GNOME desktop, some common basic utilities, and
 # enough tools to build and run anything else in VMs or containers.
@@ -119,19 +120,15 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
-        script << 'EOF'
-git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-git -C rtl8812au reset --hard e9fbf5c051453941bbc029810b893a6c010714e6
-exec make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
-EOF
+        git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
+        git -C rtl8812au reset --hard e9fbf5c051453941bbc029810b893a6c010714e6
+        make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.
-        script << 'EOF'
-echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '[0-9]*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
-su --login --session-command="exec $(</dev/stdin)" --shell=/bin/sh akmods
-rpm2cpio /var/cache/akmods/kmod-nvidia-*.rpm | cpio -idD /
-EOF
-        packages+=(/$(cd "$buildroot" ; compgen -G 'var/cache/akmods/kmod-nvidia-*.rpm'))
+        echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '[0-9]*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
+        su --login --session-command="exec $(</dev/stdin)" --shell=/bin/sh akmods
+        rpm2cpio /var/cache/akmods/kmod-nvidia-*.rpm | cpio -idD /
+        packages+=($(compgen -G '/var/cache/akmods/kmod-nvidia-*.rpm'))
 }
 
 function customize() {

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 DEFAULT_ARCH=$($uname -m)
 disk=
 exclude_paths=({boot,dev,media,proc,run,srv,sys,tmp}/'*')

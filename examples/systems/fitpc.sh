@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is an example Gentoo build for a specific target system, the fit-PC Slim
 # (based on the AMD Geode LX 800 CPU).  It demonstrates cross-compiling for an
 # i686 processor with uncommon instruction sets and building a legacy PC BIOS
@@ -77,13 +78,7 @@ packages_buildroot+=(
         sys-fs/mtools
 )
 
-# Build GRUB images for this platform for separate manual installation.
 function initialize_buildroot() {
-        echo 'GRUB_PLATFORMS="pc"' >> "$buildroot/etc/portage/make.conf"
-        packages_buildroot+=(sys-boot/grub)
-}
-
-function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Tune compilation for the AMD Geode LX 800.
@@ -97,11 +92,12 @@ EOF
         echo >> "$buildroot/etc/portage/env/rust-map.conf" \
             "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
 
-        # Work around EAPI 6 multilib package dependencies until they're gone.
-        echo 'ABI_X86="32 64"' >> "$buildroot/etc/portage/make.conf"
-
-        # Use the Geode video driver, but also build the generic fbdev driver.
-        echo -e 'USE="$USE ztv"\nVIDEO_CARDS="fbdev geode"' >> "$portage/make.conf"
+        # Use the Geode video driver.
+        echo 'VIDEO_CARDS="geode"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/package.use/geode.conf"
+x11-base/xorg-server suid
+x11-drivers/xf86-video-geode ztv
+EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
@@ -118,17 +114,26 @@ EOF
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
-        # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
         # Install Firefox.
         fix_package firefox
         packages+=(www-client/firefox)
 
+        # Build GRUB to boot from legacy BIOS.
+        echo 'GRUB_PLATFORMS="pc"' >> "$buildroot/etc/portage/make.conf"
+        packages_buildroot+=(sys-boot/grub)
+}
+
+function customize_buildroot() {
+        # Build less useless stuff on the host from bad dependencies.
+        echo >> /etc/portage/make.conf 'USE="$USE' \
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
+        # Work around EAPI 6 multilib package dependencies until they're gone.
+        echo 'ABI_X86="32 64"' >> /etc/portage/make.conf
+
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=x86 \
+        write_minimal_system_kernel_configuration > config
+        make -C /usr/src/linux allnoconfig ARCH=x86 \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -224,7 +229,7 @@ dd bs=$bs conv=notrunc if=core.img of=gpt.img seek=34\
 dd bs=$bs conv=notrunc if=boot.img of=gpt.img
 };}')"
 
-function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support adding swap space.

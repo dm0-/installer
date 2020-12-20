@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Reject empty passwords and root logins.
 test -s root/etc/ssh/sshd_config &&
 sed -i \

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is an example Gentoo build for a specific target system, the ASUS
 # Chromebook Flip C100P (based on the ARM Cortex-A17 CPU).  It demonstrates
 # cross-compiling for a 32-bit ARMv7-A device and generating a ChromeOS kernel
@@ -84,12 +85,12 @@ packages_buildroot+=(
         sys-boot/vboot-utils
 )
 
-function customize_buildroot() {
+function initialize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Tune compilation for the ARM Cortex-A17.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv7ve+simd -mtune=cortex-a17 -mfpu=neon-vfpv4 -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=cortex-a17 -mfpu=neon-vfpv4 -ftree-vectorize&/' \
             "$portage/make.conf"
         $cat << 'EOF' >> "$portage/make.conf"
 CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"
@@ -116,30 +117,29 @@ EOF
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
-        # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
-        # Disable LTO for packages broken with this architecture/ABI.
-        echo 'media-libs/libvpx no-lto.conf' >> "$portage/package.env/no-lto.conf"
-
-        # Download an NVRAM file for the wireless driver.
-        script << 'EOF'
-commit=ce86506f6ee3f4d1fc9e9cdc2c36645a6427c223  # Initial import in overlays.
-file=/overlay-veyron/chromeos-base/chromeos-bsp-veyron/files/firmware/brcmfmac4354-sdio.txt
-tmp=$(mktemp)
-curl -L "https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/$commit$file?format=TEXT" > "$tmp"
-test x$(sha256sum "$tmp" | sed -n '1s/ .*//p') = x24a7cdfe790e0cb067b11fd7f13205684bcd4368cfb00ee81574fe983618f906
-exec base64 -d < "$tmp" > /lib/firmware/brcm/brcmfmac4354-sdio.txt
-EOF
-
         # Install Firefox.
         fix_package firefox
         packages+=(www-client/firefox)
 
+        # Disable LTO for packages broken with this architecture/ABI.
+        echo 'media-libs/libvpx no-lto.conf' >> "$portage/package.env/no-lto.conf"
+}
+
+function customize_buildroot() {
+        # Build less useless stuff on the host from bad dependencies.
+        echo >> /etc/portage/make.conf 'USE="$USE' \
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
+        # Download an NVRAM file for the wireless driver.
+        local -r commit=ce86506f6ee3f4d1fc9e9cdc2c36645a6427c223  # Initial import in overlays.
+        local -r file=/overlay-veyron/chromeos-base/chromeos-bsp-veyron/files/firmware/brcmfmac4354-sdio.txt
+        curl -L "https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/$commit$file?format=TEXT" > /root/nvram.txt
+        test x$(sha256sum /root/nvram.txt | sed -n '1s/ .*//p') = x24a7cdfe790e0cb067b11fd7f13205684bcd4368cfb00ee81574fe983618f906
+        base64 -d < /root/nvram.txt > "/lib/firmware/brcm/${file##*/}"
+
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=arm \
+        write_minimal_system_kernel_configuration > config
+        make -C /usr/src/linux allnoconfig ARCH=arm \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -273,7 +273,7 @@ s/C12A7328-F81F-11D2-BA4B-00A0C93EC93B/FE3A2A5D-4F32-41A7-B725-ACCC3285A309/g
 s/size=[^ ,]*esp[^ ,]*,/'\''attrs="50 51 52 54 56"'\'', &/g
 s/"EFI System Partition"/KERN-A/g;}')"
 
-function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support adding swap space.
@@ -399,6 +399,9 @@ CONFIG_PL330_DMA=y
 ## PHY
 CONFIG_PHY_ROCKCHIP_DP=y
 CONFIG_PHY_ROCKCHIP_USB=y
+## GPIO
+CONFIG_GPIO_CDEV=y
+CONFIG_GPIO_CDEV_V1=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
@@ -445,6 +448,9 @@ CONFIG_DRM_PANEL_SIMPLE=y
 CONFIG_BATTERY_BQ27XXX=y
 CONFIG_BATTERY_BQ27XXX_I2C=y
 CONFIG_CHARGER_GPIO=y
+## Clock
+CONFIG_COMMON_CLK_ROCKCHIP=y
+CONFIG_CLK_RK3288=y
 ## Clock, power, RTC
 CONFIG_MFD_RK808=y
 CONFIG_COMMON_CLK_RK808=y

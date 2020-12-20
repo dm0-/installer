@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is a standalone openSUSE workstation image that aims to demonstrate an
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.
@@ -126,31 +127,29 @@ function initialize_buildroot() {
 # Package the bare NVIDIA modules to satisfy bad development dependencies.
 packages_buildroot+=(createrepo_c rpm-build)
 function customize_buildroot() {
-        script << 'EOF'
-name=nvidia-gfxG05-kmp
-version=$(rpm -q --qf '%{VERSION}' "$name-default") version=${version%%_*}
-kernel=$(compgen -G '/lib/modules/*/updates/nvidia.ko') kernel=${kernel:13:-18}
-rpmbuild -ba /dev/stdin << EOS
+        local -r name=nvidia-gfxG05-kmp
+        local -r kernel=$(compgen -G '/lib/modules/*/updates/nvidia.ko' | sed -n '1s,/updates.*,,p')
+        rpmbuild -ba /dev/stdin << EOF
 Name: $name
-Version: $version
+Version: $(rpm -q --qf '%{VERSION}' "$name-default" | sed -n '1s/_.*//p')
 Release: 1
 Summary: Prebuilt NVIDIA modules
 License: SUSE-NonFree
 %description
 %{summary}.
 %install
-mkdir -p %{buildroot}/lib/modules/$kernel %{buildroot}/etc/modprobe.d
-cp -at %{buildroot}/lib/modules/$kernel /lib/modules/$kernel/updates
+mkdir -p %{buildroot}$kernel %{buildroot}/etc/modprobe.d
+cp -at %{buildroot}$kernel $kernel/updates
 cp -at %{buildroot}/etc/modprobe.d /etc/modprobe.d/50-nvidia-default.conf
 %files
 %config(noreplace) /etc/modprobe.d/50-nvidia-default.conf
-/lib/modules/$kernel/updates
-EOS
-rm -fr "/lib/modules/$kernel/updates" ; depmod "$kernel"  # Skip the initrd.
-createrepo_c /usr/src/packages/RPMS
-exec zypper addrepo --no-gpgcheck /usr/src/packages/RPMS local
+$kernel/updates
 EOF
+        createrepo_c /usr/src/packages/RPMS
+        zypper addrepo --no-gpgcheck /usr/src/packages/RPMS local
         packages+=(nvidia-gfxG05-kmp nvidia-glG05 x11-video-nvidiaG05)
+        # Remove the modules here to skip installing them into the initrd.
+        rm -fr "$kernel/updates" ; depmod "${kernel##*/}"
 }
 
 function customize() {

@@ -1,3 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game The Binding of Isaac
+# (Wrath of the Lamb).  A single argument is required, the path to a release
+# archive containing the bare SWF file.  The path to an archive of the binary
+# Linux Flash Player can (and should) be given as the optional second argument.
+# If unspecified, it will attempt to download Flash Player from Adobe, but this
+# binary can't be verified since it is unsigned and they replace the file for
+# updates.  Also, they claim they'll stop hosting it at EOL by the end of 2020.
+#
+# The container installs dependencies of the Flash Player binary.  Persistent
+# Flash data for the game is mounted from the calling user's XDG data directory
+# to keep game saves independent of any native Flash installation data.
+#
+# This script implements an experimental function to minimize the container by
+# removing every file that is not explicitly required.
+
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
 
 packages+=(
@@ -9,11 +25,15 @@ packages+=(
 )
 
 packages_buildroot+=(tar unzip)
-function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+
+function initialize_buildroot() {
         $cp "${1:-the_binding_of_isaac_wrath_of_the_lamb-linux-1.48-1355426233.swf.zip}" "$output/BOI.zip"
         test -n "${2-}" && $cp "$2" "$output/flashplayer.tgz" ||
         $curl -L https://fpdownload.macromedia.com/pub/flashplayer/updaters/32/flash_player_sa_linux.x86_64.tar.gz > "$output/flashplayer.tgz"
+}
+
+function customize_buildroot() {
+        echo tsflags=nodocs >> /etc/dnf/dnf.conf
 }
 
 function customize() {

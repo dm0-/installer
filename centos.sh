@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 . fedora.sh  # Inherit Fedora's RPM functions.
 
 options[verity_sig]=
@@ -26,12 +27,16 @@ function create_buildroot() {
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
 
+        # Let the configuration decide if the system should have documentation.
+        $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
+
         configure_initrd_generation
-        initialize_buildroot
+        initialize_buildroot "$@"
 
         opt networkd || opt uefi && enable_epel  # EPEL now carries core RPMs.
-        enter /usr/bin/dnf --assumeyes upgrade
-        enter /usr/bin/dnf --assumeyes install "${packages_buildroot[@]}" "$@"
+        enter /usr/bin/dnf --assumeyes --setopt=tsflags=nodocs upgrade
+        enter /usr/bin/dnf --assumeyes --setopt=tsflags=nodocs \
+            install "${packages_buildroot[@]}"
 }
 
 # Override package installation to fix modules and the networkd RPM name.

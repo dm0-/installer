@@ -1,3 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game FTL.  A single
+# argument is required, the path to a Linux binary release archive.
+#
+# The container installs dependencies not included with the game.  Persistent
+# game data paths are bound into the home directory of the calling user, so the
+# container is interchangeable with a native installation of the game.
+#
+# Since the game archive includes both i686 and x86_64 binaries, this script
+# supports using either depending on the given architecture option.
+
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
 
 packages+=(
@@ -8,9 +19,13 @@ packages+=(
 )
 
 packages_buildroot+=(tar)
-function customize_buildroot() {
-        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+
+function initialize_buildroot() {
         $cp "${1:-FTL.1.5.4.tar.gz}" "$output/FTL.tgz"
+}
+
+function customize_buildroot() {
+        echo tsflags=nodocs >> /etc/dnf/dnf.conf
 }
 
 function customize() {

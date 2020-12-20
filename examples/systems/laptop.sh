@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is an example Gentoo build for a specific target system, the Lenovo
 # Thinkpad P1 (Gen 2).  It demonstrates native compilation where the build
 # system is the target system, which uses automatic detection of CPU features.
@@ -72,15 +73,13 @@ packages_buildroot+=(
         sys-kernel/linux-firmware
 )
 
-function customize_buildroot() {
+function initialize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Assume the build system is the target, and tune compilation for it.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
             "$portage/make.conf"
-        enter /usr/bin/cpuid2cpuflags |
-        $sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "$portage/make.conf"
         echo 'USE="$USE cet"' >> "$portage/make.conf"
 
         # Use the latest NVIDIA drivers.
@@ -104,10 +103,6 @@ function customize_buildroot() {
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
-        # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
         # Install Firefox.
         fix_package firefox
         packages+=(www-client/firefox)
@@ -115,10 +110,19 @@ function customize_buildroot() {
         # Install VLC.
         fix_package vlc
         packages+=(media-video/vlc)
+}
+
+function customize_buildroot() {
+        # Enable flags for instruction sets supported by this CPU.
+        cpuid2cpuflags | sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "/usr/${options[host]}/etc/portage/make.conf"
+
+        # Build less useless stuff on the host from bad dependencies.
+        echo >> /etc/portage/make.conf 'USE="$USE' \
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=x86 \
+        write_minimal_system_kernel_configuration > config
+        make -C /usr/src/linux allnoconfig ARCH=x86 \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -166,7 +170,7 @@ exec qemu-kvm -nodefaults \
 EOF
 }
 
-function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support CPU microcode updates.

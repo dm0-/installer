@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 if local name=iptables ; compgen -G "root/usr/lib/systemd/system/$name*.service"
 then
         local restore=$(test -s root/usr/lib/systemd/system/$name-restore.service && echo -restore)

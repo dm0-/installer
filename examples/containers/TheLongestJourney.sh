@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This builds a self-executing container image of the game The Longest Journey.
+# Two arguments are required, the paths to both Inno Setup installer fragments
+# from GOG (with the exe file first followed by the bin file).
+#
+# Since the game is only for Windows, this simply installs a 32-bit Wine
+# container and extracts files from the installer.  Persistent game data is
+# saved by binding paths from the calling user's XDG data directory over the
+# game's save directory and configuration files.
+
 options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
 
 packages+=(
@@ -6,10 +16,14 @@ packages+=(
 )
 
 packages_buildroot+=(innoextract jq)
-function customize_buildroot() {
-        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
+
+function initialize_buildroot() {
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
+}
+
+function customize_buildroot() {
+        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
 }
 
 function customize() {

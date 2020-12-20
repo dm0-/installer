@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Disable Wayland since it had problems on NVIDIA.  It might be fixed.
 test -s root/etc/gdm/custom.conf &&
 sed -i -e '/WaylandEnable=false$/s/^[# ]*//' root/etc/gdm/custom.conf

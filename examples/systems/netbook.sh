@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is an example Gentoo build for a specific target system, the Sylvania
 # SYNET07526-Z netbook (based on the ARM ARM926EJ-S CPU).  It demonstrates
 # cross-compiling for a 32-bit ARM9 device and generating a U-Boot boot script.
@@ -82,30 +83,11 @@ packages_buildroot+=(
 )
 
 function initialize_buildroot() {
-        # Build a static QEMU user binary for the target CPU.
-        packages_buildroot+=(app-emulation/qemu)
-        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu qemu_user_targets_arm static-user
-dev-libs/glib static-libs
-dev-libs/libpcre static-libs
-sys-apps/attr static-libs
-sys-libs/zlib static-libs
-EOF
-
-        # Build ARM U-Boot GRUB for bootloader testing.
-        packages_buildroot+=(sys-boot/grub)
-        echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
-
-        # Improve Linux's support for this system.
-        write_kernel_patch
-}
-
-function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Tune compilation for the ARM ARM926EJ-S.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=armv5te -mtune=arm926ej-s -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=arm926ej-s -ftree-vectorize&/' \
             "$portage/make.conf"
         echo 'CPU_FLAGS_ARM="edsp thumb v4 v5"' >> "$portage/make.conf"
 
@@ -127,17 +109,36 @@ function customize_buildroot() {
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
-        # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+        # Build a static QEMU user binary for the target CPU.
+        packages_buildroot+=(app-emulation/qemu)
+        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
+app-emulation/qemu qemu_user_targets_arm static-user
+dev-libs/glib static-libs
+dev-libs/libpcre static-libs
+sys-apps/attr static-libs
+sys-libs/zlib static-libs
+EOF
+
+        # Build GRUB to boot from U-Boot.
+        echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
+        packages_buildroot+=(sys-boot/grub)
 
         # Stop this package from building unexecutable NEON code (#752069).
         echo 'EXTRA_ECONF="--disable-intrinsics"' >> "$portage/env/opus.conf"
         echo 'media-libs/opus opus.conf' >> "$portage/package.env/opus.conf"
 
+        # Improve Linux's support for this system.
+        write_kernel_patch
+}
+
+function customize_buildroot() {
+        # Build less useless stuff on the host from bad dependencies.
+        echo >> /etc/portage/make.conf 'USE="$USE' \
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=arm \
+        write_minimal_system_kernel_configuration > config
+        make -C /usr/src/linux allnoconfig ARCH=arm \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -257,7 +258,7 @@ function write_hybrid_mbr() {
         exec cat /dev/zero
 )
 
-function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support adding swap space.
@@ -353,6 +354,9 @@ CONFIG_WLAN=y
 CONFIG_WLAN_VENDOR_RALINK=y
 CONFIG_RT2X00=y
 CONFIG_RT2800USB=y
+## GPIO
+CONFIG_GPIO_CDEV=y
+CONFIG_GPIO_CDEV_V1=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y

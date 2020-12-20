@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is a standalone Arch Linux workstation image that aims to demonstrate an
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.

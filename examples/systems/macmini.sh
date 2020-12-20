@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # This is an example Gentoo build for a specific target system, the first
 # generation Apple Mac mini (based on the PowerPC G4 CPU).  It demonstrates
 # cross-compiling for a 32-bit PPC device and generating an Open Firmware ELF
@@ -76,15 +77,13 @@ packages+=(
 packages_buildroot+=(
         # The target hardware requires firmware.
         sys-kernel/linux-firmware
+
+        # Support making a bootable New World APM image.
+        sys-fs/hfsutils
+        sys-fs/mac-fdisk
 )
 
-# Support automatically building a bootable APM disk image in this script.
 function initialize_buildroot() {
-        echo 'GRUB_PLATFORMS="ieee1275"' >> "$buildroot/etc/portage/make.conf"
-        packages_buildroot+=(sys-boot/grub sys-fs/hfsutils sys-fs/mac-fdisk)
-}
-
-function customize_buildroot() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
 
         # Tune compilation for the PowerPC G4.
@@ -111,24 +110,15 @@ function customize_buildroot() {
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
 
-        # Build less useless stuff on the host from bad dependencies.
-        echo >> "$buildroot/etc/portage/make.conf" 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
-        # Work around the endianness test being invalidated by LTO (#754654).
-        echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
-        echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
-
         # Install QEMU to run graphical virtual machines and Intel programs.
         packages+=(app-emulation/qemu sys-firmware/seabios)
-        echo -e 'QEMU_SOFTMMU_TARGETS="ppc"\nQEMU_USER_TARGETS="i386"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu *
 net-libs/libslirp *
 sys-firmware/seabios *
 EOF
         $cat << 'EOF' >> "$portage/package.use/qemu.conf"
-app-emulation/qemu static-user
+app-emulation/qemu qemu_softmmu_targets_ppc qemu_user_targets_i386 static-user
 dev-libs/glib static-libs
 dev-libs/libpcre static-libs
 sys-apps/attr static-libs
@@ -136,15 +126,28 @@ sys-libs/zlib static-libs
 EOF
 
         # Install Emacs as a GUI application.
-        fix_package webkit-gtk
         $cat << 'EOF' >> "$portage/package.use/emacs.conf"
-app-editors/emacs gui xwidgets
+app-editors/emacs gui
 app-emacs/emacs-common-gentoo gui
 EOF
 
+        # Build GRUB to boot from Open Firmware.
+        echo 'GRUB_PLATFORMS="ieee1275"' >> "$buildroot/etc/portage/make.conf"
+        packages_buildroot+=(sys-boot/grub)
+
+        # Work around the endianness test being invalidated by LTO (#754654).
+        echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
+        echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
+}
+
+function customize_buildroot() {
+        # Build less useless stuff on the host from bad dependencies.
+        echo >> /etc/portage/make.conf 'USE="$USE' \
+            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > "$output/config"
-        enter /usr/bin/make -C /usr/src/linux allnoconfig ARCH=powerpc \
+        write_minimal_system_kernel_configuration > config
+        make -C /usr/src/linux allnoconfig ARCH=powerpc \
             CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
 }
 
@@ -285,7 +288,7 @@ EOF
             -F -L var -m 0 -U "${options[var_uuid]}" apm.img
 fi
 
-function write_minimal_system_kernel_configuration() { $cat "$output/config.base" - << 'EOF' ; }
+function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support adding swap space.

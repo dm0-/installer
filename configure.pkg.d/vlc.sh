@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 if test -x root/usr/bin/vlc
 then
         mkdir -p root/etc/skel/.config/vlc
