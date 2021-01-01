@@ -45,6 +45,33 @@ EOF
 app-crypt/pesign
 sys-boot/vboot-utils
 EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
+# Accept viable versions of GNOME packages.
+gnome-base/* *
+gnome-extra/* *
+app-arch/gnome-autoar *
+<app-crypt/libsecret-0.20.5 ~*
+<app-i18n/ibus-1.5.24 ~*
+<dev-libs/json-glib-1.7 ~*
+<dev-libs/libgudev-235 ~*
+dev-libs/libgweather *
+<gnome-base/gdm-3.36.5 ~*
+<gnome-extra/evolution-data-server-3.38.3 ~*
+gui-libs/libhandy *
+media-libs/gsound *
+media-video/pipewire *
+net-libs/libnma *
+<net-libs/webkit-gtk-2.30.5 ~*
+<net-misc/networkmanager-1.26.7 ~*
+net-wireless/gnome-bluetooth *
+sci-geosciences/geocode-glib *
+sys-apps/bubblewrap *
+<sys-auth/fprintd-1.90 ~*
+<sys-auth/libfprint-1.90 ~*
+x11-libs/colord-gtk *
+x11-misc/colord *
+x11-wm/mutter *
+EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
 sys-kernel/gentoo-kernel
@@ -52,6 +79,14 @@ sys-kernel/gentoo-sources
 sys-kernel/git-sources
 sys-kernel/linux-headers
 sec-policy/*
+EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
+# Accept Rust users to bypass bad keywording.
+dev-lang/spidermonkey *
+<dev-libs/gjs-1.67 ~*
+gnome-base/librsvg *
+sys-auth/polkit *
+x11-themes/adwaita-icon-theme *
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -114,6 +149,10 @@ EOF
 # These Python tools are not useful, and they pull in horrific dependencies.
 app-admin/setools-9999
 EOF
+        $cat << 'EOF' >> "$portage/profile/package.use.mask/emacs.conf"
+# Support Emacs browser widgets everywhere so Emacs can handle everything.
+app-editors/emacs -xwidgets
+EOF
         $cat << 'EOF' >> "$portage/profile/use.mask"
 # Mask support for insecure protocols.
 sslv2
@@ -138,30 +177,28 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept binutils-2.34 to fix host dependencies and RISC-V linking (#734598).
-        echo -e 'sys-devel/binutils *\nsys-libs/binutils-libs *' >> "$portage/package.accept_keywords/binutils.conf"
         # Accept db-5.3.28 to fix host dependencies (#736870).
         echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
         # Accept emacs-27.1 to fix cross-compiling.
         echo '<app-editors/emacs-27.2 ~*' >> "$portage/package.accept_keywords/emacs.conf"
+        # Accept eselect-1.4.17 to fix host dependencies.
+        echo -e '<app-admin/eselect-1.4.18 ~*\n<app-emacs/eselect-mode-1.4.18 ~*' >> "$portage/package.accept_keywords/eselect.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
         # Accept gtk+-3.24.24 to fix host dependencies.
         echo '<x11-libs/gtk+-3.25 ~*' >> "$portage/package.accept_keywords/gtk.conf"
-        # Accept librsvg-2.40 and librsvg-2.48 to support choosing C or Rust.
-        echo -e 'gnome-base/librsvg *\nx11-themes/adwaita-icon-theme *' >> "$portage/package.accept_keywords/librsvg.conf"
         # Accept libvpx-1.9.0 to fix debuginfo stripping (#746152).
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
         echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
-        # Accept webkit-gtk-2.30.4 to fix host dependencies.
-        echo -e '<net-libs/webkit-gtk-2.30.5 ~*\nsys-apps/bubblewrap *' >> "$portage/package.accept_keywords/webkit-gtk.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
+
+        write_unconditional_patches "$portage/patches"
 
         # Create the target portage profile based on the native root's.
         portage="$buildroot/usr/$host/etc/portage"
@@ -169,7 +206,7 @@ EOF
         $cp -at "${portage%/portage}" "$buildroot/etc/portage"
         test -z "$profile" && $rm -f "$portage/make.profile" ||
         $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
-        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto=jobserver&/' "$portage/make.conf"
+        $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto&/' "$portage/make.conf"
         $cat <(echo) - << EOF >> "$portage/make.conf"
 CHOST="$host"
 GOARCH="$(archmap_go "$arch")"$(
@@ -200,22 +237,25 @@ EOF
 # Cross-compiling portage native extensions is unsupported.
 sys-apps/portage -native-extensions
 EOF
+        echo 'EXTRA_EMAKE="GDBUS_CODEGEN=/usr/bin/gdbus-codegen GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-emake-utils.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
-        echo 'EXTRA_EMAKE="GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
+        echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
+app-i18n/ibus cross-glib-genmarshal.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
+gnome-base/gnome-settings-daemon meson-pkgconfig.conf
 gnome-base/librsvg cross-glib-mkenums.conf
-media-libs/gst-plugins-bad cross-glib-mkenums.conf
-media-libs/gst-plugins-base cross-glib-mkenums.conf
-media-libs/gstreamer cross-glib-mkenums.conf
+net-libs/libmbim cross-emake-utils.conf
+net-misc/modemmanager cross-emake-utils.conf
+net-misc/networkmanager cross-emake-utils.conf
 net-wireless/wpa_supplicant cross-libnl.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
 x11-wm/windowmaker cross-windowmaker.conf
@@ -228,7 +268,6 @@ dev-libs/libaio no-lto.conf
 media-gfx/potrace no-lto.conf
 media-libs/alsa-lib no-lto.conf
 media-sound/pulseaudio no-lto.conf
-net-libs/webkit-gtk no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
@@ -250,8 +289,6 @@ EOF
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
-        # Handle bad default requirements.
-        echo 'media-libs/freetype png' >> "$portage/package.use/freetype.conf"
         # Rust is not built into the stage3, so it can't use system-bootstrap.
         echo 'dev-lang/rust -system-bootstrap' >> "$portage/package.use/rust.conf"
         # Disable journal compression to skip the massive cmake dependency.
@@ -288,6 +325,17 @@ sys.exit(0 if len(sys.argv) == 3 and using(sys.argv[1], sys.argv[2]) else 1)
 EOF
         $chmod 0755 "$buildroot/usr/bin/using"
 
+        # Write cross-clang wrappers.  They'll fail if clang isn't installed.
+        $cat << 'EOF' > "$buildroot/usr/bin/${options[host]}-clang"
+#!/bin/sh -eu
+name="${0##*/}"
+host="${name%-*}"
+prog="/usr/lib/llvm/11/bin/${name##*-}"
+exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
+EOF
+        $chmod 0755 "$buildroot/usr/bin/${options[host]}-clang"
+        $ln -fn "$buildroot/usr/bin/${options[host]}-clang"{,++}
+
         initialize_buildroot "$@"
 
         script "$host" "${packages_buildroot[@]}" << 'EOF'
@@ -300,9 +348,13 @@ sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support cross-compiling with LLVM on EAPI 7 (#745744).
 sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
-## Support cross-compiling Git (#759004).
-sed -i -e '/^DEPEND/,/BDEPEND/{/emacs/{x;d;};/BDEPEND/G;}' /var/db/repos/gentoo/dev-vcs/git/git-2.2[4-9].*.ebuild
-for ebuild in /var/db/repos/gentoo/dev-vcs/git/git-2.2[4-9].*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support cross-compiling Git (#759004) (#762796).
+rm -f /var/db/repos/gentoo/dev-vcs/git/git-2.23.*.ebuild
+sed -i -e '/^DEPEND/,/BDEPEND/{/emacs/{x;d;};/BDEPEND/G;}' -e 's/||.*libsecret.*/CC="$(tc-getCC)" CFLAGS="${CFLAGS}" PKG_CONFIG="$(tc-getPKG_CONFIG)"/' /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild
+for ebuild in /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support installing pinentry with gnome-keyring support (#762799).
+sed -i -e 's/^RDEPEND=".*[^"]$/&"\nPDEPEND="/' /var/db/repos/gentoo/app-crypt/gcr/gcr-*.ebuild
+for ebuild in /var/db/repos/gentoo/app-crypt/gcr/gcr-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support compiling basic qt5 packages in a sysroot.
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' /var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' /var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
@@ -427,6 +479,8 @@ function distro_tweaks() {
 
         # Create some usual stuff in /var that is missing.
         echo 'd /var/empty' > root/usr/lib/tmpfiles.d/var-compat.conf
+        test -s root/usr/lib/sysusers.d/acct-user-polkitd.conf &&
+        echo 'd /var/lib/polkit-1 - polkitd polkitd' >> root/usr/lib/tmpfiles.d/polkit.conf
 
         # Conditionalize wireless interfaces on their configuration files.
         test -s root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service &&
@@ -559,6 +613,47 @@ EOF
         else zstd --threads=0 --ultra -22 > initrd.img
         fi
 fi
+
+function write_unconditional_patches() {
+        local -r patches="$1"
+
+        $mkdir -p "$patches/dev-lang/spidermonkey"
+        $cat << 'EOF' > "$patches/dev-lang/spidermonkey/rust.patch"
+--- a/build/moz.configure/rust.configure
++++ b/build/moz.configure/rust.configure
+@@ -353,7 +353,7 @@
+ 
+             return None
+ 
+-        rustc_target = find_candidate(candidates)
++        rustc_target = os.getenv('RUST_TARGET') if host_or_target_str == 'target' and os.getenv('RUST_TARGET') is not None else find_candidate(candidates)
+ 
+         if rustc_target is None:
+             die("Don't know how to translate {} for rustc".format(
+EOF
+
+        $mkdir -p "$patches/www-client/firefox"
+        $cat << 'EOF' > "$patches/www-client/firefox/rust.patch"
+--- a/build/moz.configure/rust.configure
++++ b/build/moz.configure/rust.configure
+@@ -491,12 +491,13 @@
+     rustc, target, c_compiler, rust_supported_targets, arm_target, when=rust_compiler
+ )
+ @checking("for rust target triplet")
++@imports('os')
+ def rust_target_triple(
+     rustc, target, compiler_info, rust_supported_targets, arm_target
+ ):
+-    rustc_target = detect_rustc_target(
++    rustc_target = os.getenv('RUST_TARGET', detect_rustc_target(
+         target, compiler_info, arm_target, rust_supported_targets
+-    )
++    ))
+     assert_rust_compile(target, rustc_target, rustc)
+     return rustc_target
+ 
+EOF
+}
 
 function write_base_kernel_config() if opt bootable
 then
@@ -905,7 +1000,7 @@ function fix_package() {
         case "$*" in
             firefox)
                 echo 'dev-lang/python sqlite' >> "$buildroot/etc/portage/package.use/firefox.conf"
-                echo 'BINDGEN_CFLAGS="--sysroot=$SYSROOT --target=$CHOST -I/usr/include/c++/v1"' >> "$portage/env/firefox.conf"
+                echo 'BINDGEN_CFLAGS="--sysroot=$SYSROOT --target=$CHOST"' >> "$portage/env/firefox.conf"
                 $cat << EOF >> "$portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr ~*
 dev-libs/nss ~*
@@ -913,27 +1008,6 @@ www-client/firefox ~*
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -clang' >> "$portage/package.use/firefox.conf"
-                $mkdir -p "$portage/patches/www-client/firefox"
-                $cat << 'EOF' > "$portage/patches/www-client/firefox/rust.patch"
---- a/build/moz.configure/rust.configure
-+++ b/build/moz.configure/rust.configure
-@@ -491,12 +491,13 @@
-     rustc, target, c_compiler, rust_supported_targets, arm_target, when=rust_compiler
- )
- @checking("for rust target triplet")
-+@imports('os')
- def rust_target_triple(
-     rustc, target, compiler_info, rust_supported_targets, arm_target
- ):
--    rustc_target = detect_rustc_target(
-+    rustc_target = os.getenv('RUST_TARGET', detect_rustc_target(
-         target, compiler_info, arm_target, rust_supported_targets
--    )
-+    ))
-     assert_rust_compile(target, rustc_target, rustc)
-     return rustc_target
- 
-EOF
                 $sed -n '/^RUST_TARGET="i586-/q0;$q1' "$portage/make.conf" &&
                 $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
 --- a/build/moz.configure/init.configure
@@ -1016,8 +1090,7 @@ EOF
                 echo 'EXTRA_ECONF="--disable-webrtc --enable-linker=bfd"' >> "$portage/env/firefox.conf"
                 [[ ${options[arch]} =~ ^(arm|i[3-6]86|x86) ]] &&  # LTO causes ICE segfaults now.
                 echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
-                echo 'www-client/firefox -clang' >> "$portage/profile/package.use.force/firefox.conf"
-                ;;
+                : ;;
             vlc)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
@@ -1034,11 +1107,6 @@ dev-qt/qtgui -dbus
 dev-qt/qtwidgets -gtk
 sys-libs/zlib minizip
 EOF
-                ;;
-            webkit-gtk)
-                echo 'MYCMAKEARGS="-DDBUS_PROXY_EXECUTABLE:FILEPATH=/usr/bin/xdg-dbus-proxy"' >> "$portage/env/cmake.conf"
-                echo 'net-libs/webkit-gtk cmake.conf' >> "$portage/package.env/webkit-gtk.conf"
-                echo 'app-editors/emacs -xwidgets' >> "$portage/profile/package.use.mask/emacs.conf"
                 ;;
         esac
 }
