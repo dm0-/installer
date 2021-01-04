@@ -96,18 +96,20 @@ function initialize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb curl dbus elfutils emacs gcrypt gdbm git gmp gnutls gpg http2 libnotify libxml2 mpfr nettle ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb curl dbus elfutils emacs gdbm git glib http2 libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
-            alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
-            a52 aom dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
+            a52 alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
+            aacs aom bluray dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo xz zlib zstd \
-            acl caps cracklib cryptsetup fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
+            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
-            cairo gtk gtk3 gui libdrm pango plymouth X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo gtk gtk3 gui libdrm pango X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding ipv6 jit lto offensive pcap threads \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -debug -fortran -geolocation -gstreamer -gui -introspection -llvm -oss -perl -python -sendmail -tcpd -vala'"'
+            dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
+            -cups -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -ffmpeg -gui'"'
 
         # Build a static QEMU user binary for the target CPU.
         packages_buildroot+=(app-emulation/qemu)
@@ -126,6 +128,10 @@ EOF
         # Stop this package from building unexecutable NEON code (#752069).
         echo 'EXTRA_ECONF="--disable-intrinsics"' >> "$portage/env/opus.conf"
         echo 'media-libs/opus opus.conf' >> "$portage/package.env/opus.conf"
+
+        # Disable SIMD in SpiderMonkey Rust crates.
+        echo 'EXTRA_ECONF="--disable-rust-simd"' >> "$portage/env/spidermonkey.conf"
+        echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"
 
         # Improve Linux's support for this system.
         write_kernel_patch

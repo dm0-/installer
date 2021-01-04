@@ -93,10 +93,16 @@ EOF
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
 EOF
-        $cat << 'EOF' >> "$portage/package.unmask/gtk.conf"
+        $cat << 'EOF' >> "$portage/package.unmask/pango.conf"
 # Unmask pango since the alleged font issues are not a problem.
 x11-libs/pango
-# Unmask adwaita-icon-theme because Rust works everywhere.
+EOF
+        $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
+# Unmask Rust users to bypass bad architecture profiles.
+dev-lang/spidermonkey
+dev-libs/gjs
+gnome-base/librsvg
+sys-auth/polkit
 x11-themes/adwaita-icon-theme
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/systemd.conf"
@@ -177,6 +183,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept audit-3.0 to fix host dependencies.
+        echo '<sys-process/audit-3.1 ~*' >> "$portage/package.accept_keywords/audit.conf"
         # Accept db-5.3.28 to fix host dependencies (#736870).
         echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
         # Accept emacs-27.1 to fix cross-compiling.
@@ -193,8 +201,12 @@ EOF
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
+        # Accept policycoreutils-3.1 to fix dependencies.
+        echo '<sys-apps/policycoreutils-3.2 ~*' >> "$portage/package.accept_keywords/policycoreutils.conf"
         # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
         echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
+        # Accept selinux-python-3.1 to fix dependencies.
+        echo '<sys-apps/selinux-python-3.2 ~*' >> "$portage/package.accept_keywords/selinux-python.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies.
         echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
 
@@ -435,7 +447,6 @@ function install_packages() {
         USE='-* kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
             $(using media-libs/freetype harfbuzz && echo media-libs/harfbuzz) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && echo media-libs/libwebp) \
-            $(using sys-apps/dbus selinux && using sys-apps/policycoreutils dbus && echo sys-apps/dbus) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && echo sys-fs/cryptsetup) \
             $(using sys-libs/libcap pam && using sys-libs/pam filecaps && echo sys-libs/libcap) \
             sys-apps/util-linux
@@ -1127,9 +1138,9 @@ function drop_development() {
                 etc/env.d/gcc
                 etc/portage
                 usr/include
-                'usr/lib/lib*.a'
+                'usr/lib*/lib*.a'
                 usr/lib/gcc
-                usr/{lib,share}/pkgconfig
+                usr/{'lib*',share}/pkgconfig
                 usr/libexec/gcc
                 usr/share/gcc-data
         )
