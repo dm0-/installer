@@ -99,7 +99,7 @@ packages+=(
 
 # Install proprietary NVIDIA drivers.  Also update the buildroot for dracut.
 function initialize_buildroot() {
-        local -r driver_version=455
+        local -r driver_version=460
         packages+=(
                 "linux-modules-nvidia-$driver_version-generic"
                 "xserver-xorg-video-nvidia-$driver_version"

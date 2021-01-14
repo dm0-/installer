@@ -29,8 +29,15 @@ test -s root/usr/lib/systemd/system/dbus.service ||
 ln -fns dbus-broker.service root/usr/lib/systemd/system/dbus.service
 
 # Select a preferred display manager when it is installed.
-test -s root/usr/lib/systemd/system/gdm.service &&
-ln -fns gdm.service root/usr/lib/systemd/system/display-manager.service
+local dm ; for dm in gdm lxdm xdm
+do
+        if test -s "root/usr/lib/systemd/system/$dm.service"
+        then
+                ln -fns "$dm.service" \
+                    root/usr/lib/systemd/system/display-manager.service
+                break
+        fi
+done
 
 # Define a default target on boot.
 test -s root/usr/lib/systemd/system/display-manager.service &&

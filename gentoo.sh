@@ -6,7 +6,7 @@ function create_buildroot() {
         local -r arch=${options[arch]:=$DEFAULT_ARCH}
         local -r profile=${options[profile]:-$(archmap_profile "$arch")}
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
-        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)$([[ $arch == armv7* ]] && echo hf)}
+        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi$([[ $arch == armv[67]* ]] && echo hf))}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt gpt && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
@@ -50,19 +50,26 @@ EOF
 gnome-base/* *
 gnome-extra/* *
 app-arch/gnome-autoar *
+<app-crypt/gcr-3.38.1 ~*
 <app-crypt/libsecret-0.20.5 ~*
 <app-i18n/ibus-1.5.24 ~*
+<app-misc/geoclue-2.5.8 ~*
 <dev-libs/json-glib-1.7 ~*
 <dev-libs/libgudev-235 ~*
 dev-libs/libgweather *
 <gnome-base/gdm-3.36.5 ~*
 <gnome-extra/evolution-data-server-3.38.3 ~*
 gui-libs/libhandy *
+media-gfx/gnome-screenshot *
 media-libs/gsound *
 media-video/pipewire *
+<net-libs/libmbim-1.24.5 ~*
 net-libs/libnma *
+<net-libs/libqmi-1.26.7 ~*
 <net-libs/webkit-gtk-2.30.5 ~*
-<net-misc/networkmanager-1.26.7 ~*
+<net-misc/mobile-broadband-provider-info-20201226 ~*
+<net-misc/modemmanager-1.14.9 ~*
+<net-misc/networkmanager-1.28.1 ~*
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
 sys-apps/bubblewrap *
@@ -70,6 +77,7 @@ sys-apps/bubblewrap *
 <sys-auth/libfprint-1.90 ~*
 x11-libs/colord-gtk *
 x11-misc/colord *
+<x11-terms/gnome-terminal-3.38.3 ~*
 x11-wm/mutter *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
@@ -87,6 +95,28 @@ dev-lang/spidermonkey *
 gnome-base/librsvg *
 sys-auth/polkit *
 x11-themes/adwaita-icon-theme *
+EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/xfce.conf"
+# Accept viable versions of Xfce packages.
+<dev-util/xfce4-dev-tools-4.16.1 ~*
+<x11-terms/xfce4-terminal-0.8.11 ~*
+<xfce-base/exo-4.16.1 ~*
+<xfce-base/garcon-0.8.1 ~*
+<xfce-base/libxfce4ui-4.16.1 ~*
+<xfce-base/libxfce4util-4.16.1 ~*
+<xfce-base/thunar-4.16.3 ~*
+<xfce-base/xfce4-appfinder-4.16.1 ~*
+<xfce-base/xfce4-meta-4.16.1 ~*
+<xfce-base/xfce4-panel-4.16.1 ~*
+<xfce-base/xfce4-session-4.16.1 ~*
+<xfce-base/xfce4-settings-4.16.1 ~*
+<xfce-base/xfconf-4.16.1 ~*
+<xfce-base/xfdesktop-4.16.1 ~*
+<xfce-base/xfwm4-4.16.2 ~*
+<xfce-extra/thunar-volman-4.16.1 ~*
+<xfce-extra/tumbler-4.16.1 ~*
+<xfce-extra/xfce4-power-manager-4.16.1 ~*
+<xfce-extra/xfce4-screensaver-4.16.1 ~*
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -122,6 +152,7 @@ EOF
 # Disable EOL GTK+ 2 by default.  It uses different flag names sometimes.
 */* -gtk2
 app-crypt/pinentry -gtk
+media-libs/libcanberra -gtk
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Disable trying to build an initrd since it won't run in a chroot.
@@ -185,8 +216,6 @@ EOF
 
         # Accept audit-3.0 to fix host dependencies.
         echo '<sys-process/audit-3.1 ~*' >> "$portage/package.accept_keywords/audit.conf"
-        # Accept db-5.3.28 to fix host dependencies (#736870).
-        echo 'sys-libs/db *' >> "$portage/package.accept_keywords/db.conf"
         # Accept emacs-27.1 to fix cross-compiling.
         echo '<app-editors/emacs-27.2 ~*' >> "$portage/package.accept_keywords/emacs.conf"
         # Accept eselect-1.4.17 to fix host dependencies.
@@ -197,8 +226,12 @@ EOF
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
         # Accept gtk+-3.24.24 to fix host dependencies.
         echo '<x11-libs/gtk+-3.25 ~*' >> "$portage/package.accept_keywords/gtk.conf"
+        # Accept libcdio-paranoia-2.0 to fix host dependencies.
+        echo '<dev-libs/libcdio-paranoia-2.1 ~*' >> "$portage/package.accept_keywords/libcdio-paranoia.conf"
         # Accept libvpx-1.9.0 to fix debuginfo stripping (#746152).
         echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
+        # Accept lxdm-0.5.3 to fix host dependencies.
+        echo 'lxde-base/lxdm *' >> "$portage/package.accept_keywords/lxdm.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         # Accept policycoreutils-3.1 to fix dependencies.
@@ -258,17 +291,19 @@ EOF
         echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
+        echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 app-i18n/ibus cross-glib-genmarshal.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
 gnome-base/gnome-settings-daemon meson-pkgconfig.conf
-gnome-base/librsvg cross-glib-mkenums.conf
+gnome-base/librsvg cross-emake-utils.conf
 net-libs/libmbim cross-emake-utils.conf
 net-misc/modemmanager cross-emake-utils.conf
 net-misc/networkmanager cross-emake-utils.conf
 net-wireless/wpa_supplicant cross-libnl.conf
+x11-drivers/xf86-input-libinput xf86-sdk.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
 x11-wm/windowmaker cross-windowmaker.conf
 EOF
@@ -348,6 +383,11 @@ EOF
         $chmod 0755 "$buildroot/usr/bin/${options[host]}-clang"
         $ln -fn "$buildroot/usr/bin/${options[host]}-clang"{,++}
 
+        # Work around bad PolicyKit dependencies.
+        $mkdir -p "$buildroot/usr/share/gettext/its"
+        $ln -fst "$buildroot/usr/share/gettext/its" \
+            "/usr/${options[host]}/usr/share/gettext/its"/polkit.{its,loc}
+
         initialize_buildroot "$@"
 
         script "$host" "${packages_buildroot[@]}" << 'EOF'
@@ -364,9 +404,6 @@ sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/
 rm -f /var/db/repos/gentoo/dev-vcs/git/git-2.23.*.ebuild
 sed -i -e '/^DEPEND/,/BDEPEND/{/emacs/{x;d;};/BDEPEND/G;}' -e 's/||.*libsecret.*/CC="$(tc-getCC)" CFLAGS="${CFLAGS}" PKG_CONFIG="$(tc-getPKG_CONFIG)"/' /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild
 for ebuild in /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild ; do ebuild "$ebuild" manifest ; done
-## Support installing pinentry with gnome-keyring support (#762799).
-sed -i -e 's/^RDEPEND=".*[^"]$/&"\nPDEPEND="/' /var/db/repos/gentoo/app-crypt/gcr/gcr-*.ebuild
-for ebuild in /var/db/repos/gentoo/app-crypt/gcr/gcr-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support compiling basic qt5 packages in a sysroot.
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' /var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' /var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
@@ -378,11 +415,11 @@ sed -i -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}'
 if test "x$*" != "x${*/erofs-utils}"
 then
         mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
-        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=657616' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild
-        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild | sed -n '1s/ .*//p') = x80dd41b587c391161e7cacd50b4f2f481b9eb54baa221de221ffbf3a34246f8d
-        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.1.tar.gz' > /var/cache/distfiles/erofs-utils-1.1.tar.gz
-        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.1.tar.gz | sed -n '1s/ .*//p') = xa14a30d0d941f6642cad130fbba70a2493fabbe7baa09a8ce7d20745ea3385d6
-        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.1.ebuild manifest --force
+        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=682180' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.2.1.ebuild
+        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.2.1.ebuild | sed -n '1s/ .*//p') = x90e922110aacc3912a2c9caecf440d15088a415efaf39d967bc8199fc947a3cb
+        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.2.1.tar.gz' > /var/cache/distfiles/erofs-utils-1.2.1.tar.gz
+        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.2.1.tar.gz | sed -n '1s/ .*//p') = x6b2ea15c3b092bd9a3abd966f78bc01c6caacb94022643ff34cf69893ee04e84
+        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.2.1.ebuild manifest --force
 fi
 
 # Update the native build root packages to the latest versions.
@@ -465,6 +502,9 @@ function install_packages() {
         emerge --{,sys}root=root --jobs="$(nproc)" -1Kv "${packages[@]}" "$@"
         mv -t root/usr/bin root/gcc-bin/*/* ; rm -fr root/{binutils,gcc}-bin
 
+        # Create a UTF-8 locale so things work.
+        localedef --prefix=root -c -f UTF-8 -i en_US en_US.UTF-8
+
         # If a modular kernel was configured, install the stripped modules.
         opt bootable && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
         make -C /usr/src/linux modules_install \
@@ -530,8 +570,14 @@ EndSection
 EOF
 
         # Select a default desktop environment for startx, or default to twm.
-        test -s root/etc/X11/Sessions/wmaker &&
-        echo XSESSION=wmaker > root/etc/env.d/90xsession
+        local wm ; for wm in Xfce4 wmaker
+        do
+                if test -s "root/etc/X11/Sessions/$wm"
+                then
+                        echo "XSESSION=$wm" > root/etc/env.d/90xsession
+                        break
+                fi
+        done
 
         # Magenta looks more "Gentoo" than green, as in the website and logo.
         sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
@@ -956,9 +1002,10 @@ function archmap_profile() {
         local -r selinux=${options[selinux]:+/selinux}
         case "$native" in
             aarch64)  echo default/linux/arm64/17.0/systemd ;;
-            armv4t*)  echo default/linux/arm/17.0/armv4t ;;
-            armv5te*) echo default/linux/arm/17.0/armv5te ;;
-            armv7a)   echo default/linux/arm/17.0/armv7a ;;
+            armv4t*)  echo default/linux/arm/17.0/armv4t/systemd ;;
+            armv5te*) echo default/linux/arm/17.0/armv5te/systemd ;;
+            armv6*j*) echo default/linux/arm/17.0/armv6j/systemd ;;
+            armv7a)   echo default/linux/arm/17.0/armv7a/systemd ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
             powerpc)  echo default/linux/ppc/17.0 ;;
             riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d/systemd ;;
@@ -971,8 +1018,8 @@ function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
     aarch64)  echo aarch64-unknown-linux-gnu ;;
     armv4t*)  echo armv4t-unknown-linux-gnueabi ;;
     armv5te*) echo armv5te-unknown-linux-gnueabi ;;
+    armv6*)   echo arm-unknown-linux-gnueabihf ;;
     armv7*)   echo armv7-unknown-linux-gnueabihf ;;
-    arm*)     echo arm-unknown-linux-gnueabi ;;
     i[3-5]86) echo i586-unknown-linux-gnu ;;
     i686)     echo i686-unknown-linux-gnu ;;
     powerpc)  echo powerpc-unknown-linux-gnu ;;
@@ -983,6 +1030,7 @@ esac
 
 function archmap_stage3() {
         local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
+        local -r hardfp=$([[ $native == armv[67]* ]] && echo _hardfp)
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
         local -r nomulti=$([[ ${native: -2} = ${target: -2} || $target != *86* ]] && echo +nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
@@ -991,7 +1039,8 @@ function archmap_stage3() {
         case "$native" in
             armv4tl)  stage3=stage3-armv4tl ;;
             armv5tel) stage3=stage3-armv5tel ;;
-            armv7a)   stage3=stage3-armv7a_hardfp ;;
+            armv6*j*) stage3=stage3-armv6j$hardfp ;;
+            armv7a)   stage3=stage3-armv7a$hardfp ;;
             i[45]86)  stage3=stage3-i486 ;;
             i686)     stage3=stage3-i686-hardened ;;
             powerpc)  stage3=stage3-ppc ;;

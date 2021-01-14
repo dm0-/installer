@@ -9,6 +9,14 @@ cat <(echo) - << 'EOF' >> root/usr/share/X11/app-defaults/XTerm
 *ttyModes: erase ^?
 EOF
 
-test ! -s root/usr/share/X11/app-defaults/XTerm-color ||
+# Default to dark mode for the XTerm-color class.
+test -s root/usr/share/X11/app-defaults/XTerm-color &&
 sed -i -e '/dark background/,/^$/s/^[ !]*\(.*:\)/\1/' \
     root/usr/share/X11/app-defaults/XTerm-color
+
+# Allow passwordless users to log into the desktop through XDM.
+if test -s root/etc/X11/xdm/Xresources
+then
+        grep -Fqs allowNullPasswd root/etc/X11/xdm/Xresources ||
+        echo 'xlogin.Login.allowNullPasswd: true' >> root/etc/X11/xdm/Xresources
+fi

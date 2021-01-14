@@ -595,7 +595,8 @@ function defer() {
 }
 EOF
 
-        test -d root/usr/lib/locale/en_US.utf8 &&
+        test -d root/usr/lib/locale/en_US.utf8 ||
+        localedef --list-archive root/usr/lib/locale/locale-archive |& grep -Fqsx en_US.utf8 &&
         echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime

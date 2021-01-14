@@ -31,8 +31,8 @@ function create_buildroot() {
         # Fetch EROFS utilities from AUR since they're not in community yet.
         if opt read_only && ! opt squash
         then
-                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-636f3ca16ff3ecc8716ae10f24d083a2f51d4850.tar.gz' > "$output/erofs-utils.tgz"
-                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = xba048db076edf5443b760a8d284c3bd6ef384abfc47d1c97d24a493fe95f4409
+                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-a3bbcb394e86e19cf017c3f658d77f27b9a2302e.tar.gz' > "$output/erofs-utils.tgz"
+                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = x836f15e62608751283e34fd62303670acf9a28fc9f45b12be4d0083c3f3680cf
                 $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
                 packages_buildroot+=(base-devel)
         fi
@@ -75,7 +75,6 @@ function install_packages() {
 
         # Create a UTF-8 locale so things work.
         localedef --prefix=root -c -f UTF-8 -i en_US en_US.UTF-8
-        echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
         # Define basic users and groups prior to configuring other stuff.
         test -e root/usr/lib/sysusers.d/basic.conf &&

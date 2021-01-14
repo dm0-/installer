@@ -61,18 +61,18 @@ function initialize_buildroot() {
         echo >> "$portage/make.conf" 'USE="$USE' \
             berkdb curl dbus elfutils emacs gdbm git glib http2 libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
-            a52 alsa flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
+            apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
+            a52 alsa cdda flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bluray dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium kms libglvnd libkms opengl usb uvm vaapi vdpau wps \
+            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau wifi wps \
             cairo gtk gtk3 gui libdrm pango X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding ipv6 jit lto offensive pcap threads \
+            aio branding ipv6 jit lto offensive pcap threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -gallium -gui -policykit -repart -X'"'
+            -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -gallium -gui -policykit -repart -wifi -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
@@ -110,9 +110,9 @@ EOF
         $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
         test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
             x17e048ac765e92e15f7436b604452614cf88dc2bcbbaab18cdc024f3fdd4c575
-        $curl -L https://github.com/u-boot/u-boot/archive/v2020.10.tar.gz > "$buildroot/root/u-boot.tgz"
+        $curl -L https://github.com/u-boot/u-boot/archive/v2021.01.tar.gz > "$buildroot/root/u-boot.tgz"
         test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
-            x0c022ca6796aa8c0689faae8b515eb62ac84519c31de3153257a9ee0f446618f
+            xd3f8fbd819d033c8cb964c624a7cf61cfb9ca75782c3fe55be78006768a4ed1c
 }
 
 function customize_buildroot() {
