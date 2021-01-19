@@ -59,20 +59,21 @@ function initialize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb curl dbus elfutils emacs gdbm git glib http2 libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
-            a52 alsa cdda flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
-            aacs aom bluray dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
-            brotli bzip2 gzip lz4 lzma lzo xz zlib zstd \
+            a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
+            aacs aom bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
+            brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau wifi wps \
-            cairo gtk gtk3 gui libdrm pango X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding ipv6 jit lto offensive pcap threads udisks utempter \
+            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            aio branding jit lto offensive pcap system-info threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -gallium -gui -policykit -repart -wifi -X'"'
+            -gui -policykit -repart -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
@@ -107,9 +108,9 @@ EOF
         echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv/opensbi/archive/v0.8.tar.gz > "$buildroot/root/opensbi.tgz"
+        $curl -L https://github.com/riscv/opensbi/archive/v0.9.tar.gz > "$buildroot/root/opensbi.tgz"
         test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
-            x17e048ac765e92e15f7436b604452614cf88dc2bcbbaab18cdc024f3fdd4c575
+            x60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0
         $curl -L https://github.com/u-boot/u-boot/archive/v2021.01.tar.gz > "$buildroot/root/u-boot.tgz"
         test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
             xd3f8fbd819d033c8cb964c624a7cf61cfb9ca75782c3fe55be78006768a4ed1c

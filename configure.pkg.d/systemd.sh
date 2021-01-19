@@ -52,6 +52,11 @@ test -s root/usr/lib/systemd/system/systemd-pstore.service &&
 ln -fst root/usr/lib/systemd/system/basic.target.wants \
     ../systemd-pstore.service
 
+# Work around Linux 5.10 breaking BLKDISCARD in systemd-repart.
+test -s root/usr/lib/systemd/system/systemd-repart.service &&
+sed -i -e 's,^ExecStart=.*systemd-repart.*,& --discard=no,' \
+    root/usr/lib/systemd/system/systemd-repart.service
+
 # Use systemd to configure networking and DNS when requested.
 if opt networkd
 then

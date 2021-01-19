@@ -67,7 +67,6 @@ packages+=(
 
         # Graphics
         lxde-base/lxdm
-        media-sound/pulseaudio
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
@@ -103,20 +102,21 @@ EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb curl dbus elfutils emacs gdbm git glib http2 libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
-            a52 alsa cdda flac libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
-            aacs aom bluray dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
-            brotli bzip2 gzip lz4 lzma lzo xz zlib zstd \
+            a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
+            aacs aom bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
+            brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau wifi wps \
-            cairo gtk gtk3 gui libdrm pango X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding ipv6 jit lto offensive pcap threads udisks utempter \
+            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            aio branding jit lto offensive pcap system-info threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -gui -wifi'"'
+            -gui -networkmanager -wifi'"'
 
         # Install Firefox.
         fix_package firefox

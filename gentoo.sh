@@ -37,7 +37,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE bindist${options[selinux]:+ selinux} system-icu system-llvm systemd -elogind"
+USE="\$USE${options[selinux]:+ selinux} system-icu system-llvm systemd -elogind"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -56,7 +56,9 @@ app-arch/gnome-autoar *
 <app-misc/geoclue-2.5.8 ~*
 <dev-libs/json-glib-1.7 ~*
 <dev-libs/libgudev-235 ~*
+dev-libs/libgusb *
 dev-libs/libgweather *
+<dev-libs/libsigc++-2.11 ~*
 <gnome-base/gdm-3.36.5 ~*
 <gnome-extra/evolution-data-server-3.38.3 ~*
 gui-libs/libhandy *
@@ -75,7 +77,7 @@ sci-geosciences/geocode-glib *
 sys-apps/bubblewrap *
 <sys-auth/fprintd-1.90 ~*
 <sys-auth/libfprint-1.90 ~*
-x11-libs/colord-gtk *
+<x11-libs/colord-gtk-0.3 ~*
 x11-misc/colord *
 <x11-terms/gnome-terminal-3.38.3 ~*
 x11-wm/mutter *
@@ -98,6 +100,7 @@ x11-themes/adwaita-icon-theme *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/xfce.conf"
 # Accept viable versions of Xfce packages.
+xfce-extra/* *
 <dev-util/xfce4-dev-tools-4.16.1 ~*
 <x11-terms/xfce4-terminal-0.8.11 ~*
 <xfce-base/exo-4.16.1 ~*
@@ -105,7 +108,7 @@ EOF
 <xfce-base/libxfce4ui-4.16.1 ~*
 <xfce-base/libxfce4util-4.16.1 ~*
 <xfce-base/thunar-4.16.3 ~*
-<xfce-base/xfce4-appfinder-4.16.1 ~*
+<xfce-base/xfce4-appfinder-4.16.2 ~*
 <xfce-base/xfce4-meta-4.16.1 ~*
 <xfce-base/xfce4-panel-4.16.1 ~*
 <xfce-base/xfce4-session-4.16.1 ~*
@@ -267,7 +270,7 @@ PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
 SYSROOT="$ROOT"
-USE="$USE -bindist -kmod -multiarch -static -static-libs"
+USE="$USE -kmod -multiarch -static -static-libs"
 EOF
         $cat << 'EOF' >> "$portage/package.use/kill.conf"
 # Use the kill command from util-linux to minimize systemd dependencies.
@@ -327,6 +330,8 @@ EOF
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
+        # Enable udev with systemd and preserve bindist in the build root.
+        $sed -i -e '/^USE=/{s/USE /&bindist /;s/ systemd /&udev /;}' "$portage/make.conf"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
@@ -1067,90 +1072,8 @@ dev-libs/nss ~*
 www-client/firefox ~*
 EOF
                 echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
-                echo 'www-client/firefox -clang' >> "$portage/package.use/firefox.conf"
-                $sed -n '/^RUST_TARGET="i586-/q0;$q1' "$portage/make.conf" &&
-                $cat << 'EOF' > "$portage/patches/www-client/firefox/i586.patch"
---- a/build/moz.configure/init.configure
-+++ b/build/moz.configure/init.configure
-@@ -991,7 +991,7 @@
-     return namespace(
-         OS_TARGET=os_target,
-         OS_ARCH=os_arch,
--        INTEL_ARCHITECTURE=target.cpu in ("x86", "x86_64") or None,
-+        INTEL_ARCHITECTURE=None,
-     )
- 
- 
---- a/gfx/skia/skia/include/core/SkPreConfig.h
-+++ b/gfx/skia/skia/include/core/SkPreConfig.h
-@@ -85,7 +85,6 @@
- //////////////////////////////////////////////////////////////////////
- 
- #if defined(__i386) || defined(_M_IX86) ||  defined(__x86_64__) || defined(_M_X64)
--  #define SK_CPU_X86 1
- #endif
- 
- /**
---- a/media/libsoundtouch/src/STTypes.h
-+++ b/media/libsoundtouch/src/STTypes.h
-@@ -157,7 +157,7 @@
-         // data type for sample accumulation: Use double to utilize full precision.
-         typedef double LONG_SAMPLETYPE;
- 
--        #ifdef SOUNDTOUCH_ALLOW_X86_OPTIMIZATIONS
-+        #if 0
-             // Allow SSE optimizations
-             #define SOUNDTOUCH_ALLOW_SSE       1
-         #endif
---- a/mozglue/build/SSE.h
-+++ b/mozglue/build/SSE.h
-@@ -91,7 +91,7 @@
-  *
-  */
- 
--#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
-+#if 0
- 
- #  ifdef __MMX__
- // It's ok to use MMX instructions based on the -march option (or
-EOF
-                test "x${options[arch]}" = xpowerpc &&
-                $cat << 'EOF' > "$portage/patches/www-client/firefox/ppc.patch"
---- a/xpcom/reflect/xptcall/xptcall.h
-+++ b/xpcom/reflect/xptcall/xptcall.h
-@@ -71,6 +71,11 @@
-     ExtendedVal ext;
-   };
- 
-+#if defined(__powerpc__) && !defined(__powerpc64__)
-+  // this field is still necessary on ppc32, as an address
-+  // to it is taken certain places in xptcall
-+  void *ptr;
-+#endif
-   nsXPTType type;
-   uint8_t flags;
- 
-@@ -91,7 +96,12 @@
-   };
- 
-   void ClearFlags() { flags = 0; }
-+#if defined(__powerpc__) && !defined(__powerpc64__)
-+  void SetIndirect() { ptr = &val; flags |= IS_INDIRECT; }
-+  bool IsPtrData() const { return IsIndirect(); }
-+#else
-   void SetIndirect() { flags |= IS_INDIRECT; }
-+#endif
- 
-   bool IsIndirect() const { return 0 != (flags & IS_INDIRECT); }
- 
-EOF
-                test -s "$portage/patches/www-client/firefox/i586.patch" &&
-                echo 'EXTRA_ECONF="--without-system-png"' >> "$portage/env/firefox.conf"
-                test -s "$portage/patches/www-client/firefox/ppc.patch" &&
-                echo 'EXTRA_ECONF="--disable-webrtc --enable-linker=bfd"' >> "$portage/env/firefox.conf"
-                [[ ${options[arch]} =~ ^(arm|i[3-6]86|x86) ]] &&  # LTO causes ICE segfaults now.
-                echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
-                : ;;
+                echo 'www-client/firefox -clang -lto' >> "$portage/package.use/firefox.conf"
+                ;;
             vlc)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16
