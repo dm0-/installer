@@ -151,6 +151,11 @@ fi
 # Override squashfs creation since CentOS doesn't support zstd.
 eval "$(declare -f squash | $sed 's/ zstd .* 22 / xz /')"
 
+# Override ramdisk creation since the kernel is too old to support zstd.
+eval "$(declare -f configure_initrd_generation | $sed /compress=/d)"
+eval "$(declare -f squash build_systemd_ramdisk | $sed \
+    -e 's/zstd --[^|>]*/xz --check=crc32 -9e /')"
+
 # Override dm-init with userspace since the CentOS kernel is too old.
 eval "$(
 declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/'

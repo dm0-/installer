@@ -5,6 +5,12 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=31).
 eval "$(declare -f create_buildroot | $sed -e 's/cver=.*/cver=1.9/' \
     -e 's,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,')"
 
+# Override ramdisk creation since the kernel is too old to support zstd.
+eval "$(declare -f create_buildroot | $sed 's/ zstd//')"
+eval "$(declare -f configure_initrd_generation | $sed /compress=/d)"
+eval "$(declare -f relabel squash build_systemd_ramdisk | $sed \
+    -e 's/zstd --[^|>]*/xz --check=crc32 -9e /')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN

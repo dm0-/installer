@@ -63,7 +63,7 @@ function initialize_buildroot() {
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
-            aacs aom bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
+            aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
@@ -77,7 +77,6 @@ function initialize_buildroot() {
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
-        echo '<app-emulation/qemu-5.3 ~*' >> "$buildroot/etc/portage/package.accept_keywords/qemu.conf"
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
 app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_8 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
 dev-libs/glib static-libs
@@ -90,9 +89,6 @@ sys-apps/util-linux static-libs
 sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
-
-        # Disable LTO for packages broken with this architecture/ABI.
-        echo 'dev-libs/libbsd no-lto.conf' >> "$portage/package.env/no-lto.conf"
 
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)

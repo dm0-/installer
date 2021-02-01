@@ -56,7 +56,6 @@ app-arch/gnome-autoar *
 <app-misc/geoclue-2.5.8 ~*
 <dev-libs/json-glib-1.7 ~*
 <dev-libs/libgudev-235 ~*
-dev-libs/libgusb *
 dev-libs/libgweather *
 <dev-libs/libsigc++-2.11 ~*
 <gnome-base/gdm-3.36.5 ~*
@@ -78,7 +77,6 @@ sys-apps/bubblewrap *
 <sys-auth/fprintd-1.90 ~*
 <sys-auth/libfprint-1.90 ~*
 <x11-libs/colord-gtk-0.3 ~*
-x11-misc/colord *
 <x11-terms/gnome-terminal-3.38.3 ~*
 x11-wm/mutter *
 EOF
@@ -101,25 +99,25 @@ EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/xfce.conf"
 # Accept viable versions of Xfce packages.
 xfce-extra/* *
-<dev-util/xfce4-dev-tools-4.16.1 ~*
+<dev-util/xfce4-dev-tools-4.17 ~*
 <x11-terms/xfce4-terminal-0.8.11 ~*
-<xfce-base/exo-4.16.1 ~*
+<xfce-base/exo-4.17 ~*
 <xfce-base/garcon-0.8.1 ~*
-<xfce-base/libxfce4ui-4.16.1 ~*
-<xfce-base/libxfce4util-4.16.1 ~*
-<xfce-base/thunar-4.16.3 ~*
-<xfce-base/xfce4-appfinder-4.16.2 ~*
-<xfce-base/xfce4-meta-4.16.1 ~*
-<xfce-base/xfce4-panel-4.16.1 ~*
-<xfce-base/xfce4-session-4.16.1 ~*
-<xfce-base/xfce4-settings-4.16.1 ~*
-<xfce-base/xfconf-4.16.1 ~*
-<xfce-base/xfdesktop-4.16.1 ~*
-<xfce-base/xfwm4-4.16.2 ~*
-<xfce-extra/thunar-volman-4.16.1 ~*
-<xfce-extra/tumbler-4.16.1 ~*
-<xfce-extra/xfce4-power-manager-4.16.1 ~*
-<xfce-extra/xfce4-screensaver-4.16.1 ~*
+<xfce-base/libxfce4ui-4.17 ~*
+<xfce-base/libxfce4util-4.17 ~*
+<xfce-base/thunar-4.17 ~*
+<xfce-base/xfce4-appfinder-4.17 ~*
+<xfce-base/xfce4-meta-4.17 ~*
+<xfce-base/xfce4-panel-4.17 ~*
+<xfce-base/xfce4-session-4.17 ~*
+<xfce-base/xfce4-settings-4.17 ~*
+<xfce-base/xfconf-4.17 ~*
+<xfce-base/xfdesktop-4.17 ~*
+<xfce-base/xfwm4-4.17 ~*
+<xfce-extra/thunar-volman-4.17 ~*
+<xfce-extra/tumbler-4.17 ~*
+<xfce-extra/xfce4-power-manager-4.17 ~*
+<xfce-extra/xfce4-screensaver-4.17 ~*
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -145,6 +143,10 @@ gnome-extra/*
 sys-apps/gentoo-systemd-integration
 sys-apps/systemd
 EOF
+        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/cdrtools.conf"
+# Support file capabilities when making ISO images.
+app-cdr/cdrtools caps
+EOF
         $cat << 'EOF' >> "$portage/package.use/cryptsetup.conf"
 # Choose nettle as the crypto backend.
 sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
@@ -160,8 +162,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Disable trying to build an initrd since it won't run in a chroot.
 sys-kernel/gentoo-kernel -initramfs
-# Apply patches to support zstd and additional CPU optimizations.
-sys-kernel/gentoo-sources experimental
 EOF
         $cat << 'EOF' >> "$portage/package.use/llvm.conf"
 # Make clang use its own linker by default.
@@ -188,6 +188,8 @@ EOF
         $cat << 'EOF' >> "$portage/profile/package.provided"
 # These Python tools are not useful, and they pull in horrific dependencies.
 app-admin/setools-9999
+# This package is useless and installed by wrong dependencies (#768024).
+gui-libs/display-manager-init-9999
 EOF
         $cat << 'EOF' >> "$portage/profile/package.use.mask/emacs.conf"
 # Support Emacs browser widgets everywhere so Emacs can handle everything.
@@ -219,27 +221,31 @@ EOF
 
         # Accept audit-3.0 to fix host dependencies.
         echo '<sys-process/audit-3.1 ~*' >> "$portage/package.accept_keywords/audit.conf"
-        # Accept emacs-27.1 to fix cross-compiling.
-        echo '<app-editors/emacs-27.2 ~*' >> "$portage/package.accept_keywords/emacs.conf"
+        # Accept emacs-27.1 to fix cross-compiling (#767361).
+        echo 'app-editors/emacs *' >> "$portage/package.accept_keywords/emacs.conf"
         # Accept eselect-1.4.17 to fix host dependencies.
         echo -e '<app-admin/eselect-1.4.18 ~*\n<app-emacs/eselect-mode-1.4.18 ~*' >> "$portage/package.accept_keywords/eselect.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept gtk+-3.24.24 to fix host dependencies.
-        echo '<x11-libs/gtk+-3.25 ~*' >> "$portage/package.accept_keywords/gtk.conf"
-        # Accept libcdio-paranoia-2.0 to fix host dependencies.
-        echo '<dev-libs/libcdio-paranoia-2.1 ~*' >> "$portage/package.accept_keywords/libcdio-paranoia.conf"
-        # Accept libvpx-1.9.0 to fix debuginfo stripping (#746152).
-        echo 'media-libs/libvpx *' >> "$portage/package.accept_keywords/libvpx.conf"
-        # Accept lxdm-0.5.3 to fix host dependencies.
+        # Accept gtk+-3.24.24 to fix host dependencies (#767358).
+        echo 'x11-libs/gtk+ *' >> "$portage/package.accept_keywords/gtk.conf"
+        # Accept libbdplus-0.1.2 to fix host dependencies (#763477).
+        echo 'media-libs/libbdplus *' >> "$portage/package.accept_keywords/libbdplus.conf"
+        # Accept libcdio-paranoia-2.0 to fix host dependencies (#766923).
+        echo 'dev-libs/libcdio-paranoia *' >> "$portage/package.accept_keywords/libcdio-paranoia.conf"
+        # Accept libdvbpsi-1.3.3 to fix host dependencies.
+        echo '<media-libs/libdvbpsi-1.3.4 ~*' >> "$portage/package.accept_keywords/libdvbpsi.conf"
+        # Accept libmpeg2-0.5.1 to fix host dependencies (#765565).
+        echo '<media-libs/libmpeg2-0.5.2 ~*' >> "$portage/package.accept_keywords/libmpeg2.conf"
+        # Accept lxdm-0.5.3 to fix host dependencies (#766785).
         echo 'lxde-base/lxdm *' >> "$portage/package.accept_keywords/lxdm.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         # Accept policycoreutils-3.1 to fix dependencies.
         echo '<sys-apps/policycoreutils-3.2 ~*' >> "$portage/package.accept_keywords/policycoreutils.conf"
-        # Accept pulseaudio-13.0 to fix host dependencies and new users/groups.
+        # Accept pulseaudio-13.0 to fix host dependencies and new users/groups (#766926).
         echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
         # Accept selinux-python-3.1 to fix dependencies.
         echo '<sys-apps/selinux-python-3.2 ~*' >> "$portage/package.accept_keywords/selinux-python.conf"
@@ -291,13 +297,14 @@ EOF
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
-        echo 'EXTRA_ECONF="--with-incs-from= --with-libs-from="' >> "$portage/env/cross-windowmaker.conf"
+        echo 'EXTRA_CONF_QEMU="--cross-prefix=${CHOST}-"' >> "$portage/env/cross-qemu.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
+app-emulation/qemu cross-qemu.conf
 app-i18n/ibus cross-glib-genmarshal.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
 gnome-base/gnome-settings-daemon meson-pkgconfig.conf
@@ -308,13 +315,13 @@ net-misc/networkmanager cross-emake-utils.conf
 net-wireless/wpa_supplicant cross-libnl.conf
 x11-drivers/xf86-input-libinput xf86-sdk.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
-x11-wm/windowmaker cross-windowmaker.conf
 EOF
         echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
 # Turn off LTO for broken packages.
 dev-libs/icu no-lto.conf
 dev-libs/libaio no-lto.conf
+dev-libs/libbsd no-lto.conf
 media-gfx/potrace no-lto.conf
 media-libs/alsa-lib no-lto.conf
 media-sound/pulseaudio no-lto.conf
@@ -409,6 +416,9 @@ sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/
 rm -f /var/db/repos/gentoo/dev-vcs/git/git-2.23.*.ebuild
 sed -i -e '/^DEPEND/,/BDEPEND/{/emacs/{x;d;};/BDEPEND/G;}' -e 's/||.*libsecret.*/CC="$(tc-getCC)" CFLAGS="${CFLAGS}" PKG_CONFIG="$(tc-getPKG_CONFIG)"/' /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild
 for ebuild in /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild ; do ebuild "$ebuild" manifest ; done
+## Support cross-compiling VLC (#766549).
+sed -i -e '/eautoreconf/ised -i -e s/GETTEXT_VERSION/GETTEXT_REQUIRE_VERSION/ configure.ac' /var/db/repos/gentoo/media-video/vlc/vlc-3.*.ebuild
+for ebuild in /var/db/repos/gentoo/media-video/vlc/vlc-3.*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support compiling basic qt5 packages in a sysroot.
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' /var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' /var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
@@ -588,8 +598,8 @@ EOF
         sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
 }
 
-# Override ramdisk creation since the Gentoo kernel is patched to support zstd.
-eval "$(declare -f squash | $sed 's/xz.*/if opt monolithic ; then cat > initramfs.cpio ; else zstd --threads=0 --ultra -22 > initrd.img ; fi/')"
+# Override ramdisk creation to support a builtin initramfs for Gentoo.
+eval "$(declare -f squash | $sed 's/zstd --[^;]*/if opt monolithic ; then cat > initramfs.cpio ; else & ; fi/')"
 
 function save_boot_files() if opt bootable
 then
@@ -856,7 +866,7 @@ CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_SECURITY=y
 # Support using an initrd.
 CONFIG_BLK_DEV_INITRD=y
-CONFIG_RD_XZ=y
+CONFIG_RD_ZSTD=y
 # Support SELinux.
 CONFIG_NET=y
 CONFIG_AUDIT=y

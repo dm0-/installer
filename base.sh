@@ -288,7 +288,7 @@ EOF
 
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
-        xz --check=crc32 -9e > relabel.img
+        zstd --threads=0 --ultra -22 > relabel.img
 
         test -s vmlinuz.relabel ||
         cp -p /lib/modules/*/vmlinuz vmlinuz.relabel ||
@@ -330,7 +330,7 @@ EOF
                 done
         ) |
         cpio -D root -H newc -o |
-        xz --check=crc32 -9e > initrd.img
+        zstd --threads=0 --ultra -22 > initrd.img
 elif opt read_only && ! opt selinux
 then
         local -a args ; local path
@@ -425,7 +425,7 @@ EOF
         ln -fn final.img "$root/root.img"
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
-        xz --check=crc32 -9e | cat "$base" - > initrd.img
+        zstd --threads=0 --ultra -22 | cat "$base" - > initrd.img
 elif test -s "$1"
 then cp -p "$1" initrd.img
 else dracut --force initrd.img "$1"
@@ -658,16 +658,21 @@ function finalize_packages() {
         )
 
         # Work around systemd-repart not finding the storage device.
-        if opt verity && ! opt ramdisk && test -d root/usr/lib/repart.d
+        opt ramdisk || if compgen -G 'root/usr/lib/repart.d/*.conf' &>/dev/null
         then
                 local -r gendir=/usr/lib/systemd/system-generators
                 mkdir -p "root$gendir"
-                cat << 'EOF' > "root$gendir/repart-disk-wait"
-#!/bin/bash -eu
+                echo '#!/bin/bash -eu' > "root$gendir/repart-disk-wait"
+                if opt verity
+                then cat << 'EOF'
 table=( $(dmsetup table "$(findmnt --noheadings --output=source --raw /)") )
-[[ ${table[2]} == verity ]] || exit 0  # not verity root
-test -e "/sys/dev/block/${table[4]}/partition" || exit 0  # not partitioned
-part=$(sed -n s,^DEVNAME=,/dev/,p "/sys/dev/block/${table[4]}/uevent")
+[[ ${table[2]} == verity ]] && mm=${table[4]} || exit 0  # not verity root
+EOF
+                else echo 'mm=$(findmnt --noheadings --output=maj:min --raw /)'
+                fi >> "root$gendir/repart-disk-wait"
+                cat << 'EOF' >> "root$gendir/repart-disk-wait"
+test -e "/sys/dev/block/$mm/partition" || exit 0  # not partitioned
+part=$(sed -n s,^DEVNAME=,/dev/,p "/sys/dev/block/$mm/uevent")
 dev=/dev/$(lsblk --nodeps --noheadings --output=PKNAME "$part")
 test -b "$dev" || exit 0  # failed to find the partition's parent device
 unit=$(systemd-escape --path "$dev").device

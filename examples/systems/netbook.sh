@@ -5,7 +5,10 @@
 #
 # The GPT image is modified from the usual UEFI layout to produce an image with
 # a hybrid MBR that defines the ESP as a DOS partition.  The ESP is repurposed
-# as a FAT boot partition required by the U-Boot firmware.
+# as a FAT boot partition required by the U-Boot firmware.  When the image is
+# booted, it will automatically repartition the disk to have a boot partition,
+# two root file system partitions, and a persistent /var partition.  At least a
+# 4GiB SD card should be used for this.
 #
 # After writing gpt.img to an SD card, it will be booted automatically when the
 # system starts with the card inserted.
@@ -102,7 +105,7 @@ function initialize_buildroot() {
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
-            aacs aom bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
+            aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
@@ -112,7 +115,7 @@ function initialize_buildroot() {
             aio branding jit lto offensive pcap system-info threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -ffmpeg -gtk -gui -opengl -repart'"'
+            -ffmpeg -gtk -gui -opengl'"'
 
         # Build a static QEMU user binary for the target CPU.
         packages_buildroot+=(app-emulation/qemu)
@@ -199,6 +202,37 @@ EOF
 
         # Include a mount point for a writable boot partition.
         mkdir root/boot
+
+        # Use a persistent /var partition with bare ext4.
+        echo >> root/etc/fstab \
+            "PARTUUID=${options[var_uuid]:=$(</proc/sys/kernel/random/uuid)}" /var ext4 \
+            defaults,nodev,nosuid,x-systemd.growfs,x-systemd.makefs,x-systemd.rw-only 1 2
+
+        # Define a default partition layout: boot, two roots, and var.
+        mkdir -p root/usr/lib/repart.d
+        cat << EOF > root/usr/lib/repart.d/10-boot.conf
+[Partition]
+Label=BOOT
+SizeMinBytes=$(( 260 << 20 ))
+Type=esp
+EOF
+        cat << EOF > root/usr/lib/repart.d/20-root-a.conf
+[Partition]
+Label=ROOT-A
+SizeMaxBytes=$(( 1 << 30 ))
+SizeMinBytes=$(( 1 << 30 ))
+Type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+EOF
+        sed s/ROOT-A/ROOT-B/ root/usr/lib/repart.d/20-root-a.conf \
+            > root/usr/lib/repart.d/30-root-b.conf
+        cat << EOF > root/usr/lib/repart.d/50-var.conf
+[Partition]
+FactoryReset=on
+Label=var
+SizeMinBytes=$(( 512 << 20 ))
+Type=var
+UUID=${options[var_uuid]}
+EOF
 }
 
 # Override the UEFI function as a hack to produce the U-Boot files.

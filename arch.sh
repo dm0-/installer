@@ -112,6 +112,7 @@ then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"
 EOF

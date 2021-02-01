@@ -14,6 +14,7 @@ then
                 [OpaqueMoveResizeKeyboard]=YES
                 [OpaqueResize]=YES
                 [PrevWorkspaceKey]='"Mod1+Left"'
+                [RunKey]='"Mod1+F2"'
                 [SmoothWorkspaceBack]=YES
                 [SnapToTopMaximizesFullscreen]=YES
                 [WindowSnapping]=YES

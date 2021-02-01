@@ -7,11 +7,11 @@ options[verity_sig]=
 function create_buildroot() {
         local -r image="https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.$DEFAULT_ARCH-lxc.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel-default ucode-{amd,intel})
+        opt bootable && packages_buildroot+=(kernel-default ucode-{amd,intel} zstd)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(mozilla-nss-tools pesign)
-        opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86)
+        opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86 zstd)
         opt squash && packages_buildroot+=(squashfs)
         opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
@@ -122,6 +122,7 @@ then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"
 EOF
@@ -175,7 +176,7 @@ then
         local -r repo='https://download.opensuse.org/repositories/security:/SELinux/openSUSE_Factory'
         $curl -L "$repo/repodata/repomd.xml.key" > "$output/selinux.key"
         test x$($sha256sum "$output/selinux.key" | $sed -n '1s/ .*//p') = \
-            x32af8322c657e308ab97aea20dc7c57a37a20b2e0ce5bf83b9945028ceb1e172
+            xc8bfe12f4756a041e66e6a246455f4efe5710707591949f7377ec251aabbda91
         enter /usr/bin/rpmkeys --import selinux.key
         $rm -f "$output/selinux.key"
         echo -e > "$buildroot/etc/zypp/repos.d/selinux.repo" \

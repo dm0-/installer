@@ -99,7 +99,7 @@ function initialize_buildroot() {
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
-            aacs aom bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
+            aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
@@ -136,6 +136,14 @@ EOF
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'dev-lang/spidermonkey -lto' >> "$portage/package.use/spidermonkey.conf"
+
+        # Fix broken Linux 5.10.8+.
+        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
+        $curl -L > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/ppc.patch" \
+            https://github.com/gregkh/linux/commit/bca9ca5a603f6c5586a7dfd35e06abe6d5fcd559.patch
+        test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/ppc.patch" | $sed -n '1s/ .*//p') = \
+            x8c4b7397b2244a595a9a5867f9414e03094d15d92436980fddeb2b1cc23bf6b6
+        $sed -i -e '/@@/y/09/90/;/^+[^+]/s/./-/' "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/ppc.patch"
 }
 
 function customize_buildroot() {

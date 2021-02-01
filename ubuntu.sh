@@ -220,6 +220,10 @@ eval "$(declare -f relabel | $sed \
     -e '/ldd/iopt squash && cp -t "$root/lib" /usr/lib/*/libgcc_s.so.1' \
     -e 's/qemu-system-[^ ]* /&-display none /g')"
 
+# Override ramdisk creation since the kernel is too old to support zstd.
+eval "$(declare -f relabel squash build_systemd_ramdisk | $sed \
+    -e 's/zstd --[^|>]*/xz --check=crc32 -9e /')"
+
 # Override kernel arguments to use SELinux instead of AppArmor.
 eval "$(
 declare -f relabel | $sed 's/ -append /&security=selinux" "/'

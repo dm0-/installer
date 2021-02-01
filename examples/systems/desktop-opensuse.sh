@@ -129,7 +129,7 @@ packages_buildroot+=(createrepo_c rpm-build)
 function customize_buildroot() {
         local -r name=nvidia-gfxG05-kmp
         local -r kernel=$(compgen -G '/lib/modules/*/updates/nvidia.ko' | sed -n '1s,/updates.*,,p')
-        rpmbuild -ba /dev/stdin << EOF
+        cat << EOF > "/root/$name.spec" ; rpmbuild -ba "/root/$name.spec"
 Name: $name
 Version: $(rpm -q --qf '%{VERSION}' "$name-default" | sed -n '1s/_.*//p')
 Release: 1

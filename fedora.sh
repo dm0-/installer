@@ -8,12 +8,12 @@ function create_buildroot() {
         local -r cver=$(test "x${options[release]-}" = x32 && echo 1.6 || echo 1.2)
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
+        opt bootable && packages_buildroot+=(kernel-core microcode_ctl zstd)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(nss-tools pesign)
-        opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core)
+        opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
         opt verity && packages_buildroot+=(veritysetup)
@@ -98,6 +98,7 @@ then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"
 EOF
