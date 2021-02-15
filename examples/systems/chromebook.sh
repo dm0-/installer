@@ -139,9 +139,7 @@ function customize_buildroot() {
         base64 -d < /root/nvram.txt > "/lib/firmware/brcm/${file##*/}"
 
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > config
-        make -C /usr/src/linux allnoconfig ARCH=arm \
-            CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
+        write_system_kernel_config
 }
 
 function customize() {
@@ -274,7 +272,9 @@ s/C12A7328-F81F-11D2-BA4B-00A0C93EC93B/FE3A2A5D-4F32-41A7-B725-ACCC3285A309/g
 s/size=[^ ,]*esp[^ ,]*,/'\''attrs="50 51 52 54 56"'\'', &/g
 s/"EFI System Partition"/KERN-A/g;}')"
 
-function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
+function write_system_kernel_config() if opt bootable
+then cat >> /etc/kernel/config.d/system.config
+fi << 'EOF'
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support adding swap space.

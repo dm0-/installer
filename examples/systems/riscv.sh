@@ -122,9 +122,7 @@ function customize_buildroot() {
         ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild manifest
 
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > config
-        make -C /usr/src/linux allnoconfig ARCH=riscv \
-            CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
+        write_system_kernel_config
 }
 
 function customize() {
@@ -146,7 +144,7 @@ function customize() {
         ln -ft "/usr/$host/tmp" /usr/bin/qemu-riscv64
         chroot "/usr/$host" \
             /tmp/qemu-riscv64 -cpu rv64 -E "LD_LIBRARY_PATH=$gccdir" \
-            /usr/bin/emacs --batch --eval='(dump-emacs-portable "/tmp/emacs.pdmp")'
+            /usr/bin/emacs --batch --eval='(dump-emacs-portable "/tmp/emacs.pdmp")' --quick
         rm -f root/usr/libexec/emacs/*/*/emacs.pdmp \
             root/usr/lib/systemd/system{,/multi-user.target.wants}/emacs-pdmp.service
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
@@ -157,13 +155,13 @@ function customize() {
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
 EOF
-        make -C /root/u-boot -j"$(nproc)" olddefconfig CROSS_COMPILE="${options[host]}-" V=1
-        make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="${options[host]}-" V=1
+        make -C /root/u-boot -j"$(nproc)" olddefconfig CROSS_COMPILE="$host-" V=1
+        make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="$host-" V=1
 
         # Build OpenSBI with a U-Boot payload for the firmware image.
         tar --transform='s,^/*[^/]*,opensbi,' -C /root -xf /root/opensbi.tgz
         make -C /root/opensbi -j"$(nproc)" all \
-            CROSS_COMPILE="${options[host]}-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
+            CROSS_COMPILE="$host-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
         cp -p /root/opensbi/build/platform/generic/firmware/fw_payload.bin opensbi-uboot.bin
         chmod 0644 opensbi-uboot.bin
 
@@ -222,7 +220,9 @@ test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a\
 mcopy -i esp.img grub.cfg ::/grub.cfg
 }')"
 
-function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
+function write_system_kernel_config() if opt bootable
+then cat >> /etc/kernel/config.d/system.config
+fi << 'EOF'
 # Show initialization messages.
 CONFIG_PRINTK=y
 ## Output early printk messages to the console.

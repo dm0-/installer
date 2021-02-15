@@ -32,7 +32,7 @@ function create_buildroot() {
         $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.{force,mask},repos.conf}
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
-FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -network-sandbox -news -selinux"
+FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -merge-sync -network-sandbox -news -selinux"
 GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}"
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
@@ -42,8 +42,8 @@ VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
 # Accept boot-related utilities with no stable versions.
-app-crypt/pesign
-sys-boot/vboot-utils
+app-crypt/pesign ~*
+sys-boot/vboot-utils ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
 # Accept viable versions of GNOME packages.
@@ -82,11 +82,12 @@ x11-wm/mutter *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
+sec-policy/* ~*
 sys-kernel/gentoo-kernel
 sys-kernel/gentoo-sources
 sys-kernel/git-sources
 sys-kernel/linux-headers
-sec-policy/*
+virtual/dist-kernel
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
 # Accept Rust users to bypass bad keywording.
@@ -98,26 +99,10 @@ x11-themes/adwaita-icon-theme *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/xfce.conf"
 # Accept viable versions of Xfce packages.
+xfce-base/* *
 xfce-extra/* *
-<dev-util/xfce4-dev-tools-4.17 ~*
-<x11-terms/xfce4-terminal-0.8.11 ~*
-<xfce-base/exo-4.17 ~*
-<xfce-base/garcon-0.8.1 ~*
-<xfce-base/libxfce4ui-4.17 ~*
-<xfce-base/libxfce4util-4.17 ~*
-<xfce-base/thunar-4.17 ~*
-<xfce-base/xfce4-appfinder-4.17 ~*
-<xfce-base/xfce4-meta-4.17 ~*
-<xfce-base/xfce4-panel-4.17 ~*
-<xfce-base/xfce4-session-4.17 ~*
-<xfce-base/xfce4-settings-4.17 ~*
-<xfce-base/xfconf-4.17 ~*
-<xfce-base/xfdesktop-4.17 ~*
-<xfce-base/xfwm4-4.17 ~*
-<xfce-extra/thunar-volman-4.17 ~*
-<xfce-extra/tumbler-4.17 ~*
-<xfce-extra/xfce4-power-manager-4.17 ~*
-<xfce-extra/xfce4-screensaver-4.17 ~*
+dev-util/xfce4-dev-tools *
+x11-terms/xfce4-terminal *
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -188,8 +173,6 @@ EOF
         $cat << 'EOF' >> "$portage/profile/package.provided"
 # These Python tools are not useful, and they pull in horrific dependencies.
 app-admin/setools-9999
-# This package is useless and installed by wrong dependencies (#768024).
-gui-libs/display-manager-init-9999
 EOF
         $cat << 'EOF' >> "$portage/profile/package.use.mask/emacs.conf"
 # Support Emacs browser widgets everywhere so Emacs can handle everything.
@@ -219,38 +202,20 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept audit-3.0 to fix host dependencies.
-        echo '<sys-process/audit-3.1 ~*' >> "$portage/package.accept_keywords/audit.conf"
-        # Accept emacs-27.1 to fix cross-compiling (#767361).
-        echo 'app-editors/emacs *' >> "$portage/package.accept_keywords/emacs.conf"
-        # Accept eselect-1.4.17 to fix host dependencies.
-        echo -e '<app-admin/eselect-1.4.18 ~*\n<app-emacs/eselect-mode-1.4.18 ~*' >> "$portage/package.accept_keywords/eselect.conf"
+        # Accept eselect-1.4.17 to fix host dependencies (#768528).
+        echo 'app-admin/eselect *' >> "$portage/package.accept_keywords/eselect.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept gtk+-3.24.24 to fix host dependencies (#767358).
-        echo 'x11-libs/gtk+ *' >> "$portage/package.accept_keywords/gtk.conf"
-        # Accept libbdplus-0.1.2 to fix host dependencies (#763477).
-        echo 'media-libs/libbdplus *' >> "$portage/package.accept_keywords/libbdplus.conf"
-        # Accept libcdio-paranoia-2.0 to fix host dependencies (#766923).
-        echo 'dev-libs/libcdio-paranoia *' >> "$portage/package.accept_keywords/libcdio-paranoia.conf"
-        # Accept libdvbpsi-1.3.3 to fix host dependencies.
-        echo '<media-libs/libdvbpsi-1.3.4 ~*' >> "$portage/package.accept_keywords/libdvbpsi.conf"
-        # Accept libmpeg2-0.5.1 to fix host dependencies (#765565).
-        echo '<media-libs/libmpeg2-0.5.2 ~*' >> "$portage/package.accept_keywords/libmpeg2.conf"
+        # Accept libdvbpsi-1.3.3 to fix host dependencies (#769308).
+        echo 'media-libs/libdvbpsi *' >> "$portage/package.accept_keywords/libdvbpsi.conf"
         # Accept lxdm-0.5.3 to fix host dependencies (#766785).
         echo 'lxde-base/lxdm *' >> "$portage/package.accept_keywords/lxdm.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
-        # Accept policycoreutils-3.1 to fix dependencies.
-        echo '<sys-apps/policycoreutils-3.2 ~*' >> "$portage/package.accept_keywords/policycoreutils.conf"
-        # Accept pulseaudio-13.0 to fix host dependencies and new users/groups (#766926).
-        echo '<media-sound/pulseaudio-14.0 ~*' >> "$portage/package.accept_keywords/pulseaudio.conf"
-        # Accept selinux-python-3.1 to fix dependencies.
-        echo '<sys-apps/selinux-python-3.2 ~*' >> "$portage/package.accept_keywords/selinux-python.conf"
-        # Accept windowmaker-0.95.9 to fix host dependencies.
-        echo '<x11-wm/windowmaker-0.95.10 ~*' >> "$portage/package.accept_keywords/windowmaker.conf"
+        # Accept windowmaker-0.95.9 to fix host dependencies (#768987).
+        echo 'x11-wm/windowmaker *' >> "$portage/package.accept_keywords/windowmaker.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -329,10 +294,6 @@ sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
 EOF
-        $cat << 'EOF' >> "$portage/profile/package.provided"
-# The kernel source is shared between the host and cross-compiled root.
-sys-kernel/gentoo-sources-9999
-EOF
         echo split-usr >> "$portage/profile/use.mask"
 
         # Write portage profile settings that only apply to the native root.
@@ -400,6 +361,7 @@ EOF
         $ln -fst "$buildroot/usr/share/gettext/its" \
             "/usr/${options[host]}/usr/share/gettext/its"/polkit.{its,loc}
 
+        write_base_kernel_config
         initialize_buildroot "$@"
 
         script "$host" "${packages_buildroot[@]}" << 'EOF'
@@ -458,36 +420,53 @@ stable=$(env {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host" portageq envvar ACCEPT_KEYWO
 crossdev ${stable:+--stable} --target "$host"
 
 # Install all requirements for building the target image.
-emerge --changed-use --jobs=4 --update --verbose "$@"
-
-# Share the clean kernel source between roots if it's installed.
-if test -d /usr/src/linux
-then
-        ln -fst "/usr/$host/usr/src" ../../../../usr/src/linux
-        make -C /usr/src/linux -j"$(nproc)" mrproper V=1
-fi
+exec emerge --changed-use --jobs=4 --update --verbose "$@"
 EOF
 
         build_relabel_kernel
-        write_base_kernel_config
 }
 
 function install_packages() {
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
+        local -a packages_sysroot=()
 
         opt bootable || opt networkd && packages+=(acct-group/mail sys-apps/systemd)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
         packages+=(sys-apps/baselayout)
 
-        # Build the kernel now so external modules can be built.
+        # If system-specific kernel configs were not given, use dist-kernel.
         if opt bootable
         then
+                test "x$(cd /etc/kernel/config.d ; compgen -G '*.config')" \
+                    = xbase.config || : ${options[raw_kernel]=1}
+                cat << EOF >> /etc/kernel/config.d/keys.config
+CONFIG_MODULE_SIG_KEY="$keydir/sign.pem"
+$(opt verity_sig || echo '#')CONFIG_SYSTEM_TRUSTED_KEYS="$keydir/verity.crt"
+EOF
+                if ! opt raw_kernel
+                then
+                        chgrp portage "$keydir" ; chmod g+x "$keydir"
+                        packages_sysroot+=(sys-kernel/gentoo-kernel virtual/libelf)
+                fi
+        fi
+
+        # Build an unpackaged kernel now so external modules can use its files.
+        if opt raw_kernel
+        then
                 local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
-                test -s /usr/src/linux/.config
-                sed -i -e "/^CONFIG_MODULE_SIG_KEY=.certs.signing_key.pem.$/s,=.*,=\"$keydir/sign.pem\"," /usr/src/linux/.config
-                opt verity_sig && sed -i -e "/^CONFIG_SYSTEM_TRUSTED_KEYS=\"\"$/s,.$,$keydir/verity.crt&," /usr/src/linux/.config
+                KCONFIG_CONFIG=/root/config \
+                /usr/src/linux/scripts/kconfig/merge_config.sh \
+                    -m -r /etc/kernel/config.d/*.config
+                make -C /usr/src/linux -j"$(nproc)" \
+                    allnoconfig KCONFIG_ALLCONFIG=/root/config \
+                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
                 make -C /usr/src/linux -j"$(nproc)" \
                     ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                ln -fst "$ROOT/usr/src" ../../../../usr/src/linux
+                cat << 'EOF' >> "$ROOT/etc/portage/profile/package.provided"
+# The kernel source is shared between the host and cross-compiled root.
+sys-kernel/gentoo-sources-9999
+EOF
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
@@ -505,7 +484,7 @@ function install_packages() {
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-            "${packages[@]}" "$@"
+            "${packages[@]}" "${packages_sysroot[@]}" "$@"
 
         # Install the target root from binaries with no build dependencies.
         mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib},var}
@@ -521,7 +500,7 @@ function install_packages() {
         localedef --prefix=root -c -f UTF-8 -i en_US en_US.UTF-8
 
         # If a modular kernel was configured, install the stripped modules.
-        opt bootable && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
+        opt raw_kernel && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
         make -C /usr/src/linux modules_install \
             INSTALL_MOD_PATH=/wd/root INSTALL_MOD_STRIP=1 \
             ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
@@ -569,10 +548,6 @@ function distro_tweaks() {
         ROOT=root eselect iptables list |& grep -Fqs xtables-nft-multi &&
         ROOT=root eselect iptables set xtables-nft-multi
 
-        # Link BIOS files where QEMU expects to find them.
-        test -d root/usr/share/qemu -a -d root/usr/share/seavgabios &&
-        (cd root/usr/share/qemu ; exec ln -fst . ../sea{,vga}bios/*)
-
         # Set some sensible key behaviors for a bare X session.
         test -x root/usr/bin/startx &&
         mkdir -p root/etc/X11/xorg.conf.d &&
@@ -599,34 +574,42 @@ EOF
 }
 
 # Override ramdisk creation to support a builtin initramfs for Gentoo.
-eval "$(declare -f squash | $sed 's/zstd --[^;]*/if opt monolithic ; then cat > initramfs.cpio ; else & ; fi/')"
+eval "$(declare -f squash | $sed 's/zstd --[^;]*/if opt monolithic ; then cat > /initramfs.cpio ; else & ; fi/')"
 
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
         magick -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s $(opt monolithic && echo initramfs.cpio || echo initrd.img) || build_busybox_initrd
-        if ! test -s vmlinux -o -s vmlinuz
-        then
-                local -r kernel_arch="$(archmap_kernel "${options[arch]}")"
-                if opt monolithic
-                then
-                        cat << EOF >> /usr/src/linux/.config
+        test -s $(opt monolithic && echo /initramfs.cpio || echo initrd.img) || build_busybox_initrd
+        opt monolithic && if opt raw_kernel
+        then cat >> /usr/src/linux/.config
+        else cat >> /etc/kernel/config.d/monolithic.config
+        fi << EOF
 CONFIG_CMDLINE="$(sed 's/["\]/\\&/g' kernel_args.txt)"
 CONFIG_CMDLINE_FORCE=y
 CONFIG_INITRAMFS_COMPRESSION_ZSTD=y
 CONFIG_INITRAMFS_FORCE=y
-$(test -s initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/wd/initramfs.cpio"
+$(test -s /initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/initramfs.cpio"
 EOF
+        test -s vmlinux -o -s vmlinuz || if opt raw_kernel
+        then
+                local -r arch="$(archmap_kernel "${options[arch]}")"
+                if opt monolithic
+                then
                         make -C /usr/src/linux -j"$(nproc)" olddefconfig \
-                            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                            ARCH="$arch" CROSS_COMPILE="${options[host]}-" V=1
                         make -C /usr/src/linux -j"$(nproc)" \
-                            ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                            ARCH="$arch" CROSS_COMPILE="${options[host]}-" V=1
                 fi
                 make -C /usr/src/linux install \
-                    ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
+                    ARCH="$arch" CROSS_COMPILE="${options[host]}-" V=1
                 cp -p /boot/vmlinux-* vmlinux || cp -p /boot/vmlinuz-* vmlinuz
+        else
+                local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
+                opt monolithic &&
+                emerge --buildpkg=n --jobs=4 --verbose sys-kernel/gentoo-kernel
+                cp -p "$ROOT"/usr/src/linux/arch/*/boot/*Image* vmlinuz
         fi < /dev/null
 fi
 
@@ -681,7 +664,7 @@ EOF
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
         if opt monolithic
-        then cat > initramfs.cpio
+        then cat > /initramfs.cpio
         else zstd --threads=0 --ultra -22 > initrd.img
         fi
 fi
@@ -729,7 +712,9 @@ EOF
 
 function write_base_kernel_config() if opt bootable
 then
-        echo '# Basic settings
+        $mkdir -p "$buildroot/etc/kernel/config.d"
+        {
+                echo '# Basic settings
 CONFIG_ACPI=y
 CONFIG_BASE_FULL=y
 CONFIG_BLOCK=y
@@ -740,7 +725,6 @@ CONFIG_SHMEM=y
 CONFIG_UNIX=y
 # File system settings
 CONFIG_DEVTMPFS=y
-CONFIG_OVERLAY_FS=y
 CONFIG_PROC_FS=y
 CONFIG_SYSFS=y
 CONFIG_TMPFS=y
@@ -770,34 +754,36 @@ CONFIG_MODULE_SIG=y
 CONFIG_MODULE_SIG_ALL=y
 CONFIG_MODULE_SIG_FORCE=y
 CONFIG_MODULE_SIG_SHA512=y'
-        [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
+                [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
 CONFIG_64BIT=y'
-        test "x${options[arch]}" = xx86_64 && echo 'CONFIG_SMP=y
+                [[ ${options[arch]} = x86_64 ]] && echo 'CONFIG_SMP=y
 CONFIG_X86_LOCAL_APIC=y'
-        opt networkd && echo '# Network settings
+                opt networkd && echo '# Network settings
 CONFIG_NET=y
 CONFIG_INET=y
 CONFIG_IPV6=y
 CONFIG_PACKET=y'
-        opt nvme && echo '# NVMe settings
+                opt nvme && echo '# NVMe settings
 CONFIG_PCI=y
 CONFIG_BLK_DEV_NVME=y'
-        opt ramdisk || opt verity_sig && echo '# Initrd settings
+                opt ramdisk || opt verity_sig && echo '# Initrd settings
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_RD_ZSTD=y'
-        opt ramdisk && echo '# Loop settings
+                opt ramdisk && echo '# Loop settings
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
 CONFIG_BLK_DEV_LOOP_MIN_COUNT=1' || echo '# Loop settings
 CONFIG_BLK_DEV_LOOP_MIN_COUNT=0'
-        opt selinux && echo '# SELinux settings
+                opt read_only && echo '# Overlay settings
+CONFIG_OVERLAY_FS=y'
+                opt selinux && echo '# SELinux settings
 CONFIG_AUDIT=y
 CONFIG_SECURITY=y
 CONFIG_SECURITY_NETWORK=y
 CONFIG_SECURITY_SELINUX=y
 CONFIG_SECURITY_SELINUX_DEVELOP=y    # XXX: Start permissive.
 CONFIG_SECURITY_SELINUX_BOOTPARAM=y  # XXX: Support toggling at boot to test.'
-        opt squash && echo '# Squashfs settings
+                opt squash && echo '# Squashfs settings
 CONFIG_MISC_FILESYSTEMS=y
 CONFIG_SQUASHFS=y
 CONFIG_SQUASHFS_FILE_DIRECT=y
@@ -813,7 +799,7 @@ CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y'
-        opt uefi && echo '# UEFI settings
+                opt uefi && echo '# UEFI settings
 CONFIG_EFI=y
 CONFIG_EFI_STUB=y
 # ESP settings
@@ -824,15 +810,15 @@ CONFIG_NLS_DEFAULT="utf8"
 CONFIG_NLS_CODEPAGE_437=y
 CONFIG_NLS_ISO8859_1=y
 CONFIG_NLS_UTF8=y'
-        opt verity && echo '# Verity settings
+                opt verity && echo '# Verity settings
 CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_INIT=y
 CONFIG_DM_VERITY=y
 CONFIG_CRYPTO_SHA256=y'
-        opt verity_sig && echo 'CONFIG_CRYPTO_SHA512=y
+                opt verity_sig && echo 'CONFIG_CRYPTO_SHA512=y
 CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG=y'
-        echo '# Settings for systemd as decided by Gentoo, plus some missing
+                echo '# Settings for systemd
 CONFIG_COMPAT_32BIT_TIME=y
 CONFIG_DMI=y
 CONFIG_NAMESPACES=y
@@ -844,12 +830,12 @@ CONFIG_FUTEX=y
 CONFIG_POSIX_TIMERS=y
 CONFIG_PROC_SYSCTL=y
 CONFIG_UNIX98_PTYS=y'
-else $rm -f "$output/config.base"
-fi > "$output/config.base"
+        } >> "$buildroot/etc/kernel/config.d/base.config"
+fi
 
 function build_relabel_kernel() if opt selinux
 then
-        echo > "$output/config.relabel" '# Target the native CPU.
+        echo > "$buildroot/root/config.relabel" '# Target the native CPU.
 '$([[ $DEFAULT_ARCH =~ 64 ]] || echo '#')'CONFIG_64BIT=y
 CONFIG_MNATIVE=y
 CONFIG_SMP=y
@@ -895,9 +881,9 @@ CONFIG_SERIAL_8250_CONSOLE=y
 CONFIG_ACPI=y
 # Print initialization messages for debugging.
 CONFIG_PRINTK=y'
-
         script << 'EOF'
-make -C /usr/src/linux -j"$(nproc)" allnoconfig KCONFIG_ALLCONFIG="$PWD/config.relabel" V=1
+make -C /usr/src/linux -j"$(nproc)" V=1 \
+    allnoconfig KCONFIG_ALLCONFIG=/root/config.relabel
 make -C /usr/src/linux -j"$(nproc)" V=1
 make -C /usr/src/linux install V=1
 mv /boot/vmlinuz-* vmlinuz.relabel
@@ -1075,13 +1061,11 @@ function fix_package() {
         case "$*" in
             firefox)
                 echo 'dev-lang/python sqlite' >> "$buildroot/etc/portage/package.use/firefox.conf"
-                echo 'BINDGEN_CFLAGS="--sysroot=$SYSROOT --target=$CHOST"' >> "$portage/env/firefox.conf"
                 $cat << EOF >> "$portage/package.accept_keywords/firefox.conf"
 dev-libs/nspr ~*
 dev-libs/nss ~*
 www-client/firefox ~*
 EOF
-                echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
                 echo 'www-client/firefox -clang -lto' >> "$portage/package.use/firefox.conf"
                 ;;
             vlc)

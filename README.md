@@ -73,7 +73,7 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (32 
 **Bootable**:  The bootable option produces a kernel and other boot-related files in addition to the root file system.  This option should always be used unless a container is being built.
 
   * :star: *Arch*, *CentOS*, *Fedora*, *openSUSE*, and *Ubuntu* support the bootable option by using the distro kernel (preferring a security-hardened variant where available) and including early microcode updates for all supported CPU types.  This should make the images portable across all hardware supported by the distro and architecture.
-  * :warning: *Gentoo* requires a full kernel config to be supplied so it can build Linux tailored to run only on desired targets.  Microcode updates must be specified in the config for the target CPUs.  The resulting system will only be portable to machines that were intentionally configured in the kernel.
+  * :warning: *Gentoo* can use a default distro kernel on a handful of common architectures, but it is configured so that it doesn't build or require an initrd.  Early microcode updates need to be handled separately.  Alternatively, configuration files can be provided to build a custom kernel instead, which can support any architecture and bundle microcode/firmware files for the target system.
 
 **RAM Disk**:  The root file system image can be included in an initrd for a bootable system so that it does not need to be written to a partition.  This option runs the system entirely in RAM.  When not using SquashFS, verity, or SELinux, no file system image is produced; the entire root directory is packed into the initrd directly.
 
@@ -122,8 +122,6 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (32 
 ## To Do
 
 **Support configuring systemd with the etc Git overlay.**  The `/etc` directory contains the read-only default configuration files with a writable overlay, and if Git is installed, the modified files in the overlay are tracked in a repository.  The repository database is saved in `/var` so the changes can be stored persistently.  At the moment, the Git overlay is mounted by a systemd unit in the root file system, which happens too late to configure systemd behavior.  It needs to be set up by an initrd before pivoting to the real root file system.
-
-**Install the preconfigured Gentoo kernel when not given a custom config.**  Gentoo added a package to build a generic kernel using the configuration from Arch.  This package should be installed for bootable systems when a custom kernel is not configured so that it is easier to produce a portable image from source.
 
 **Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
 

@@ -46,7 +46,8 @@ function create_buildroot() {
 }
 
 function install_packages() {
-        opt bootable || opt networkd && packages+=(systemd)
+        opt bootable && packages+=(systemd)
+        opt networkd && packages+=(systemd-networkd)
         opt selinux && packages+=(selinux-policy-targeted)
 
         mount -o bind,X-mount.mkdir {,root}/var/cache/dnf
@@ -60,6 +61,10 @@ function install_packages() {
         rpm -qa | sort > packages-buildroot.txt
         rpm --root="$PWD/root" -qa | sort > packages.txt
 }
+
+# Override the networkd provider for Fedora releases before 33.
+[[ ${options[distro]} = fedora && ${options[release]:-$DEFAULT_RELEASE} -lt 33 ]] &&
+eval "$(declare -f install_packages | $sed s/-networkd//)"
 
 function distro_tweaks() {
         exclude_paths+=('usr/lib/.build-id')

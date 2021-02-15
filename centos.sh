@@ -39,10 +39,9 @@ function create_buildroot() {
             install "${packages_buildroot[@]}"
 }
 
-# Override package installation to fix modules and the networkd RPM name.
+# Override package installation to fix modules.
 eval "$(declare -f install_packages | $sed \
-    -e '/{ *$/amkdir -p root/etc ; cp -pt root/etc /etc/os-release' \
-    -e '/networkd/iopt networkd && packages+=(systemd-networkd)')"
+    -e '/{ *$/amkdir -p root/etc ; cp -pt root/etc /etc/os-release')"
 
 function distro_tweaks() {
         exclude_paths+=('usr/lib/.build-id')

@@ -112,9 +112,9 @@ function initialize_buildroot() {
             -ffmpeg -networkmanager -repart'"'
 
         # Install QEMU to run graphical virtual machines and Intel programs.
-        packages+=(app-emulation/qemu sys-firmware/seabios)
+        packages+=(app-emulation/qemu)
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
-app-emulation/qemu *
+<app-emulation/qemu-5.3 ~*
 net-libs/libslirp *
 sys-firmware/seabios *
 EOF
@@ -152,9 +152,7 @@ function customize_buildroot() {
             -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
-        write_minimal_system_kernel_configuration > config
-        make -C /usr/src/linux allnoconfig ARCH=powerpc \
-            CROSS_COMPILE="${options[host]}-" KCONFIG_ALLCONFIG=/wd/config V=1
+        write_system_kernel_config
 }
 
 function customize() {
@@ -294,7 +292,9 @@ EOF
             -F -L var -m 0 -U "${options[var_uuid]}" apm.img
 fi
 
-function write_minimal_system_kernel_configuration() { cat config.base - << 'EOF' ; }
+function write_system_kernel_config() if opt bootable
+then cat >> /etc/kernel/config.d/system.config
+fi << 'EOF'
 # Show initialization messages.
 CONFIG_PRINTK=y
 # Support adding swap space.
