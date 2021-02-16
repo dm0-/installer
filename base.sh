@@ -687,8 +687,21 @@ EOF
         test ! -s root/etc/os-release || cp -pt . root/etc/os-release
 }
 
+function archmap_uefi() case "${*:-$DEFAULT_ARCH}" in
+    aarch64)  echo AA64 ;;
+    arm*)     echo ARM ;;
+    i[3-6]86) echo IA32 ;;
+    ia64)     echo IA64 ;;
+    riscv32)  echo RISCV32 ;;
+    riscv64)  echo RISCV64 ;;
+    riscv128) echo RISCV128 ;;
+    x86_64)   echo X64 ;;
+    *) return 1 ;;
+esac
+
 function produce_uefi_exe() if opt uefi
 then
+        local -r arch=$(archmap_uefi ${options[arch]-})
         local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
         local -r logo=$(test -s logo.bmp && echo logo.bmp)
         local -r osrelease=$(test -s os-release && echo os-release)
@@ -700,19 +713,19 @@ then
             ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
             --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
-            /usr/lib/systemd/boot/efi/linuxx64.efi.stub unsigned.efi
+            "/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub" unsigned.efi
 
         if opt secureboot
         then
                 pesign --certdir="$keydir" --certificate=sb --force \
-                    --in=unsigned.efi --out=BOOTX64.EFI --sign
-        else ln -fn unsigned.efi BOOTX64.EFI
+                    --in=unsigned.efi --out="BOOT$arch.EFI" --sign
+        else ln -fn unsigned.efi "BOOT$arch.EFI"
         fi
 fi
 
 function partition() if opt gpt
 then
-        local -r efi=BOOTX64.EFI
+        local -r efi=BOOT$(archmap_uefi ${options[arch]-}).EFI
         local -ir bs=512 start=2048
         local -i esp=${options[esp_size]:-0} size=0
 

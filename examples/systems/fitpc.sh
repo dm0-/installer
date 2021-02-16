@@ -212,8 +212,8 @@ EOF
 fi
 
 # Override image partitioning to install the compiled legacy BIOS bootloader.
-eval "$(declare -f partition | $sed '/BOOTX64/,${
-s/BOOTX64.EFI/grub.cfg/g
+declare -f verify_distro &>/dev/null &&
+eval "$(declare -f partition | $sed 's/BOOT.*.EFI/grub.cfg/g
 s/uefi/bootable/g
 /mmd/d;s,/EFI/BOOT,,g;/^ *mcopy/a\
 mcopy -i esp.img vmlinuz ::/linux_a\
@@ -222,10 +222,23 @@ test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a
 if opt bootable ; then\
 dd bs=$bs conv=notrunc if=core.img of=gpt.img seek=34\
 dd bs=$bs conv=notrunc if=boot.img of=gpt.img
-};}')"
+}')"
 
 function write_system_kernel_config() if opt bootable
-then cat >> /etc/kernel/config.d/system.config
+then
+        cat << 'EOF' >> /etc/kernel/config.d/qemu.config.disabled
+# TARGET HARDWARE: QEMU
+## QEMU default graphics
+CONFIG_DRM=m
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_DRM_BOCHS=m
+## QEMU default network
+CONFIG_NET_VENDOR_INTEL=y
+CONFIG_E1000=m
+## QEMU default disk
+CONFIG_ATA_PIIX=y
+EOF
+        cat >> /etc/kernel/config.d/system.config
 fi << 'EOF'
 # Show initialization messages.
 CONFIG_PRINTK=y
@@ -386,14 +399,4 @@ CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
 CONFIG_SND_USB_AUDIO=m  # headsets
 CONFIG_USB_ACM=m        # fit-PC status LED
 CONFIG_USB_HID=m        # mice and keyboards
-# TARGET HARDWARE: QEMU
-## QEMU default graphics
-#CONFIG_DRM=m
-#CONFIG_DRM_FBDEV_EMULATION=y
-#CONFIG_DRM_BOCHS=m
-## QEMU default network
-#CONFIG_NET_VENDOR_INTEL=y
-#CONFIG_E1000=m
-## QEMU default disk
-#CONFIG_ATA_PIIX=y
 EOF

@@ -54,6 +54,10 @@ app-arch/gnome-autoar *
 <app-crypt/libsecret-0.20.5 ~*
 <app-i18n/ibus-1.5.24 ~*
 <app-misc/geoclue-2.5.8 ~*
+<dev-cpp/atkmm-2.28.2 ~*
+<dev-cpp/cairomm-1.14.3 ~*
+<dev-cpp/gtkmm-3.24.4 ~*
+<dev-cpp/pangomm-2.42.3 ~*
 <dev-libs/json-glib-1.7 ~*
 <dev-libs/libgudev-235 ~*
 dev-libs/libgweather *
@@ -102,6 +106,7 @@ EOF
 xfce-base/* *
 xfce-extra/* *
 dev-util/xfce4-dev-tools *
+media-sound/pavucontrol *
 x11-terms/xfce4-terminal *
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
@@ -202,16 +207,10 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept eselect-1.4.17 to fix host dependencies (#768528).
-        echo 'app-admin/eselect *' >> "$portage/package.accept_keywords/eselect.conf"
         # Accept ffmpeg-4.3.1 to fix the altivec implementation.
         echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept libdvbpsi-1.3.3 to fix host dependencies (#769308).
-        echo 'media-libs/libdvbpsi *' >> "$portage/package.accept_keywords/libdvbpsi.conf"
-        # Accept lxdm-0.5.3 to fix host dependencies (#766785).
-        echo 'lxde-base/lxdm *' >> "$portage/package.accept_keywords/lxdm.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
         # Accept windowmaker-0.95.9 to fix host dependencies (#768987).
@@ -313,12 +312,10 @@ EOF
         echo 'dev-lang/rust -system-bootstrap' >> "$portage/package.use/rust.conf"
         # Disable journal compression to skip the massive cmake dependency.
         echo 'sys-apps/systemd -lz4' >> "$portage/package.use/systemd.conf"
-        # Support building the UEFI boot stub, its logo image, and signing tools.
+        # Support building the UEFI logo image and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
 dev-libs/nss utils
 media-gfx/imagemagick svg xml
-sys-apps/pciutils -udev
-sys-apps/systemd gnuefi
 EOF
         # Work around bad dependencies requiring X on the host.
         $cat << 'EOF' >> "$portage/package.use/X.conf"
@@ -574,14 +571,16 @@ EOF
 }
 
 # Override ramdisk creation to support a builtin initramfs for Gentoo.
-eval "$(declare -f squash | $sed 's/zstd --[^;]*/if opt monolithic ; then cat > /initramfs.cpio ; else & ; fi/')"
+eval "$(declare -f squash | $sed 's/zstd --[^;]*/if opt monolithic ; then cat > /root/initramfs.cpio ; else & ; fi/')"
 
 function save_boot_files() if opt bootable
 then
+        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
+        opt uefi && USE=gnuefi emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose sys-apps/systemd
         opt uefi && test ! -s logo.bmp &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
         magick -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
-        test -s $(opt monolithic && echo /initramfs.cpio || echo initrd.img) || build_busybox_initrd
+        test -s $(opt monolithic && echo /root/initramfs.cpio || echo initrd.img) || build_busybox_initrd
         opt monolithic && if opt raw_kernel
         then cat >> /usr/src/linux/.config
         else cat >> /etc/kernel/config.d/monolithic.config
@@ -590,7 +589,7 @@ CONFIG_CMDLINE="$(sed 's/["\]/\\&/g' kernel_args.txt)"
 CONFIG_CMDLINE_FORCE=y
 CONFIG_INITRAMFS_COMPRESSION_ZSTD=y
 CONFIG_INITRAMFS_FORCE=y
-$(test -s /initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/initramfs.cpio"
+$(test -s /root/initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/root/initramfs.cpio"
 EOF
         test -s vmlinux -o -s vmlinuz || if opt raw_kernel
         then
@@ -606,12 +605,21 @@ EOF
                     ARCH="$arch" CROSS_COMPILE="${options[host]}-" V=1
                 cp -p /boot/vmlinux-* vmlinux || cp -p /boot/vmlinuz-* vmlinuz
         else
-                local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
-                opt monolithic &&
-                emerge --buildpkg=n --jobs=4 --verbose sys-kernel/gentoo-kernel
+                if opt monolithic
+                then
+                        chgrp portage /root ; chmod g+x /root
+                        emerge --buildpkg=n --jobs=4 --oneshot --verbose \
+                            sys-kernel/gentoo-kernel
+                        chgrp root /root ; chmod g-x /root
+                fi
                 cp -p "$ROOT"/usr/src/linux/arch/*/boot/*Image* vmlinuz
         fi < /dev/null
 fi
+
+# Override the UEFI function to support non-native stub files in Gentoo.
+eval "$(declare -f produce_uefi_exe | $sed \
+    -e 's/objcopy/"${options[host]}-&"/' \
+    -e 's,/[^ ]*.efi.stub,/usr/${options[host]}&,')"
 
 function build_busybox_initrd() if opt ramdisk || opt verity_sig
 then
@@ -664,7 +672,7 @@ EOF
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
         if opt monolithic
-        then cat > /initramfs.cpio
+        then cat > /root/initramfs.cpio
         else zstd --threads=0 --ultra -22 > initrd.img
         fi
 fi

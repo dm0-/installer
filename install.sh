@@ -67,7 +67,7 @@ buildroot="$output/buildroot"
 create_buildroot "$@"
 create_root_image
 script_with_keydb << EOF
-$(declare -p disk exclude_paths options packages)
+$(declare -p DEFAULT_ARCH disk exclude_paths options packages)
 $(declare -f)
 mount_root
 customize_buildroot

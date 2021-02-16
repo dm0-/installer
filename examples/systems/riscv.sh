@@ -212,13 +212,11 @@ EOF
 fi
 
 # Override image partitioning to additionally stuff GRUB into the ESP.
-eval "$(declare -f partition | $sed '/BOOTX64/,${
-s/BOOTX64/BOOTRISCV64/g
-/^ *mcopy/a\
+declare -f verify_distro &>/dev/null &&
+eval "$(declare -f partition | $sed '/^ *mcopy/a\
 mcopy -i esp.img vmlinuz ::/linux_a\
 test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a\
-mcopy -i esp.img grub.cfg ::/grub.cfg
-}')"
+mcopy -i esp.img grub.cfg ::/grub.cfg')"
 
 function write_system_kernel_config() if opt bootable
 then cat >> /etc/kernel/config.d/system.config

@@ -170,7 +170,24 @@ EOF
 }
 
 function write_system_kernel_config() if opt bootable
-then cat >> /etc/kernel/config.d/system.config
+then
+        cat << 'EOF' >> /etc/kernel/config.d/qemu.config
+# TARGET HARDWARE: QEMU
+## QEMU default graphics
+CONFIG_DRM_BOCHS=m
+## QEMU default network
+CONFIG_E1000=m
+## QEMU default disk
+CONFIG_ATA=y
+CONFIG_ATA_SFF=y
+CONFIG_ATA_BMDMA=y
+CONFIG_BLK_DEV_SD=y
+CONFIG_ATA_PIIX=y
+## QEMU default serial port
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+EOF
+        cat >> /etc/kernel/config.d/system.config
 fi << 'EOF'
 # Show initialization messages.
 CONFIG_PRINTK=y
@@ -301,18 +318,4 @@ CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
 CONFIG_SND_USB_AUDIO=m  # headsets
 CONFIG_USB_ACM=m        # fit-PC status LED
 CONFIG_USB_HID=m        # mice and keyboards
-# TARGET HARDWARE: QEMU
-## QEMU default graphics
-CONFIG_DRM_BOCHS=m
-## QEMU default network
-CONFIG_E1000=m
-## QEMU default disk
-CONFIG_ATA=y
-CONFIG_ATA_SFF=y
-CONFIG_ATA_BMDMA=y
-CONFIG_BLK_DEV_SD=y
-CONFIG_ATA_PIIX=y
-## QEMU default serial port
-CONFIG_SERIAL_8250=y
-CONFIG_SERIAL_8250_CONSOLE=y
 EOF

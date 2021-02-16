@@ -266,14 +266,14 @@ EOF
 fi
 
 # Override image partitioning to install U-Boot files and write a hybrid MBR.
-eval "$(declare -f partition | $sed '/BOOTX64/,${
-s/BOOTX64.EFI/vmlinuz.uimg/g
+declare -f verify_distro &>/dev/null &&
+eval "$(declare -f partition | $sed 's/BOOT.*.EFI/vmlinuz.uimg/g
 s/uefi/bootable/g
 s, ::/EFI , ,g;s,EFI/BOOT,script,g;/^ *mcopy/a\
 mcopy -i esp.img scriptcmd ::/script/scriptcmd
 /^ *if test -s launch.sh/,/^ *fi/{/^ *fi/a\
 if opt bootable ; then write_hybrid_mbr gpt.img $(( esp * bs >> 20 )) ; fi
-};}')"
+}')"
 
 # Define a helper function to add an ESP DOS partition for the U-Boot firmware.
 function write_hybrid_mbr() {

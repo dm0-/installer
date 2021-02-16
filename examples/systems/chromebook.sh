@@ -265,12 +265,13 @@ EOF
 fi
 
 # Override image partitioning to replace the ESP with a ChromeOS kernel.
-eval "$(declare -f partition | $sed '/BOOTX64/,${
-s/BOOTX64.EFI\|esp.img/kernel.img/g;/272629760/d;s/4194304 *+ *//
+declare -f verify_distro &>/dev/null &&
+eval "$(declare -f partition | $sed '
+s/BOOT.*.EFI\|esp.img/kernel.img/g;/272629760/d;s/4194304 *+ *//
 s/uefi/bootable/g;/^ *if opt bootab/,/^ *fi/{/dd/!d;s/dd/opt bootable \&\& &/;}
 s/C12A7328-F81F-11D2-BA4B-00A0C93EC93B/FE3A2A5D-4F32-41A7-B725-ACCC3285A309/g
 s/size=[^ ,]*esp[^ ,]*,/'\''attrs="50 51 52 54 56"'\'', &/g
-s/"EFI System Partition"/KERN-A/g;}')"
+s/"EFI System Partition"/KERN-A/g')"
 
 function write_system_kernel_config() if opt bootable
 then cat >> /etc/kernel/config.d/system.config

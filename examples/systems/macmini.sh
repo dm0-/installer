@@ -116,7 +116,6 @@ function initialize_buildroot() {
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 <app-emulation/qemu-5.3 ~*
 net-libs/libslirp *
-sys-firmware/seabios *
 EOF
         $cat << 'EOF' >> "$portage/package.use/qemu.conf"
 app-emulation/qemu qemu_softmmu_targets_ppc qemu_user_targets_i386 static-user
@@ -136,14 +135,6 @@ EOF
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'dev-lang/spidermonkey -lto' >> "$portage/package.use/spidermonkey.conf"
-
-        # Fix broken Linux 5.10.8+.
-        $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
-        $curl -L > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/ppc.patch" \
-            https://github.com/gregkh/linux/commit/bca9ca5a603f6c5586a7dfd35e06abe6d5fcd559.patch
-        test x$($sha256sum "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/ppc.patch" | $sed -n '1s/ .*//p') = \
-            x8c4b7397b2244a595a9a5867f9414e03094d15d92436980fddeb2b1cc23bf6b6
-        $sed -i -e '/@@/y/09/90/;/^+[^+]/s/./-/' "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/ppc.patch"
 }
 
 function customize_buildroot() {
@@ -293,7 +284,18 @@ EOF
 fi
 
 function write_system_kernel_config() if opt bootable
-then cat >> /etc/kernel/config.d/system.config
+then
+        cat << 'EOF' >> /etc/kernel/config.d/qemu.config.disabled
+# TARGET HARDWARE: QEMU
+## QEMU default graphics
+CONFIG_DRM_BOCHS=m
+## QEMU default disk
+CONFIG_ATA_PIIX=y
+## QEMU default serial port
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+EOF
+        cat >> /etc/kernel/config.d/system.config
 fi << 'EOF'
 # Show initialization messages.
 CONFIG_PRINTK=y
@@ -427,12 +429,4 @@ CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
 CONFIG_SND_USB_AUDIO=m  # headsets
 CONFIG_USB_ACM=m        # fit-PC status LED
 CONFIG_USB_HID=m        # mice and keyboards
-# TARGET HARDWARE: QEMU
-## QEMU default graphics
-#CONFIG_DRM_BOCHS=m
-## QEMU default disk
-#CONFIG_ATA_PIIX=y
-## QEMU default serial port
-#CONFIG_SERIAL_8250=y
-#CONFIG_SERIAL_8250_CONSOLE=y
 EOF
