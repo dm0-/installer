@@ -56,6 +56,7 @@ packages+=(
 
         # Graphics
         lxde-base/lxdm
+        media-sound/pavucontrol
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
@@ -78,7 +79,10 @@ function initialize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo 'USE="$USE cet"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/make.conf"
+RUSTFLAGS="-C target-cpu=native"
+USE="$USE cet"
+EOF
 
         # Use the latest NVIDIA drivers.
         echo -e 'USE="$USE kmod"\nVIDEO_CARDS="nvidia"' >> "$portage/make.conf"
@@ -99,7 +103,7 @@ function initialize_buildroot() {
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding jit lto offensive pcap system-info threads udisks utempter \
+            aio branding haptic jit lto offensive pcap system-info threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gallium -gui -networkmanager -repart -wifi'"'
@@ -127,7 +131,6 @@ function customize_buildroot() {
 
 function customize() {
         double_display_scale
-        drop_debugging
         drop_development
         store_home_on_var +root
 

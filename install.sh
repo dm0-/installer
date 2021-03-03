@@ -15,6 +15,7 @@ ln=${LN:-ln}
 losetup=${LOSETUP:-losetup}
 mkdir=${MKDIR:-mkdir}
 mktemp=${MKTEMP:-mktemp}
+mv=${MV:-mv}
 nspawn=${NSPAWN:-systemd-nspawn}
 rm=${RM:-rm}
 sed=${SED:-sed}

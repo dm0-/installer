@@ -24,7 +24,7 @@ function customize_buildroot() {
 
         # Build the game engine before installing packages into the image.
         git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
-        git -C VVVVVV reset --hard 99276d7cdd3142143155f213b56fde3766ce269d
+        git -C VVVVVV reset --hard 9789848b36a74cd0cb735ccac3a00d8ca2a81a69
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \
             -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C VVVVVV/desktop_version/build -j"$(nproc)" all

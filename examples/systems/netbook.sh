@@ -93,7 +93,10 @@ function initialize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=arm926ej-s -ftree-vectorize&/' \
             "$portage/make.conf"
-        echo 'CPU_FLAGS_ARM="edsp thumb v4 v5"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/make.conf"
+CPU_FLAGS_ARM="edsp thumb v4 v5"
+RUSTFLAGS="-C target-cpu=arm926ej-s"
+EOF
 
         # Fall back to the fbdev driver for graphical sessions and skip OpenGL.
         echo 'VIDEO_CARDS="fbdev"' >> "$portage/make.conf"
@@ -112,7 +115,7 @@ function initialize_buildroot() {
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding jit lto offensive pcap system-info threads udisks utempter \
+            aio branding haptic jit lto offensive pcap system-info threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -ffmpeg -gtk -gui -opengl'"'
@@ -153,7 +156,6 @@ function customize_buildroot() {
 }
 
 function customize() {
-        drop_debugging
         drop_development
         store_home_on_var +root
 

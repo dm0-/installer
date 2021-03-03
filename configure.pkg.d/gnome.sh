@@ -1,8 +1,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Disable Wayland since it had problems on NVIDIA.  It might be fixed.
-test -s root/etc/gdm/custom.conf &&
-sed -i -e '/WaylandEnable=false$/s/^[# ]*//' root/etc/gdm/custom.conf
-
 # Fix GNOME 3 as best as possible.
 test -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml &&
 cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override

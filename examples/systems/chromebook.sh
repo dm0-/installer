@@ -67,6 +67,7 @@ packages+=(
 
         # Graphics
         lxde-base/lxdm
+        media-sound/pavucontrol
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
@@ -93,6 +94,7 @@ function initialize_buildroot() {
         $cat << 'EOF' >> "$portage/make.conf"
 CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"
 RUST_TARGET="thumbv7neon-unknown-linux-gnueabihf"
+RUSTFLAGS="-C target-cpu=cortex-a17"
 EOF
         echo >> "$buildroot/etc/portage/env/rust-map.conf" \
             "RUST_CROSS_TARGETS=\"$(archmap_llvm ${options[arch]}):thumbv7neon-unknown-linux-gnueabihf:${options[host]}\""
@@ -113,7 +115,7 @@ EOF
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding jit lto offensive pcap system-info threads udisks utempter \
+            aio branding haptic jit lto offensive pcap system-info threads udisks utempter \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gui -networkmanager -wifi'"'
@@ -143,7 +145,6 @@ function customize_buildroot() {
 }
 
 function customize() {
-        drop_debugging
         drop_development
         store_home_on_var +root
 

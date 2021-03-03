@@ -4,7 +4,7 @@ packages_buildroot=()
 
 function create_buildroot() {
         local -r arch=${options[arch]:=$DEFAULT_ARCH}
-        local -r profile=${options[profile]:-$(archmap_profile "$arch")}
+        local -r profile=${options[profile]-$(archmap_profile "$arch")}
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
         local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi$([[ $arch == armv[67]* ]] && echo hf))}
 
@@ -28,8 +28,14 @@ function create_buildroot() {
 
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
-        $ln -fns "../../var/db/repos/gentoo/profiles/$(archmap_profile)" "$portage/make.profile"
-        $mkdir -p "$portage"/{env,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.{force,mask},repos.conf}
+        $mv "$portage" "$portage.stage3"
+        $mkdir -p "$portage"/{env,make.profile,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.{force,mask},repos.conf}
+        $cp -at "$portage" "$portage.stage3/make.conf"
+        $cat << EOF >> "$portage/make.profile/parent"
+gentoo:$(archmap_profile)
+gentoo:targets/systemd$(
+opt selinux && echo -e '\ngentoo:features/selinux')
+EOF
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
 FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -merge-sync -network-sandbox -news -selinux"
@@ -37,7 +43,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE${options[selinux]:+ selinux} system-icu system-llvm systemd -elogind"
+USE="\$USE system-icu"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -71,7 +77,7 @@ media-video/pipewire *
 <net-libs/libmbim-1.24.5 ~*
 net-libs/libnma *
 <net-libs/libqmi-1.26.7 ~*
-<net-libs/webkit-gtk-2.30.5 ~*
+net-libs/webkit-gtk *
 <net-misc/mobile-broadband-provider-info-20201226 ~*
 <net-misc/modemmanager-1.14.9 ~*
 <net-misc/networkmanager-1.28.1 ~*
@@ -87,11 +93,11 @@ EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
 sec-policy/* ~*
-sys-kernel/gentoo-kernel
-sys-kernel/gentoo-sources
-sys-kernel/git-sources
-sys-kernel/linux-headers
-virtual/dist-kernel
+sys-kernel/gentoo-kernel ~*
+sys-kernel/gentoo-sources ~*
+sys-kernel/git-sources ~*
+sys-kernel/linux-headers ~*
+virtual/dist-kernel ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
 # Accept Rust users to bypass bad keywording.
@@ -100,14 +106,6 @@ dev-lang/spidermonkey *
 gnome-base/librsvg *
 sys-auth/polkit *
 x11-themes/adwaita-icon-theme *
-EOF
-        $cat << 'EOF' >> "$portage/package.accept_keywords/xfce.conf"
-# Accept viable versions of Xfce packages.
-xfce-base/* *
-xfce-extra/* *
-dev-util/xfce4-dev-tools *
-media-sound/pavucontrol *
-x11-terms/xfce4-terminal *
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -146,7 +144,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/gtk.conf"
 # Disable EOL GTK+ 2 by default.  It uses different flag names sometimes.
 */* -gtk2
-app-crypt/pinentry -gtk
 media-libs/libcanberra -gtk
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
@@ -183,6 +180,10 @@ EOF
 # Support Emacs browser widgets everywhere so Emacs can handle everything.
 app-editors/emacs -xwidgets
 EOF
+        $cat << 'EOF' >> "$portage/profile/package.use.mask/rust.conf"
+# Allow sharing LLVM and the native Rust for cross-bootstrapping.
+dev-lang/rust -system-bootstrap -system-llvm
+EOF
         $cat << 'EOF' >> "$portage/profile/use.mask"
 # Mask support for insecure protocols.
 sslv2
@@ -191,7 +192,7 @@ EOF
 
         # Permit selectively toggling important features.
         echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
-        echo -e '-cet\n-clang\n-system-llvm\n-systemd' >> "$portage/profile/use.mask"
+        echo -e '-cet\n-clang\n-systemd' >> "$portage/profile/use.mask"
 
         # Write build environment modifiers for later use.
         echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
@@ -207,14 +208,12 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept ffmpeg-4.3.1 to fix the altivec implementation.
-        echo 'media-video/ffmpeg *' >> "$portage/package.accept_keywords/ffmpeg.conf"
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
         # Accept pango-1.44.7 to fix host dependencies (#698922).
         echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
-        # Accept windowmaker-0.95.9 to fix host dependencies (#768987).
-        echo 'x11-wm/windowmaker *' >> "$portage/package.accept_keywords/windowmaker.conf"
+        # Accept xfce4-screensaver-4.16.0 to fix host dependencies (#771639).
+        echo 'xfce-extra/xfce4-screensaver *' >> "$portage/package.accept_keywords/xfce4-screensaver.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -222,12 +221,19 @@ EOF
         portage="$buildroot/usr/$host/etc/portage"
         $mkdir -p "${portage%/portage}"
         $cp -at "${portage%/portage}" "$buildroot/etc/portage"
-        test -z "$profile" && $rm -f "$portage/make.profile" ||
-        $ln -fns "../../../../var/db/repos/gentoo/profiles/$profile" "$portage/make.profile"
+        $cat << EOF > "$portage/make.profile/parent"
+$(test -n "$profile" && echo "gentoo:$profile" || {
+        generic=(base arch/base default/linux releases/17.0)
+        IFS=$'\n' ; echo "${generic[*]/#/gentoo:}"
+})
+gentoo:targets/systemd$(
+opt selinux && echo -e '\ngentoo:features/selinux')
+EOF
         $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto&/' "$portage/make.conf"
         $cat <(echo) - << EOF >> "$portage/make.conf"
 CHOST="$host"
 GOARCH="$(archmap_go "$arch")"$(
+[[ $arch == i[3-5]86 ]] && echo -e '\nGO386="softfloat"'
 [[ $arch == armv[5-7]* ]] && echo -e "\nGOARM=\"${arch:4:1}\"")
 RUST_TARGET="$(archmap_rust "$arch")"
 EOF
@@ -289,6 +295,7 @@ dev-libs/libbsd no-lto.conf
 media-gfx/potrace no-lto.conf
 media-libs/alsa-lib no-lto.conf
 media-sound/pulseaudio no-lto.conf
+sys-apps/sandbox no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
@@ -297,8 +304,8 @@ EOF
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
-        # Enable udev with systemd and preserve bindist in the build root.
-        $sed -i -e '/^USE=/{s/USE /&bindist /;s/ systemd /&udev /;}' "$portage/make.conf"
+        # Preserve bindist in the build root.
+        $sed -i -e '/^USE=/s/USE /&bindist /' "$portage/make.conf"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
@@ -308,8 +315,8 @@ EOF
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
-        # Rust is not built into the stage3, so it can't use system-bootstrap.
-        echo 'dev-lang/rust -system-bootstrap' >> "$portage/package.use/rust.conf"
+        # Rust isn't built into the stage3 to bootstrap, but it can share LLVM.
+        echo 'dev-lang/rust system-llvm -system-bootstrap' >> "$portage/package.use/rust.conf"
         # Disable journal compression to skip the massive cmake dependency.
         echo 'sys-apps/systemd -lz4' >> "$portage/package.use/systemd.conf"
         # Support building the UEFI logo image and signing tools.
@@ -515,6 +522,10 @@ function distro_tweaks() {
 
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
+
+        # Without GDB, assume debuginfo is unwanted to be like other distros.
+        test -x root/usr/bin/gdb && : ${options[debuginfo]=1}
+        opt debuginfo || drop_debugging
 
         # Add a mount point to support the ESP mount generator.
         opt uefi && mkdir root/boot
@@ -1008,17 +1019,16 @@ esac
 function archmap_profile() {
         local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
         local -r nomulti=$([[ ${native: -2} = ${target: -2} || $target != *86* || $# -gt 0 ]] && echo /no-multilib)
-        local -r selinux=${options[selinux]:+/selinux}
         case "$native" in
-            aarch64)  echo default/linux/arm64/17.0/systemd ;;
-            armv4t*)  echo default/linux/arm/17.0/armv4t/systemd ;;
-            armv5te*) echo default/linux/arm/17.0/armv5te/systemd ;;
-            armv6*j*) echo default/linux/arm/17.0/armv6j/systemd ;;
-            armv7a)   echo default/linux/arm/17.0/armv7a/systemd ;;
-            i[3-6]86) echo default/linux/x86/17.0/hardened$selinux ;;
+            aarch64)  echo default/linux/arm64/17.0 ;;
+            armv4t*)  echo default/linux/arm/17.0/armv4t ;;
+            armv5te*) echo default/linux/arm/17.0/armv5te ;;
+            armv6*j*) echo default/linux/arm/17.0/armv6j ;;
+            armv7a)   echo default/linux/arm/17.0/armv7a ;;
+            i[3-6]86) echo default/linux/x86/17.0/hardened ;;
             powerpc)  echo default/linux/ppc/17.0 ;;
-            riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d/systemd ;;
-            x86_64)   echo default/linux/amd64/17.1$nomulti/hardened$selinux ;;
+            riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d ;;
+            x86_64)   echo default/linux/amd64/17.1$nomulti/hardened ;;
             *) return 1 ;;
         esac
 }
@@ -1029,7 +1039,9 @@ function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
     armv5te*) echo armv5te-unknown-linux-gnueabi ;;
     armv6*)   echo arm-unknown-linux-gnueabihf ;;
     armv7*)   echo armv7-unknown-linux-gnueabihf ;;
-    i[3-5]86) echo i586-unknown-linux-gnu ;;
+    i386)     echo i386-unknown-linux-gnu ;;
+    i486)     echo i486-unknown-linux-gnu ;;
+    i586)     echo i586-unknown-linux-gnu ;;
     i686)     echo i686-unknown-linux-gnu ;;
     powerpc)  echo powerpc-unknown-linux-gnu ;;
     riscv64)  echo riscv64gc-unknown-linux-gnu ;;
