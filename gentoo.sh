@@ -56,38 +56,36 @@ EOF
 gnome-base/* *
 gnome-extra/* *
 app-arch/gnome-autoar *
-<app-crypt/gcr-3.38.1 ~*
-<app-crypt/libsecret-0.20.5 ~*
+app-crypt/gcr *
+app-crypt/libsecret *
 <app-i18n/ibus-1.5.24 ~*
-<app-misc/geoclue-2.5.8 ~*
-<dev-cpp/atkmm-2.28.2 ~*
-<dev-cpp/cairomm-1.14.3 ~*
-<dev-cpp/gtkmm-3.24.4 ~*
-<dev-cpp/pangomm-2.42.3 ~*
-<dev-libs/json-glib-1.7 ~*
-<dev-libs/libgudev-235 ~*
+app-misc/geoclue *
+dev-cpp/atkmm *
+dev-cpp/cairomm *
+dev-cpp/gtkmm *
+dev-cpp/pangomm *
+dev-libs/json-glib *
+dev-libs/libgudev *
 dev-libs/libgweather *
-<dev-libs/libsigc++-2.11 ~*
-<gnome-base/gdm-3.36.5 ~*
-<gnome-extra/evolution-data-server-3.38.3 ~*
+dev-libs/libsigc++ *
 gui-libs/libhandy *
 media-gfx/gnome-screenshot *
 media-libs/gsound *
 media-video/pipewire *
-<net-libs/libmbim-1.24.5 ~*
+net-libs/libmbim *
 net-libs/libnma *
-<net-libs/libqmi-1.26.7 ~*
+net-libs/libqmi *
 net-libs/webkit-gtk *
-<net-misc/mobile-broadband-provider-info-20201226 ~*
-<net-misc/modemmanager-1.14.9 ~*
-<net-misc/networkmanager-1.28.1 ~*
+net-misc/mobile-broadband-provider-info *
+net-misc/modemmanager *
+net-misc/networkmanager *
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
 sys-apps/bubblewrap *
-<sys-auth/fprintd-1.90 ~*
-<sys-auth/libfprint-1.90 ~*
-<x11-libs/colord-gtk-0.3 ~*
-<x11-terms/gnome-terminal-3.38.3 ~*
+sys-auth/fprintd *
+sys-auth/libfprint *
+x11-libs/colord-gtk *
+x11-terms/gnome-terminal *
 x11-wm/mutter *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
@@ -102,7 +100,7 @@ EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
 # Accept Rust users to bypass bad keywording.
 dev-lang/spidermonkey *
-<dev-libs/gjs-1.67 ~*
+dev-libs/gjs *
 gnome-base/librsvg *
 sys-auth/polkit *
 x11-themes/adwaita-icon-theme *
@@ -406,6 +404,7 @@ fi
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
     @world sys-devel/crossdev
+emerge --rage-clean '<sys-devel/gcc-10' || :  # Avoid mixing GCC versions.
 
 # Ensure Python defaults to the version in the profile before continuing.
 sed -i -e '/^[^#]/d' /etc/python-exec/python-exec.conf
@@ -566,6 +565,20 @@ Section "InputClass"
         Option "XkbOptions" "ctrl:nocaps"
 EndSection
 EOF
+
+        # Prioritize available daemons for the user audio service socket.
+        local dir=root/usr/lib/systemd/user
+        local daemon ; for daemon in pipewire-pulse pulseaudio
+        do
+                if test -s "$dir/$daemon.socket"
+                then
+                        mkdir -p "$dir/sockets.target.wants"
+                        ln -fst "$dir/sockets.target.wants" "../$daemon.socket"
+                        break
+                fi
+        done
+        test -s "$dir/pipewire.socket" &&
+        ln -fst "$dir/sockets.target.wants" ../pipewire.socket
 
         # Select a default desktop environment for startx, or default to twm.
         local wm ; for wm in Xfce4 wmaker

@@ -20,7 +20,6 @@ options+=(
         [gpt]=1          # Generate a ready-to-boot GPT disk image.
         [monolithic]=1   # Build all boot-related files into the kernel image.
         [networkd]=1     # Let systemd manage the network configuration.
-        [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=          # This platform does not support UEFI.
         [verity_sig]=1   # Require all verity root hashes to be verified.
 )
@@ -68,6 +67,7 @@ packages+=(
         # Graphics
         lxde-base/lxdm
         media-sound/pavucontrol
+        media-video/pipewire
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
@@ -179,8 +179,8 @@ EOF
         cat << EOF > root/usr/lib/repart.d/20-root-a.conf
 [Partition]
 Label=ROOT-A
-SizeMaxBytes=$(( 1 << 30 ))
-SizeMinBytes=$(( 1 << 30 ))
+SizeMaxBytes=$(( 0${options[squash]:+1} ? 1 << 30 : 3 << 29 ))
+SizeMinBytes=$(( 0${options[squash]:+1} ? 1 << 30 : 3 << 29 ))
 Type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
 EOF
         sed s/KERN-A/KERN-B/ root/usr/lib/repart.d/15-kern-a.conf \
@@ -330,7 +330,7 @@ CONFIG_NET_SCH_FQ_CODEL=y
 # TARGET HARDWARE: ASUS Chromebook Flip C100P
 CONFIG_AEABI=y
 ## Bundle firmware
-CONFIG_EXTRA_FIRMWARE="brcm/brcmfmac4354-sdio.bin brcm/brcmfmac4354-sdio.txt regulatory.db regulatory.db.p7s"
+CONFIG_EXTRA_FIRMWARE="brcm/brcmfmac4354-sdio.bin brcm/brcmfmac4354-sdio.clm_blob brcm/brcmfmac4354-sdio.txt regulatory.db regulatory.db.p7s"
 ## ARM Cortex-A17
 CONFIG_ARCH_MULTI_V7=y
 CONFIG_SMP=y
@@ -373,6 +373,14 @@ CONFIG_HIGHPTE=y
 ## ARM Mali-T760 MP4
 CONFIG_DRM=y
 CONFIG_DRM_PANFROST=y
+## Maxim MAX98090 audio
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_SOC=y
+CONFIG_SND_SOC_ROCKCHIP=y
+CONFIG_SND_SOC_ROCKCHIP_MAX98090=y
+CONFIG_ROCKCHIP_DW_HDMI=y
+CONFIG_DRM_DW_HDMI_I2S_AUDIO=y
 ## USB support
 CONFIG_USB_SUPPORT=y
 CONFIG_USB=y

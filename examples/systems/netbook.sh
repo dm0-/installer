@@ -64,7 +64,6 @@ packages+=(
         sys-fs/e2fsprogs
 
         # Graphics
-        media-sound/pulseaudio
         x11-apps/xdm
         x11-apps/xev
         x11-apps/xrandr

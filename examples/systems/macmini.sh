@@ -68,6 +68,7 @@ packages+=(
         # Graphics
         lxde-base/lxdm
         media-sound/pavucontrol
+        media-video/pipewire
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
@@ -119,7 +120,7 @@ EOF
         # Install QEMU to run graphical virtual machines and Intel programs.
         packages+=(app-emulation/qemu)
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
-<app-emulation/qemu-5.3 ~*
+app-emulation/qemu *
 net-libs/libslirp *
 EOF
         $cat << 'EOF' >> "$portage/package.use/qemu.conf"
@@ -169,22 +170,6 @@ function customize() {
             ':qemu-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-i386:'
         echo > root/usr/lib/binfmt.d/qemu-i486.conf \
             ':qemu-i486:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x06\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-i386:'
-
-        # Have PulseAudio default to ALSA output, and don't suspend devices.
-        sed -i \
-            -e '/load-module module-alsa-sink/s/^[# ]*//' \
-            -e 's/^load-module .*suspend/#&/' \
-            root/etc/pulse/default.pa
-        cat << 'EOF' > root/etc/asound.conf
-pcm.!default {
- type hw
- card 0
-}
-ctl.!default {
- type hw
- card 0
-}
-EOF
 
         # Define how to mount the bootstrap partition, but leave it unmounted.
         mkdir root/boot ; echo >> root/etc/fstab PARTLABEL=bootstrap \

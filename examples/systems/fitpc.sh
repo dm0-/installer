@@ -62,6 +62,7 @@ packages+=(
         # Graphics
         lxde-base/lxdm
         media-sound/pavucontrol
+        media-video/pipewire
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta

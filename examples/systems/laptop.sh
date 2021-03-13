@@ -57,6 +57,7 @@ packages+=(
         # Graphics
         lxde-base/lxdm
         media-sound/pavucontrol
+        media-video/pipewire
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
@@ -166,7 +167,7 @@ EOF
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user \
+    -cpu host -m 8G -vga std -soundhw hda -nic user \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
     "$@"
 EOF
@@ -290,11 +291,12 @@ CONFIG_BT_HCIBTUSB=y
 CONFIG_BT_BREDR=y
 CONFIG_BT_LE=y
 CONFIG_BT_HS=y
-## Intel HDA sound
+## Conexant CX8070 audio
 CONFIG_SOUND=y
 CONFIG_SND=y
 CONFIG_SND_PCI=y
 CONFIG_SND_HDA_INTEL=y
+CONFIG_SND_HDA_CODEC_CONEXANT=y
 ## NVIDIA Quadro T2000 (enable modules to build the proprietary driver)
 CONFIG_MODULES=y
 CONFIG_MODULE_COMPRESS=y
