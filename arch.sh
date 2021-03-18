@@ -12,6 +12,7 @@ function create_buildroot() {
 
         opt bootable && packages_buildroot+=(dracut intel-ucode linux-firmware linux-hardened)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils librsvg imagemagick)
@@ -28,15 +29,6 @@ function create_buildroot() {
             -e '/https.*kernel.org/s/^#*//' \
             "$buildroot/etc/pacman.d/mirrorlist"
 
-        # Fetch EROFS utilities from AUR since they're not in community yet.
-        if opt read_only && ! opt squash
-        then
-                $curl -L 'https://aur.archlinux.org/cgit/aur.git/snapshot/aur-a3bbcb394e86e19cf017c3f658d77f27b9a2302e.tar.gz' > "$output/erofs-utils.tgz"
-                test x$($sha256sum "$output/erofs-utils.tgz" | $sed -n '1s/ .*//p') = x836f15e62608751283e34fd62303670acf9a28fc9f45b12be4d0083c3f3680cf
-                $tar --transform='s,^/*[^/]*,erofs-utils,' -C "$output" -xvf "$output/erofs-utils.tgz" ; $rm -f "$output/erofs-utils.tgz"
-                packages_buildroot+=(base-devel)
-        fi
-
         configure_initrd_generation
         initialize_buildroot "$@"
 
@@ -48,14 +40,6 @@ pacman --noconfirm --sync --needed --refresh{,} --sysupgrade{,} "$@"
 # Work around Arch not providing Intel microcode so dracut can find it.
 test -e /boot/intel-ucode.img && mkdir -p /lib/firmware/intel-ucode &&
 cpio --to-stdout -i < /boot/intel-ucode.img > /lib/firmware/intel-ucode/all.img
-
-# Build and install an erofs-utils package from source.
-if test -d erofs-utils
-then
-        mv erofs-utils /home/build ; useradd build ; chown -R build /home/build
-        su -c 'exec makepkg PKGBUILD' - build
-        pacman --noconfirm --upgrade /home/build/erofs-utils-*.pkg.tar.zst
-fi
 EOF
 }
 

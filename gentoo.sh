@@ -82,8 +82,6 @@ net-misc/networkmanager *
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
 sys-apps/bubblewrap *
-sys-auth/fprintd *
-sys-auth/libfprint *
 x11-libs/colord-gtk *
 x11-terms/gnome-terminal *
 x11-wm/mutter *
@@ -404,7 +402,6 @@ fi
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
     @world sys-devel/crossdev
-emerge --rage-clean '<sys-devel/gcc-10' || :  # Avoid mixing GCC versions.
 
 # Ensure Python defaults to the version in the profile before continuing.
 sed -i -e '/^[^#]/d' /etc/python-exec/python-exec.conf
