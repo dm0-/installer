@@ -71,6 +71,9 @@ packages+=(
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
+
+        # Browser
+        www-client/firefox
 )
 
 packages_buildroot+=(
@@ -120,12 +123,15 @@ EOF
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gui -networkmanager -wifi'"'
 
-        # Install Firefox.
-        fix_package firefox
-        packages+=(www-client/firefox)
+        # Firefox 87 fails to compile for ARM.
+        echo '>=www-client/firefox-87' >> "$portage/package.mask/firefox.conf"
+
+        # Pass FPU flags through LDFLAGS so this package works with LTO.
+        echo "LDFLAGS=\"\${LDFLAGS} $($sed -n 's/^COMMON_FLAGS=.* \(-mfpu=[^" ]*\).*/\1/p' "$portage/make.conf")\"" >> "$portage/env/ldflags-fpu.conf"
+        echo 'media-libs/libvpx ldflags-fpu.conf' >> "$portage/package.env/fix-cross-compiling.conf"
 
         # Disable LTO for packages broken with this architecture/ABI.
-        echo 'media-libs/libvpx no-lto.conf' >> "$portage/package.env/no-lto.conf"
+        echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
 }
 
 function customize_buildroot() {

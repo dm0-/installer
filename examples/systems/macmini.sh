@@ -135,10 +135,6 @@ EOF
         echo 'GRUB_PLATFORMS="ieee1275"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
 
-        # Work around the endianness test being invalidated by LTO (#754654).
-        echo 'bigendian="yes"' >> "$portage/env/ffmpeg.conf"
-        echo 'media-video/ffmpeg ffmpeg.conf' >> "$portage/package.env/ffmpeg.conf"
-
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'dev-lang/spidermonkey -lto' >> "$portage/package.use/spidermonkey.conf"
 }

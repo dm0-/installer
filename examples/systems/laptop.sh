@@ -61,6 +61,9 @@ packages+=(
         x11-apps/xev
         x11-base/xorg-server
         xfce-base/xfce4-meta
+
+        # Browser
+        www-client/firefox
 )
 
 packages_buildroot+=(
@@ -87,7 +90,7 @@ EOF
 
         # Use the latest NVIDIA drivers.
         echo -e 'USE="$USE kmod"\nVIDEO_CARDS="nvidia"' >> "$portage/make.conf"
-        echo x11-drivers/nvidia-drivers >> "$portage/package.accept_keywords/nvidia.conf"
+        echo -e 'media-libs/nv-codec-headers\nx11-drivers/nvidia-drivers' >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
 
@@ -108,10 +111,6 @@ EOF
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gallium -gui -networkmanager -repart -wifi'"'
-
-        # Install Firefox.
-        fix_package firefox
-        packages+=(www-client/firefox)
 
         # Install VLC.
         fix_package vlc

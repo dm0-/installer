@@ -51,6 +51,13 @@ EOF
 app-crypt/pesign ~*
 sys-boot/vboot-utils ~*
 EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
+# Accept the latest (non-ESR) Firefox release.
+dev-libs/nspr ~*
+dev-libs/nss ~*
+media-libs/dav1d ~*
+www-client/firefox ~*
+EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
 # Accept viable versions of GNOME packages.
 gnome-base/* *
@@ -108,6 +115,10 @@ EOF
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
 EOF
+        $cat << 'EOF' >> "$portage/package.mask/libgpg-error.conf"
+# This fails to generate a valid gpg-error.h header.
+>=dev-libs/libgpg-error-1.42
+EOF
         $cat << 'EOF' >> "$portage/package.unmask/pango.conf"
 # Unmask pango since the alleged font issues are not a problem.
 x11-libs/pango
@@ -137,6 +148,10 @@ sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 # Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
 sys-fs/lvm2 device-mapper-only -thin
 EOF
+        $cat << 'EOF' >> "$portage/package.use/firefox.conf"
+# Fix Firefox builds by preferring GCC over Clang.
+www-client/firefox -clang
+EOF
         $cat << 'EOF' >> "$portage/package.use/gtk.conf"
 # Disable EOL GTK+ 2 by default.  It uses different flag names sometimes.
 */* -gtk2
@@ -155,10 +170,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/shadow.conf"
 # Don't use shadow's built in cracklib support since PAM provides it.
 sys-apps/shadow -cracklib
-EOF
-        $cat << 'EOF' >> "$portage/package.use/sqlite.conf"
-# Always enable secure delete.  Some things need it.
-dev-db/sqlite secure-delete
 EOF
         $cat << 'EOF' >> "$portage/package.use/squashfs-tools.conf"
 # Support zstd squashfs compression.
@@ -206,8 +217,14 @@ EOF
 
         # Accept grub-2.06 to fix file modification time support on ESPs.
         echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept pango-1.44.7 to fix host dependencies (#698922).
-        echo 'x11-libs/pango ~*' >> "$portage/package.accept_keywords/pango.conf"
+        # Accept gtk-update-icon-cache-3.24.26 to fix host dependencies.
+        echo '<dev-util/gtk-update-icon-cache-3.24.27 ~*' >> "$portage/package.accept_keywords/gtk-update-icon-cache.conf"
+        # Accept libksba-1.5 to fix host dependencies (#766573).
+        echo '<dev-libs/libksba-1.6 ~*' >> "$portage/package.accept_keywords/libksba.conf"
+        # Accept pango-1.48 to fix host dependencies and support gtk4 (#698922).
+        echo '<x11-libs/pango-1.49 ~*' >> "$portage/package.accept_keywords/pango.conf"
+        # Accept tar-1.34 to fix host dependencies (#777729).
+        echo '<app-arch/tar-1.35 ~*' >> "$portage/package.accept_keywords/tar.conf"
         # Accept xfce4-screensaver-4.16.0 to fix host dependencies (#771639).
         echo 'xfce-extra/xfce4-screensaver *' >> "$portage/package.accept_keywords/xfce4-screensaver.conf"
 
@@ -257,20 +274,22 @@ EOF
 # Cross-compiling portage native extensions is unsupported.
 sys-apps/portage -native-extensions
 EOF
+        $cat << 'EOF' >> "$portage/package.use/sqlite.conf"
+# Always enable secure delete for SQLite.
+dev-db/sqlite secure-delete
+EOF
         echo 'EXTRA_EMAKE="GDBUS_CODEGEN=/usr/bin/gdbus-codegen GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-emake-utils.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
-        echo 'EXTRA_CONF_QEMU="--cross-prefix=${CHOST}-"' >> "$portage/env/cross-qemu.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
-app-emulation/qemu cross-qemu.conf
 app-i18n/ibus cross-glib-genmarshal.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
 gnome-base/gnome-settings-daemon meson-pkgconfig.conf
@@ -374,13 +393,6 @@ sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
 for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support cross-compiling with LLVM on EAPI 7 (#745744).
 sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
-## Support cross-compiling Git (#759004) (#762796).
-rm -f /var/db/repos/gentoo/dev-vcs/git/git-2.23.*.ebuild
-sed -i -e '/^DEPEND/,/BDEPEND/{/emacs/{x;d;};/BDEPEND/G;}' -e 's/||.*libsecret.*/CC="$(tc-getCC)" CFLAGS="${CFLAGS}" PKG_CONFIG="$(tc-getPKG_CONFIG)"/' /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild
-for ebuild in /var/db/repos/gentoo/dev-vcs/git/git-2.*.ebuild ; do ebuild "$ebuild" manifest ; done
-## Support cross-compiling VLC (#766549).
-sed -i -e '/eautoreconf/ised -i -e s/GETTEXT_VERSION/GETTEXT_REQUIRE_VERSION/ configure.ac' /var/db/repos/gentoo/media-video/vlc/vlc-3.*.ebuild
-for ebuild in /var/db/repos/gentoo/media-video/vlc/vlc-3.*.ebuild ; do ebuild "$ebuild" manifest ; done
 ## Support compiling basic qt5 packages in a sysroot.
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' /var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
 sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' /var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
@@ -1089,15 +1101,6 @@ function archmap_stage3() {
 function fix_package() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
         case "$*" in
-            firefox)
-                echo 'dev-lang/python sqlite' >> "$buildroot/etc/portage/package.use/firefox.conf"
-                $cat << EOF >> "$portage/package.accept_keywords/firefox.conf"
-dev-libs/nspr ~*
-dev-libs/nss ~*
-www-client/firefox ~*
-EOF
-                echo 'www-client/firefox -clang -lto' >> "$portage/package.use/firefox.conf"
-                ;;
             vlc)
                 $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
 dev-libs/libpcre2 pcre16

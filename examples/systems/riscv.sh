@@ -100,7 +100,7 @@ EOF
         do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
         done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
         $rm -f "$output/grub.mbox"
-        echo 'GRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
+        echo -e 'GRUB_AUTOGEN="1"\nGRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
         echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
 
         # Download sources to build a UEFI firmware image.
