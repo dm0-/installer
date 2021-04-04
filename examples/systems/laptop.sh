@@ -83,10 +83,7 @@ function initialize_buildroot() {
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
             "$portage/make.conf"
-        $cat << 'EOF' >> "$portage/make.conf"
-RUSTFLAGS="-C target-cpu=native"
-USE="$USE cet"
-EOF
+        echo 'RUSTFLAGS="-C target-cpu=native"' >> "$portage/make.conf"
 
         # Use the latest NVIDIA drivers.
         echo -e 'USE="$USE kmod"\nVIDEO_CARDS="nvidia"' >> "$portage/make.conf"

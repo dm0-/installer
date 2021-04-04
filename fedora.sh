@@ -504,4 +504,5 @@ done < <(rpm --root="$PWD/root" -qal "$@")
 
 # EOL Fedora releases are still available, but they should not be used anymore.
 [[ ${options[release]:-$DEFAULT_RELEASE} -ge $(( DEFAULT_RELEASE - 1 )) ]] ||
+[[ ${options[distro]:-fedora} != fedora ]] ||  # Expect CentOS reusing this.
 . "legacy/fedora$(( DEFAULT_RELEASE -= 2 )).sh"

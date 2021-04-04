@@ -6,7 +6,8 @@ options[verity_sig]=
 DEFAULT_RELEASE=8
 
 function create_buildroot() {
-        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH.tar.xz"
+#       local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH.tar.xz"
+        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/$(archmap_container)/docker/centos-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
@@ -20,7 +21,8 @@ function create_buildroot() {
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tar.xz"
-        $curl -L "$image.asc" | verify_distro - "$output/image.tar.xz"
+#       $curl -L "$image.asc" | verify_distro - "$output/image.tar.xz"
+        verify_distro "$output/image.tar.xz"
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
         $rm -f "$output/image.tar.xz"
 
@@ -333,6 +335,23 @@ EOF
 eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
 
 # WORKAROUNDS
+
+# CentOS container releases are horribly broken.  Pin them to static versions.
+function archmap_container() case "$DEFAULT_ARCH" in
+    aarch64) echo 88b3ec90d3e01f637cab87ad124e8917f60839af ;;
+    ppc64le) echo cf1c88f0b706f6c6192e4e80ec8ec5be5c499eaa ;;
+    x86_64)  echo ccd17799397027acf9ee6d660e75b8fce4c852e8 ;;
+    *) return 1 ;;
+esac
+
+# CentOS container releases are horribly broken.  Check sums with no signature.
+function verify_distro() [[
+        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case "$DEFAULT_ARCH" in
+            aarch64) echo 4b3a73e7f354a9a4e0ce73b63e66db0be6be887f2b1bc1b8f561e121c43b5f45 ;;
+            ppc64le) echo d6abf6111500397ebbe2fc811c34bacca02ac31acaff2963ad18c03e352753ba ;;
+            x86_64)  echo 45e655330e7290265fd9cc6bc9478d1a93bc476b284cfe2f40fbb525b76b8e89 ;;
+        esac)
+]]
 
 # The CentOS 7 implementation is so different that it needs its own file.
 test "x${options[release]-}" != x7 || . legacy/centos7.sh

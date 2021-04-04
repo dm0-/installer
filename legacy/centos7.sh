@@ -9,7 +9,8 @@ options[secureboot]=
 options[uefi]=
 
 function create_buildroot() {
-        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH-docker.tar.xz"
+#       local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH-docker.tar.xz"
+        local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/$(archmap_container)/docker/centos-${options[release]:=$DEFAULT_RELEASE}-${DEFAULT_ARCH/#i[4-6]86/i386}-docker.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel microcode_ctl)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
@@ -22,7 +23,8 @@ function create_buildroot() {
 
         $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.tar.xz"
-        $curl -L "$image.asc" | verify_distro - "$output/image.tar.xz"
+#       $curl -L "$image.asc" | verify_distro - "$output/image.tar.xz"
+        verify_distro "$output/image.tar.xz"
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
         $rm -f "$output/image.tar.xz"
 
@@ -99,8 +101,8 @@ $sed 's/cpio -D \([^ ]*\) \([^|]*\)|/{ cd \1 ; cpio \2 ; } |/')"
 eval "$(declare -f overlay_etc | $sed 's/test.*git/false/')"
 
 # Override initrd configuration to add device mapper support when needed.
-eval "$(declare -f configure_initrd_generation | $sed /hostonly=/r<(echo \
-    "opt verity && echo 'add_dracutmodules+=\" dm \"'" \
+eval "$(declare -f configure_initrd_generation | $sed /sysroot.mount/r<(echo \
+    "echo 'add_dracutmodules+=\" dm \"'" \
     '>> "$buildroot/etc/dracut.conf.d/99-settings.conf"'))"
 
 # OPTIONAL (BUILDROOT)
@@ -237,6 +239,25 @@ EOF
 eval "$(declare -f store_home_on_var | $sed 's/Q /d /')"
 
 # WORKAROUNDS
+
+# CentOS container releases are horribly broken.  Pin them to static versions.
+function archmap_container() case "$DEFAULT_ARCH" in
+    aarch64)  echo 02ea5808a8a155bad28677dd5857c8d382027e14 ;;
+    i[3-6]86) echo 206003c215684a869a686cf9ea5f9697e577c546 ;;
+    ppc64le)  echo a8e4f3da8300d18da4c0e5256d64763965e66810 ;;
+    x86_64)   echo b2d195220e1c5b181427c3172829c23ab9cd27eb ;;
+    *) return 1 ;;
+esac
+
+# CentOS container releases are horribly broken.  Check sums with no signature.
+function verify_distro() [[
+        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case "$DEFAULT_ARCH" in
+            aarch64)  echo 6db9d6b9c8122e9fe7e7fc422e630ee10ff8b671ea5c8f7f16017b9b1c012f67 ;;
+            i[3-6]86) echo 5aba6af141b5c1c5218011470da2e75a9d93a0fff5b62a30cc277945cd12ba2b ;;
+            ppc64le)  echo cc60b971d00aa3c57e0fc913de8317bcc74201af9bdbd8f5c85eedbd29b93abc ;;
+            x86_64)   echo 2b66ff1fa661f55d02a8e95597903008d55e0f98da8f65e3f47c04ac400f9b35 ;;
+        esac)
+]]
 
 # CentOS 7 is too old to provide sysusers, so just pretend it always works.
 function systemd-sysusers() { : ; }

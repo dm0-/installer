@@ -55,7 +55,6 @@ EOF
 # Accept the latest (non-ESR) Firefox release.
 dev-libs/nspr ~*
 dev-libs/nss ~*
-media-libs/dav1d ~*
 www-client/firefox ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
@@ -114,10 +113,6 @@ EOF
 # Accept CPU microcode licenses.
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
-EOF
-        $cat << 'EOF' >> "$portage/package.mask/libgpg-error.conf"
-# This fails to generate a valid gpg-error.h header.
->=dev-libs/libgpg-error-1.42
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/pango.conf"
 # Unmask pango since the alleged font issues are not a problem.
@@ -215,18 +210,16 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept grub-2.06 to fix file modification time support on ESPs.
-        echo '<sys-boot/grub-2.07 ~*' >> "$portage/package.accept_keywords/grub.conf"
-        # Accept gtk-update-icon-cache-3.24.26 to fix host dependencies.
-        echo '<dev-util/gtk-update-icon-cache-3.24.27 ~*' >> "$portage/package.accept_keywords/gtk-update-icon-cache.conf"
-        # Accept libksba-1.5 to fix host dependencies (#766573).
-        echo '<dev-libs/libksba-1.6 ~*' >> "$portage/package.accept_keywords/libksba.conf"
+        # Accept gtk-update-icon-cache-3.24.26 to fix host dependencies (#778932).
+        echo 'dev-util/gtk-update-icon-cache *' >> "$portage/package.accept_keywords/gtk-update-icon-cache.conf"
         # Accept pango-1.48 to fix host dependencies and support gtk4 (#698922).
         echo '<x11-libs/pango-1.49 ~*' >> "$portage/package.accept_keywords/pango.conf"
-        # Accept tar-1.34 to fix host dependencies (#777729).
-        echo '<app-arch/tar-1.35 ~*' >> "$portage/package.accept_keywords/tar.conf"
+        # Accept procps-3.3.17 to fix host dependencies (#778935).
+        echo 'sys-process/procps *' >> "$portage/package.accept_keywords/procps.conf"
         # Accept xfce4-screensaver-4.16.0 to fix host dependencies (#771639).
         echo 'xfce-extra/xfce4-screensaver *' >> "$portage/package.accept_keywords/xfce4-screensaver.conf"
+        # Accept xorg-server-1.20.10 to fix host dependencies.
+        echo 'x11-base/xorg-server *' >> "$portage/package.accept_keywords/xorg-server.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -1039,9 +1032,8 @@ function archmap_llvm() case "${*:-$DEFAULT_ARCH}" in
 esac
 
 function archmap_profile() {
-        local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
-        local -r nomulti=$([[ ${native: -2} = ${target: -2} || $target != *86* || $# -gt 0 ]] && echo /no-multilib)
-        case "$native" in
+        local -r nomulti=$(opt multilib || echo /no-multilib)
+        case "${*:-$DEFAULT_ARCH}" in
             aarch64)  echo default/linux/arm64/17.0 ;;
             armv4t*)  echo default/linux/arm/17.0/armv4t ;;
             armv5te*) echo default/linux/arm/17.0/armv5te ;;
@@ -1072,14 +1064,14 @@ function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
 esac
 
 function archmap_stage3() {
-        local -r native=${1:-$DEFAULT_ARCH} target=${options[arch]}
-        local -r hardfp=$([[ $native == armv[67]* ]] && echo _hardfp)
+        local -r arch=${*:-$DEFAULT_ARCH}
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
-        local -r nomulti=$([[ ${native: -2} = ${target: -2} || $target != *86* ]] && echo +nomultilib)
+        local -r hardfp=$([[ $arch == armv[67]* ]] && echo _hardfp)
+        local -r nomulti=$(opt multilib || echo +nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
 
         local stage3
-        case "$native" in
+        case "$arch" in
             armv4tl)  stage3=stage3-armv4tl ;;
             armv5tel) stage3=stage3-armv5tel ;;
             armv6*j*) stage3=stage3-armv6j$hardfp ;;
