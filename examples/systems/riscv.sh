@@ -69,8 +69,8 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
-            cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding haptic jit lto offensive pcap system-info threads udisks utempter \
+            cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gui -policykit -repart -X'"'
@@ -107,19 +107,15 @@ EOF
         $curl -L https://github.com/riscv/opensbi/archive/v0.9.tar.gz > "$buildroot/root/opensbi.tgz"
         test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
             x60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0
-        $curl -L https://github.com/u-boot/u-boot/archive/v2021.01.tar.gz > "$buildroot/root/u-boot.tgz"
+        $curl -L https://github.com/u-boot/u-boot/archive/v2021.04.tar.gz > "$buildroot/root/u-boot.tgz"
         test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
-            xd3f8fbd819d033c8cb964c624a7cf61cfb9ca75782c3fe55be78006768a4ed1c
+            xc51a62092c7c18c249febe31457f3c811d2d3296a9186d241ad23a2fb0a794f2
 }
 
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
             -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
-        # The multilib subdirectories don't work with UsrMerge (#728674).
-        sed -i -e 's/^multilib_layout/&() { : ; } ; x/' /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild
-        ebuild /var/db/repos/gentoo/sys-apps/baselayout/baselayout-2.7-r1.ebuild manifest
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

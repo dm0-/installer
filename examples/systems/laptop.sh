@@ -54,6 +54,9 @@ packages+=(
         sys-fs/cryptsetup
         sys-fs/e2fsprogs
 
+        # Host
+        app-emulation/qemu
+
         # Graphics
         lxde-base/lxdm
         media-sound/pavucontrol
@@ -103,8 +106,8 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
-            cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding haptic jit lto offensive pcap system-info threads udisks utempter \
+            cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gallium -gui -networkmanager -repart -wifi'"'
@@ -137,6 +140,7 @@ function customize() {
         exclude_paths+=(
                 usr/lib/firmware
                 usr/local
+                usr/share/qemu/'*'{aarch,arm,hppa,ppc,riscv,s390,sparc}'*'
         )
 
         # Start the wireless interface if it is configured.

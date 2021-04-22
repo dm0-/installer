@@ -2,10 +2,10 @@
 packages=()
 packages_buildroot=()
 
-DEFAULT_RELEASE=20.10
+DEFAULT_RELEASE=21.04
 
 function create_buildroot() {
-        local -Ar releasemap=([20.04]=focal [20.10]=groovy)
+        local -Ar releasemap=([20.04]=focal [20.10]=groovy [21.04]=hirsute)
         local -r release=${options[release]:=$DEFAULT_RELEASE}
         local -r name=${releasemap[$release]?Unsupported release version}
         local -r image="https://cloud-images.ubuntu.com/minimal/releases/$name/release/ubuntu-$release-minimal-cloudimg-$(archmap)-root.tar.xz"
@@ -38,7 +38,7 @@ exec apt-get --assume-yes --option=Acquire::Retries=5 install "$@"
 EOF
 
         # Fix the old pesign option name.
-        test ! -e "$buildroot/etc/popt.d/pesign.popt" ||
+        $sed -n '/certficate/q0;$q1' "$buildroot/etc/popt.d/pesign.popt" ||
         echo 'pesign alias --certificate --certficate' >> "$buildroot/etc/popt.d/pesign.popt"
 }
 

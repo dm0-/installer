@@ -111,8 +111,8 @@ EOF
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
-            cairo colord gtk gtk3 gui lcms libdrm pango wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding haptic jit lto offensive pcap system-info threads udisks utempter \
+            cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -ffmpeg -networkmanager -repart'"'
@@ -158,7 +158,7 @@ function customize() {
         exclude_paths+=(
                 usr/lib/firmware
                 usr/local
-                usr/share/qemu/'*'{aarch,arm,efi,riscv,s390,x86_64}'*'
+                usr/share/qemu/'*'{aarch,arm,efi,hppa,riscv,s390,sparc,x86_64}'*'
         )
 
         # Support running Intel containers.

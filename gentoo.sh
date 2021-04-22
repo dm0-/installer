@@ -62,29 +62,13 @@ EOF
 gnome-base/* *
 gnome-extra/* *
 app-arch/gnome-autoar *
-app-crypt/gcr *
-app-crypt/libsecret *
 <app-i18n/ibus-1.5.24 ~*
-app-misc/geoclue *
-dev-cpp/atkmm *
-dev-cpp/cairomm *
-dev-cpp/gtkmm *
-dev-cpp/pangomm *
-dev-libs/json-glib *
-dev-libs/libgudev *
 dev-libs/libgweather *
-dev-libs/libsigc++ *
 gui-libs/libhandy *
 media-gfx/gnome-screenshot *
 media-libs/gsound *
-media-video/pipewire *
-net-libs/libmbim *
 net-libs/libnma *
-net-libs/libqmi *
 net-libs/webkit-gtk *
-net-misc/mobile-broadband-provider-info *
-net-misc/modemmanager *
-net-misc/networkmanager *
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
 sys-apps/bubblewrap *
@@ -155,6 +139,8 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Disable trying to build an initrd since it won't run in a chroot.
 sys-kernel/gentoo-kernel -initramfs
+# Apply patches to support additional CPU optimizations.
+sys-kernel/gentoo-sources experimental
 EOF
         $cat << 'EOF' >> "$portage/package.use/llvm.conf"
 # Make clang use its own linker by default.
@@ -210,16 +196,18 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept gtk-update-icon-cache-3.24.26 to fix host dependencies (#778932).
-        echo 'dev-util/gtk-update-icon-cache *' >> "$portage/package.accept_keywords/gtk-update-icon-cache.conf"
+        # Accept baselayout-2.7 to fix a couple target root issues.
+        echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
+        # Accept curl-7.76.1 to fix compilation and security issues (#779535).
+        echo 'net-misc/curl *' >> "$portage/package.accept_keywords/curl.conf"
+        # Accept gtk+-3.24.28 to fix build ordering.
+        echo '<x11-libs/gtk+-3.24.29 ~*' >> "$portage/package.accept_keywords/gtk.conf"
         # Accept pango-1.48 to fix host dependencies and support gtk4 (#698922).
         echo '<x11-libs/pango-1.49 ~*' >> "$portage/package.accept_keywords/pango.conf"
         # Accept procps-3.3.17 to fix host dependencies (#778935).
         echo 'sys-process/procps *' >> "$portage/package.accept_keywords/procps.conf"
         # Accept xfce4-screensaver-4.16.0 to fix host dependencies (#771639).
         echo 'xfce-extra/xfce4-screensaver *' >> "$portage/package.accept_keywords/xfce4-screensaver.conf"
-        # Accept xorg-server-1.20.10 to fix host dependencies.
-        echo 'x11-base/xorg-server *' >> "$portage/package.accept_keywords/xorg-server.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -307,13 +295,14 @@ sys-apps/sandbox no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
+x11-drivers/xf86-video-intel no-lto.conf
 EOF
         echo split-usr >> "$portage/profile/use.mask"
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
-        # Preserve bindist in the build root.
-        $sed -i -e '/^USE=/s/USE /&bindist /' "$portage/make.conf"
+        # Preserve bindist in the build root, and don't build documentation.
+        $sed -i -e '/^USE=/s/USE /&-doc bindist /' "$portage/make.conf"
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
@@ -418,9 +407,9 @@ cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
 location = /var/db/repos/crossdev
 EOG
-mkdir -p /usr/"$host"/usr/{bin,lib,lib64,src}
+mkdir -p /usr/"$host"/usr/{bin,lib,lib32,lib64,libx32,src}
 ln -fns bin /usr/"$host"/usr/sbin
-ln -fst "/usr/$host" usr/{bin,lib,lib64,sbin}
+ln -fst "/usr/$host" usr/{bin,lib,lib32,lib64,libx32,sbin}
 stable=$(env {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host" portageq envvar ACCEPT_KEYWORDS | grep -Fqs -e '~' -e '**' || echo 1)
 crossdev ${stable:+--stable} --target "$host"
 
@@ -495,7 +484,12 @@ EOF
         mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib},var}
         mkdir -pm 0700 root/root
         ln -fns bin root/usr/sbin
-        [[ ${options[arch]-} =~ 64 ]] && ln -fns lib root/usr/lib64
+        if [[ ${options[arch]-} =~ 64 ]]
+        then
+                [[ ${options[host]-} == *x32 ]] &&
+                mkdir -p root/usr/libx32 ||
+                ln -fns lib root/usr/lib64
+        fi
         (cd root ; exec ln -fst . usr/*)
         ln -fns .. "root$ROOT"  # Lazily work around bad packaging.
         emerge --{,sys}root=root --jobs="$(nproc)" -1Kv "${packages[@]}" "$@"
@@ -791,7 +785,9 @@ CONFIG_MODULE_SIG_SHA512=y'
                 [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
 CONFIG_64BIT=y'
                 [[ ${options[arch]} = x86_64 ]] && echo 'CONFIG_SMP=y
-CONFIG_X86_LOCAL_APIC=y'
+CONFIG_X86_LOCAL_APIC=y' &&
+                [[ ${options[host]} == *x32 ]] && echo 'CONFIG_X86_X32=y
+CONFIG_IA32_EMULATION=y'
                 opt networkd && echo '# Network settings
 CONFIG_NET=y
 CONFIG_INET=y

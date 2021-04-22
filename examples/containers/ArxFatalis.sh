@@ -50,7 +50,7 @@ function customize_buildroot() {
 
         # Build the game engine before installing packages into the image.
         git clone --branch=master https://github.com/arx/ArxLibertatis.git
-        git -C ArxLibertatis reset --hard a45ce7092a3bb0cad5ea7a591c6493a22294b912
+        git -C ArxLibertatis reset --hard ac0b1f2ce5119e28ac295d269aea0a2ba5b22be5
         cmake -GNinja -S ArxLibertatis -B ArxLibertatis/build \
             -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C ArxLibertatis/build -j"$(nproc)" all

@@ -5,6 +5,7 @@ exclude_paths=({boot,dev,media,proc,run,srv,sys,tmp}/'*')
 
 declare -A options
 options[distro]=fedora
+options[append]=      # The arguments to append to the kernel command-line
 options[bootable]=    # Include a kernel and init system to boot the image
 options[gpt]=         # Create a partitioned GPT disk image
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
@@ -23,7 +24,7 @@ function usage() {
         echo "Usage: $0 [-BKRSUVZhu] \
 [-E <uefi-binary-path>] [[-I] -P <partuuid>] \
 [-c <pem-certificate> -k <pem-private-key>] \
-[-a <userspec>] [-d <distro>] [-p <package-list>] \
+[-a <userspec>] [-d <distro>] [-o <option>=[<value>]] [-p <package-list>] \
 [<config.sh> [<parameter>]...]
 
 This program will produce a root file system from a given system configuration
@@ -76,6 +77,12 @@ Customization options:
         Select the distro to install (default: fedora).  This is only used when
         a system definition file does not specify the distro.
         Example: -d centos
+  -o <option>=[<value>]
+        Set an option to the given value, which can be empty to unset.  Most of
+        the previous flags are abbreviated versions of this.  It can be used to
+        set distro- or system-specific options that have no other command-line
+        interface.  This option can be used multiple times to set more options.
+        Example: -o append='quiet splash' -o networkd=1
   -p <package-list>
         Install the given space-separated list of packages into the image in
         addition to the package set in the system definition file.
@@ -402,7 +409,8 @@ then
             $(opt read_only && echo ro || echo rw) \
             $(test -s final.img && echo "root=$root" "rootfstype=$type") \
             $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"") \
-            $(opt verity_sig && echo dm-verity.require_signatures=1)
+            $(opt verity_sig && echo dm-verity.require_signatures=1) \
+            ${options[append]-}
 fi
 
 function build_systemd_ramdisk() if opt ramdisk

@@ -29,7 +29,7 @@ uname=${UNAME:-uname}
 . base.sh
 
 # Parse command-line options.
-while getopts :BE:IKP:RSUVZa:c:d:hk:p:u opt
+while getopts :BE:IKP:RSUVZa:c:d:hk:o:p:u opt
 do
         case "$opt" in
             B) options[bootable]=1 ;;
@@ -47,6 +47,7 @@ do
             d) options[distro]=$OPTARG ;;
             h) usage ; exit 0 ;;
             k) options[signing_key]=$OPTARG ;;
+            o) [[ $OPTARG == *=* ]] ; options[${OPTARG%%=*}]=${OPTARG#*=} ;;
             p) options[packages]=$OPTARG ;;
             u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
             *) usage 1>&2 ; exit 1 ;;
