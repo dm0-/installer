@@ -18,6 +18,8 @@ clock-format='24h'
 clock-show-date=true
 clock-show-seconds=true
 clock-show-weekday=true
+font-antialiasing='rgba'
+font-hinting='full'
 [org.gnome.desktop.media-handling]
 automount=false
 automount-open=false
@@ -67,9 +69,6 @@ ambient-enabled=false
 idle-dim=false
 sleep-inactive-ac-type='nothing'
 sleep-inactive-battery-type='nothing'
-[org.gnome.settings-daemon.plugins.xsettings]
-antialiasing='rgba'
-hinting='full'
 [org.gnome.shell]
 always-show-log-out=true
 favorite-apps=['firefox.desktop','vlc.desktop','gnome-terminal.desktop']
@@ -97,9 +96,13 @@ use-theme-colors=false
 EOF
 
 # Rewind changes for older versions.
+local -i major=$(sed -n 's,.*<platform>\([0-9]*\)</platform>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
 local -i minor=$(sed -n 's,.*<minor>\([0-9]*\)</minor>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
-if test "$minor" -gt 0 -a -s root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
+if [[ $major -eq 3 && $minor -gt 0 && -s root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override ]]
 then
+        sed -i \
+            -e 's/^font-//;/antialiasing/i[org.gnome.settings-daemon.plugins.xsettings]' \
+            root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
         test "$minor" -le 32 && sed -i \
             -e 's/desktop.peripherals.keyboard/settings-daemon.peripherals.keyboard/' \
             -e "/^numlock-state=/s/=true/='on'/" \

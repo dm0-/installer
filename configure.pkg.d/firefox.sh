@@ -18,6 +18,8 @@ pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
 pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
 // Disable spam-tier nonsense on new tabs.
 pref("browser.newtabpage.enabled", false);
+// Don't try to predict search terms.
+pref("browser.search.suggest.enabled", false);
 // Don't download autocomplete URLs.
 pref("browser.urlbar.speculativeConnect.enabled", false);
 // Don't send information to Mozilla.
@@ -30,6 +32,8 @@ pref("dom.security.https_only_mode", true);
 pref("extensions.pocket.enabled", false);
 // Never send location data.
 pref("geo.enabled", false);
+// Disable executing scripts in PDFs by default again.
+pref("pdfjs.enableScripting", false);
 // Send DNT all the time.
 pref("privacy.donottrackheader.enabled", true);
 // Prevent various cross-domain tracking methods.
@@ -40,6 +44,9 @@ EOF
 
         # Try to fix many UI "improvements" and be more usable in general.
         cat << 'EOF' > "$dir/usability.js"
+// Don't yell at the user for configuring the browser.
+pref("browser.aboutConfig.showWarning", false);
+pref("general.warnOnAboutConfig", false);
 // Fix the Ctrl+Tab behavior.
 pref("browser.ctrlTab.recentlyUsedOrder", false);
 // Never open more browser windows.
@@ -48,7 +55,6 @@ pref("browser.link.open_newwindow.restriction", 0);
 pref("browser.messaging-system.whatsNewPanel.enabled", false);
 // Include a sensible search bar.
 pref("browser.search.openintab", true);
-pref("browser.search.suggest.enabled", false);
 pref("browser.search.widget.inNavBar", true);
 // Restore sessions instead of starting at home, and make the home page blank.
 pref("browser.startup.homepage", "about:blank");
@@ -68,8 +74,6 @@ pref("devtools.command-button-screenshot.enabled", true);
 pref("devtools.theme", "dark");
 // Display when messages are logged.
 pref("devtools.webconsole.timestampMessages", true);
-// Shut up.
-pref("general.warnOnAboutConfig", false);
 // Stop stretching PDFs off the screen for no reason.
 pref("pdfjs.defaultZoomValue", "page-fit");
 // Prefer the PDF outline display.

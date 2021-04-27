@@ -9,7 +9,7 @@
 # Since the game archive includes both i686 and x86_64 binaries, this script
 # supports using either depending on the given architecture option.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio

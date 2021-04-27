@@ -11,7 +11,7 @@
 # This script implements an option to demonstrate supporting the proprietary
 # NVIDIA drivers on the host system.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
 
 packages+=(
         freetype
@@ -50,7 +50,7 @@ function customize_buildroot() {
 
         # Build the game engine before installing packages into the image.
         git clone --branch=master https://github.com/arx/ArxLibertatis.git
-        git -C ArxLibertatis reset --hard ac0b1f2ce5119e28ac295d269aea0a2ba5b22be5
+        git -C ArxLibertatis reset --hard d9e2fc07eb82b3d5a9b7d1defccf27ef59debacb
         cmake -GNinja -S ArxLibertatis -B ArxLibertatis/build \
             -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C ArxLibertatis/build -j"$(nproc)" all

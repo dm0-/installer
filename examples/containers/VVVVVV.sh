@@ -5,7 +5,7 @@
 # game data paths are bound into the home directory of the calling user, so the
 # container is interchangeable with a native installation of the game.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=33 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
 
 packages+=(
         pulseaudio-libs
@@ -24,7 +24,7 @@ function customize_buildroot() {
 
         # Build the game engine before installing packages into the image.
         git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
-        git -C VVVVVV reset --hard 0fc17ec277a2e01b083e9fce096722fe522e13a7
+        git -C VVVVVV reset --hard 801ac995e2cbd8f082a7c6ffd7f58d78014c1d17
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \
             -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C VVVVVV/desktop_version/build -j"$(nproc)" all
