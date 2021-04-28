@@ -90,6 +90,9 @@ sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
 
+        # Block GCC 11 since it won't cross-compile.
+        echo '>=sys-devel/gcc-11' >> "$portage/package.mask/gcc.conf"
+
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
         $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
