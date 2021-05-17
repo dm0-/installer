@@ -3,8 +3,8 @@
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.
 #
-# The proprietary NVIDIA drivers are installed here to demonstrate how to use
-# dkms to build kernel modules for an immutable image.
+# The proprietary NVIDIA drivers are optionally installed here to demonstrate
+# how to use dkms to build kernel modules for an immutable image.
 
 options+=(
         [distro]=arch
@@ -98,8 +98,11 @@ packages+=(
 )
 
 # Build the proprietary NVIDIA drivers using dkms.
-packages_buildroot+=(linux-hardened-headers nvidia-dkms)
-packages+=(nvidia-utils)
+function initialize_buildroot() if opt nvidia
+then
+        packages_buildroot+=(linux-hardened-headers nvidia-dkms)
+        packages+=(nvidia-utils)
+fi
 
 function customize() {
         store_home_on_var +root
@@ -114,11 +117,11 @@ function customize() {
         )
 
         # Install unpackaged NVIDIA drivers into the image.
-        cp -pt root/lib/modules/*/kernel/drivers/video \
+        opt nvidia && cp -pt root/lib/modules/*/kernel/drivers/video \
             /var/lib/dkms/nvidia/kernel-*/module/nvidia*.ko.xz
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        for module in root/lib/modules/*/kernel/drivers/video/nvidia*.ko.xz
+        opt nvidia && for module in root/lib/modules/*/kernel/drivers/video/nvidia*.ko.xz
         do
                 unxz "$module" ; module=${module%.xz}
                 /lib/modules/*/build/scripts/sign-file \
@@ -126,7 +129,7 @@ function customize() {
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
+        opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
 blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1

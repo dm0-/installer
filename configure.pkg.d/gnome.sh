@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Fix GNOME 3 as best as possible.
+# Fix GNOME as best as possible.
 test -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml &&
 cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
 [org.gnome.calculator]

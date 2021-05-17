@@ -3,9 +3,9 @@
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.
 #
-# The proprietary NVIDIA drivers are installed here to demonstrate how to use
-# the vendor's repository and install the modules in an immutable image without
-# development packages.
+# The proprietary NVIDIA drivers are optionally installed here to demonstrate
+# how to use the vendor's repository and install the modules in an immutable
+# image without development packages.
 
 options+=(
         [distro]=opensuse
@@ -111,22 +111,16 @@ packages+=(
 )
 
 # Build the proprietary NVIDIA drivers from the vendor repository.
-function initialize_buildroot() {
-        local -r repo='https://download.nvidia.com/opensuse/tumbleweed'
-        $curl -L "$repo/repodata/repomd.xml.key" > "$output/nvidia.key"
-        test x$($sha256sum "$output/nvidia.key" | $sed -n '1s/ .*//p') = \
-            x599aa39edfa43fb81e5bf5743396137c93639ce47738f9a2ae8b9a5732c91762
-        enter /usr/bin/rpmkeys --import nvidia.key
-        $rm -f "$output/nvidia.key"
-        echo -e > "$buildroot/etc/zypp/repos.d/nvidia.repo" \
-            "[nvidia]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
+function initialize_buildroot() if opt nvidia
+then
+        enable_repo_nvidia
         echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
-        packages_buildroot+=(nvidia-gfxG05-kmp-default)
-}
+        packages_buildroot+=(createrepo_c nvidia-gfxG05-kmp-default rpm-build)
+fi
 
 # Package the bare NVIDIA modules to satisfy bad development dependencies.
-packages_buildroot+=(createrepo_c rpm-build)
-function customize_buildroot() {
+function customize_buildroot() if opt nvidia
+then
         local -r name=nvidia-gfxG05-kmp
         local -r kernel=$(compgen -G '/lib/modules/*/updates/nvidia.ko' | sed -n '1s,/updates.*,,p')
         cat << EOF > "/root/$name.spec" ; rpmbuild -ba "/root/$name.spec"
@@ -150,7 +144,7 @@ EOF
         packages+=(nvidia-gfxG05-kmp nvidia-glG05 x11-video-nvidiaG05)
         # Remove the modules here to skip installing them into the initrd.
         rm -fr "$kernel/updates" ; depmod "${kernel##*/}"
-}
+fi
 
 function customize() {
         store_home_on_var +root
@@ -164,14 +158,14 @@ function customize() {
         )
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        for module in root/lib/modules/*/updates/nvidia*.ko
+        opt nvidia && for module in root/lib/modules/*/updates/nvidia*.ko
         do
                 /lib/modules/*/build/scripts/sign-file \
                     sha256 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
+        opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
 blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1

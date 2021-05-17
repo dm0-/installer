@@ -102,8 +102,8 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (33 
 
 **SquashFS**:  Immutable systems can opt to use SquashFS for a compressed root file system to save space at the cost of runtime decompression.  All compression in the installer (kernels, initrds, root images, binary packages, etc.) aims to standardize on zstd for the best size-to-resource-utilization ratio, but it falls back to xz when unsupported by the distros for slightly smaller sizes and much higher resource utilization.
 
-  * :star: *Arch*, *Fedora*, *Gentoo*, and *Ubuntu* support SquashFS with zstd compression.
-  * :construction: *CentOS* and *openSUSE* support SquashFS, but they fall back to xz compression.
+  * :star: *Arch*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support SquashFS with zstd compression.
+  * :construction: *CentOS* supports SquashFS, but it falls back to xz compression.
 
 **Verity**:  Verity is cryptographic integrity verification that guarantees a file system has not been modified.  It creates a read-only device mapper node that returns I/O errors if anything has changed.  The verity hash block created for the root file system is directly appended to the image so there is only one file to manage for updates.  The root hash is stored in the kernel command-line, so a UEFI Secure Boot signature authenticates the entire file system.
 

@@ -248,7 +248,7 @@ then
         mkimage -A arm -C none -O linux -T kernel -a 0x8000 -d /root/bundle -e 0x8000 -n Linux vmlinuz.uimg
 
         # Write a boot script to start the kernel.
-        mkimage -A arm -C none -O linux -T script -d /dev/stdin -n 'Boot script' scriptcmd << EOF
+        cat << EOF > /root/script
 lcdinit
 textout -1 -1 \"Loading kernel...\" FFFFFF
 fatload mmc 0 0 /script/vmlinuz.uimg
@@ -256,6 +256,7 @@ setenv bootargs $(<kernel_args.txt) rootwait
 textout -1 -1 \"Booting...\" FFFFFF
 bootm 0
 EOF
+        mkimage -A arm -C none -O linux -T script -d /root/script -n 'Boot script' scriptcmd
 
         # Build an ARM GRUB image that U-Boot can use.  (experiment)
         grub-mkimage \

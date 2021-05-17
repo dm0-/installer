@@ -71,7 +71,6 @@ net-libs/libnma *
 net-libs/webkit-gtk *
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
-sys-apps/bubblewrap *
 x11-libs/colord-gtk *
 x11-terms/gnome-terminal *
 x11-wm/mutter *
@@ -87,10 +86,12 @@ virtual/dist-kernel ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
 # Accept Rust users to bypass bad keywording.
+dev-lang/rust *
 dev-lang/spidermonkey *
 dev-libs/gjs *
 gnome-base/librsvg *
 sys-auth/polkit *
+virtual/rust *
 x11-themes/adwaita-icon-theme *
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
@@ -98,16 +99,14 @@ EOF
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
 EOF
-        $cat << 'EOF' >> "$portage/package.unmask/pango.conf"
-# Unmask pango since the alleged font issues are not a problem.
-x11-libs/pango
-EOF
         $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
 # Unmask Rust users to bypass bad architecture profiles.
+dev-lang/rust
 dev-lang/spidermonkey
 dev-libs/gjs
 gnome-base/librsvg
 sys-auth/polkit
+virtual/rust
 x11-themes/adwaita-icon-theme
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/systemd.conf"
@@ -198,16 +197,10 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues.
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept curl-7.76.1 to fix compilation and security issues (#779535).
-        echo 'net-misc/curl *' >> "$portage/package.accept_keywords/curl.conf"
         # Accept gtk+-3.24.28 to fix build ordering.
         echo '<x11-libs/gtk+-3.24.29 ~*' >> "$portage/package.accept_keywords/gtk.conf"
-        # Accept pango-1.48 to fix host dependencies and support gtk4 (#698922).
+        # Accept pango-1.48 to fix host dependencies and support gtk4.
         echo '<x11-libs/pango-1.49 ~*' >> "$portage/package.accept_keywords/pango.conf"
-        # Accept procps-3.3.17 to fix host dependencies (#778935).
-        echo 'sys-process/procps *' >> "$portage/package.accept_keywords/procps.conf"
-        # Accept xfce4-screensaver-4.16.0 to fix host dependencies (#771639).
-        echo 'xfce-extra/xfce4-screensaver *' >> "$portage/package.accept_keywords/xfce4-screensaver.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -323,11 +316,13 @@ media-gfx/imagemagick svg xml
 EOF
         # Work around bad dependencies requiring X on the host.
         $cat << 'EOF' >> "$portage/package.use/X.conf"
+dev-qt/qtgui X
 media-libs/libepoxy X
 media-libs/libglvnd X
 media-libs/mesa X
 x11-libs/cairo X
 x11-libs/gtk+ X
+x11-libs/libxkbcommon X
 EOF
         # Prevent accidentally disabling required modules.
         echo 'dev-libs/libxml2 python' >> "$portage/profile/package.use.force/libxml2.conf"
@@ -1068,10 +1063,11 @@ function archmap_stage3() {
 
         local stage3
         case "$arch" in
-            armv4tl)  stage3=stage3-armv4tl ;;
-            armv5tel) stage3=stage3-armv5tel ;;
-            armv6*j*) stage3=stage3-armv6j$hardfp ;;
-            armv7a)   stage3=stage3-armv7a$hardfp ;;
+            aarch64)  stage3=stage3-arm64-systemd ;;
+            armv4tl)  stage3=stage3-armv4tl-systemd ;;
+            armv5tel) stage3=stage3-armv5tel-systemd ;;
+            armv6*j*) stage3=stage3-armv6j$hardfp-systemd ;;
+            armv7a)   stage3=stage3-armv7a$hardfp-systemd ;;
             i[45]86)  stage3=stage3-i486 ;;
             i686)     stage3=stage3-i686-hardened ;;
             powerpc)  stage3=stage3-ppc ;;
@@ -1090,17 +1086,11 @@ function fix_package() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
         case "$*" in
             vlc)
-                $cat << 'EOF' >> "$buildroot/etc/portage/package.use/vlc.conf"
-dev-libs/libpcre2 pcre16
-dev-qt/qtgui X
-x11-libs/libxkbcommon X
-EOF
                 [[ ${options[arch]} =~ 64 ]] &&
                 echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf" ||
                 echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf"
                 echo 'dev-qt/* pkgconfig-redundant.conf' >> "$portage/package.env/qt.conf"
                 $cat << 'EOF' >> "$portage/package.use/vlc.conf"
-dev-libs/libpcre2 pcre16
 dev-qt/qtgui -dbus
 dev-qt/qtwidgets -gtk
 sys-libs/zlib minizip

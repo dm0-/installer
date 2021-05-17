@@ -107,7 +107,7 @@ eval "$(declare -f configure_initrd_generation | $sed /sysroot.mount/r<(echo \
 
 # OPTIONAL (BUILDROOT)
 
-function enable_epel() {
+function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
@@ -148,10 +148,10 @@ exec rm -f epel.rpm
 EOF
 }
 
-function enable_rpmfusion() {
+function enable_repo_rpmfusion() {
         local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
         local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
-        enable_epel
+        enable_repo_epel
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

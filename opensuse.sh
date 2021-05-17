@@ -15,7 +15,7 @@ function create_buildroot() {
         opt squash && packages_buildroot+=(squashfs)
         opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
-        packages_buildroot+=(curl e2fsprogs glib2-tools)
+        packages_buildroot+=(curl e2fsprogs glib2-tools openssl)
 
         $mkdir -p "$buildroot"
         $curl -L "$image.sha256" > "$output/checksum"
@@ -36,7 +36,7 @@ function create_buildroot() {
         $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
 
         configure_initrd_generation
-        enable_selinux_repo
+        enable_repo_selinux
         initialize_buildroot "$@"
 
         enter /usr/bin/zypper --non-interactive update
@@ -45,7 +45,8 @@ function create_buildroot() {
 }
 
 function install_packages() {
-        opt bootable || opt networkd && packages+=(systemd)
+        opt bootable && packages+=(systemd)
+        opt networkd && packages+=(systemd-network)
         opt selinux && packages+=(selinux-policy-targeted)
 
         opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
@@ -111,9 +112,6 @@ declare -f relabel | $sed 's/ -append /&security=selinux" "/'
 declare -f kernel_cmdline | $sed 's/^ *echo /&${options[selinux]:+security=selinux} /'
 )"
 
-# Override squashfs creation since openSUSE doesn't support zstd.
-eval "$(declare -f relabel squash | $sed 's/ zstd .* 22 / xz /')"
-
 # Override dm-init with userspace since the openSUSE kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
 
@@ -171,7 +169,18 @@ Requires=dev-mapper-root.device dmsetup-verity-root.service"'
         fi
 fi
 
-function enable_selinux_repo() if opt selinux
+function enable_repo_nvidia() {
+        local -r repo='https://download.nvidia.com/opensuse/tumbleweed'
+        $curl -L "$repo/repodata/repomd.xml.key" > "$output/nvidia.key"
+        test x$($sha256sum "$output/nvidia.key" | $sed -n '1s/ .*//p') = \
+            x599aa39edfa43fb81e5bf5743396137c93639ce47738f9a2ae8b9a5732c91762
+        enter /usr/bin/rpmkeys --import nvidia.key
+        $rm -f "$output/nvidia.key"
+        echo -e > "$buildroot/etc/zypp/repos.d/nvidia.repo" \
+            "[nvidia]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
+}
+
+function enable_repo_selinux() if opt selinux
 then
         local -r repo='https://download.opensuse.org/repositories/security:/SELinux/openSUSE_Factory'
         $curl -L "$repo/repodata/repomd.xml.key" > "$output/selinux.key"

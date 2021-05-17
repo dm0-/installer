@@ -10,11 +10,11 @@ function create_buildroot() {
         local -r name=${releasemap[$release]?Unsupported release version}
         local -r image="https://cloud-images.ubuntu.com/minimal/releases/$name/release/ubuntu-$release-minimal-cloudimg-$(archmap)-root.tar.xz"
 
-        opt bootable && packages_buildroot+=(dracut linux-image-generic)
+        opt bootable && packages_buildroot+=(dracut linux-image-generic zstd)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
-        opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86)
+        opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86 zstd)
         opt uefi && packages_buildroot+=(binutils imagemagick ubuntu-mono)
         opt verity_sig && opt bootable && packages_buildroot+=(keyutils linux-headers-generic)
         packages_buildroot+=(debootstrap libglib2.0-bin)
@@ -89,6 +89,9 @@ function distro_tweaks() {
         test -s root/usr/share/systemd/tmp.mount &&
         mv -t root/usr/lib/systemd/system root/usr/share/systemd/tmp.mount
 
+        test -s root/etc/default/useradd &&
+        sed -i -e '/^SHELL=/s,=.*,=/bin/bash,' root/etc/default/useradd
+
         test -s root/etc/inputrc &&
         sed -i -e '/history-search/s/^[# ]*//' root/etc/inputrc
 
@@ -129,6 +132,7 @@ then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
         $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"
 EOF
@@ -220,10 +224,6 @@ eval "$(declare -f relabel | $sed \
     -e '/ldd/iopt squash && cp -t "$root/lib" /usr/lib/*/libgcc_s.so.1' \
     -e 's/qemu-system-[^ ]* /&-display none /g')"
 
-# Override ramdisk creation since the kernel is too old to support zstd.
-eval "$(declare -f relabel squash build_systemd_ramdisk | $sed \
-    -e 's/zstd --[^|>]*/xz --check=crc32 -9e /')"
-
 # Override kernel arguments to use SELinux instead of AppArmor.
 eval "$(
 declare -f relabel | $sed 's/ -append /&security=selinux" "/'
@@ -297,3 +297,11 @@ function archmap() case "${*:-$DEFAULT_ARCH}" in
     x86_64)   echo amd64 ;;
     *) return 1 ;;
 esac
+
+# Override 2020 ramdisk creation since the kernel is too old to support zstd.
+[[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] || eval "$(
+declare -f create_buildroot | $sed 's/ zstd//'
+declare -f configure_initrd_generation | $sed /compress=/d
+declare -f relabel squash build_systemd_ramdisk | $sed \
+    -e 's/zstd --[^|>]*/xz --check=crc32 -9e /'
+)"

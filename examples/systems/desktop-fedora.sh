@@ -5,8 +5,8 @@
 #
 # An out-of-tree driver for a USB wireless device is included to demonstrate
 # setting up a build environment for bare kernel modules.  This example also
-# installs the proprietary NVIDIA drivers to demonstrate how to use akmods for
-# the resulting immutable image.
+# optionally installs the proprietary NVIDIA drivers to demonstrate how to use
+# akmods for the resulting immutable image.
 
 options+=(
         [gpt]=1         # Generate a VM disk image for fast testing.
@@ -28,7 +28,7 @@ packages+=(
         file
         findutils
         git-core
-        kbd
+        kbd-legacy
         lsof
         man-{db,pages}
         p7zip
@@ -109,12 +109,15 @@ packages+=(
 )
 
 # Install the akmod package to build the proprietary NVIDIA drivers.
-function initialize_buildroot() {
-        enable_rpmfusion +nonfree
+function initialize_buildroot() if opt nvidia
+then
+        enable_repo_rpmfusion +nonfree
         $mkdir -p  "$buildroot/usr/lib/modprobe.d"
         echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
         packages_buildroot+=(akmod-nvidia)
-}
+        packages+=(rpmfusion-nonfree-release{,-rawhide,-tainted})
+else enable_repo_rpmfusion
+fi
 
 # Install packages for building bare kernel modules.
 packages_buildroot+=(bc make gcc git-core kernel-devel)
@@ -126,10 +129,11 @@ function customize_buildroot() {
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.
+        opt nvidia || return 0
         echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '[0-9]*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
         su --login --session-command="exec $(</dev/stdin)" --shell=/bin/sh akmods
         rpm2cpio /var/cache/akmods/kmod-nvidia-*.rpm | cpio -idD /
-        packages+=($(compgen -G '/var/cache/akmods/kmod-nvidia-*.rpm'))
+        packages+=(/var/cache/akmods/kmod-nvidia-*.rpm)
 }
 
 function customize() {
@@ -153,7 +157,7 @@ function customize() {
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
         for module in \
-            root/lib/modules/*/extra/nvidia/nvidia*.ko \
+            ${options[nvidia]:+root/lib/modules/*/extra/nvidia/nvidia*.ko} \
             root/lib/modules/*/kernel/drivers/net/wireless/88XXau.ko
         do
                 /lib/modules/*/build/scripts/sign-file \
@@ -161,7 +165,7 @@ function customize() {
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
+        opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
 blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1

@@ -228,7 +228,7 @@ EOF
 
 # OPTIONAL (BUILDROOT)
 
-function enable_rpmfusion() {
+function enable_repo_rpmfusion() {
         local key="RPM-GPG-KEY-rpmfusion-free-fedora-${options[release]}"
         local url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
