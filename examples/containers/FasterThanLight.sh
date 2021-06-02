@@ -7,14 +7,15 @@
 # container is interchangeable with a native installation of the game.
 #
 # Since the game archive includes both i686 and x86_64 binaries, this script
-# supports using either depending on the given architecture option.
+# supports using either depending on the given architecture option.  It also
+# implements an option to demonstrate supporting the proprietary NVIDIA drivers
+# on the host system.
 
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
         libGLU
-        mesa-dri-drivers
         which
 )
 
@@ -22,6 +23,14 @@ packages_buildroot+=(tar)
 
 function initialize_buildroot() {
         $cp "${1:-FTL.1.5.4.tar.gz}" "$output/FTL.tgz"
+
+        # Support an option for running on a host with proprietary drivers.
+        if opt nvidia
+        then
+                enable_repo_rpmfusion +nonfree
+                packages+=(xorg-x11-drv-nvidia-libs)
+        else packages+=(mesa-dri-drivers)
+        fi
 }
 
 function customize_buildroot() {
@@ -38,7 +47,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        local -r drop=$(test "x${options[arch]}" = xi686 && echo amd64)
+        local -r drop=$([[ ${options[arch]} == i?86 ]] && echo amd64)
         tar --exclude="${drop:-x86}" -xf FTL.tgz -C root
         rm -f FTL.tgz
 
@@ -49,7 +58,7 @@ ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
 exec ./FTL "$@"
 EOF
 
-        sed "${drop:+s/-64//}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,;}${drop:+s/-64//}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||
@@ -57,7 +66,7 @@ mkdir -p "$XDG_DATA_HOME/FasterThanLight"
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/FasterThanLight:/tmp/save" \
-    --bind=/dev/dri \
+    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \

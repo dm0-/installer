@@ -50,7 +50,7 @@ function customize_buildroot() {
 
         # Build the game engine before installing packages into the image.
         git clone --branch=master https://github.com/arx/ArxLibertatis.git
-        git -C ArxLibertatis reset --hard d9e2fc07eb82b3d5a9b7d1defccf27ef59debacb
+        git -C ArxLibertatis reset --hard 36933f2bb9e715f3213e8d8f8ed0e01715aa26b8
         cmake -GNinja -S ArxLibertatis -B ArxLibertatis/build \
             -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C ArxLibertatis/build -j"$(nproc)" all
@@ -72,7 +72,7 @@ function customize() {
 
         ln -fns usr/bin/arx root/init
 
-        sed "${options[nvidia]:+s, /dev/dri ,&/dev/nvidia* ,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_CONFIG_HOME:=$HOME/.config}/arx" ] ||

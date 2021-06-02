@@ -118,7 +118,7 @@ EOF
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -gallium -gui -networkmanager -repart'"'
+            -gui -networkmanager -repart'"'
 
         # Build GRUB to boot from legacy BIOS.
         echo 'GRUB_PLATFORMS="pc"' >> "$buildroot/etc/portage/make.conf"
@@ -128,7 +128,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Work around EAPI 6 multilib package dependencies until they're gone.
         echo 'ABI_X86="32 64"' >> /etc/portage/make.conf

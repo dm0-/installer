@@ -24,7 +24,7 @@ function usage() {
         echo "Usage: $0 [-BKRSUVZhu] \
 [-E <uefi-binary-path>] [[-I] -P <partuuid>] \
 [-c <pem-certificate> -k <pem-private-key>] \
-[-a <userspec>] [-d <distro>] [-o <option>=[<value>]] [-p <package-list>] \
+[-a <userspec>] [-d <distro>] [-o <option>[=<value>]] [-p <package-list>] \
 [<config.sh> [<parameter>]...]
 
 This program will produce a root file system from a given system configuration
@@ -77,12 +77,11 @@ Customization options:
         Select the distro to install (default: fedora).  This is only used when
         a system definition file does not specify the distro.
         Example: -d centos
-  -o <option>=[<value>]
-        Set an option to the given value, which can be empty to unset.  Most of
-        the previous flags are abbreviated versions of this.  It can be used to
-        set distro- or system-specific options that have no other command-line
-        interface.  This option can be used multiple times to set more options.
-        Example: -o append='quiet splash' -o networkd=1
+  -o <option>[=<value>]
+        Set an option to the given value, which can be empty to unset.  If the
+        equals sign and value are omitted, the option is set to its name.  This
+        option can be used multiple times to set more options.
+        Example: -o append='quiet splash' -o networkd
   -p <package-list>
         Install the given space-separated list of packages into the image in
         addition to the package set in the system definition file.
@@ -848,7 +847,7 @@ do
         do
                 REPLY=${REPLY:1:-1}
                 local k=${REPLY%%:*} v=${REPLY#*:}
-                k=${k//\"/} ; v=${v#\"} ; v=${v%\"}
+                k=${k//\"} ; v=${v#\"} ; v=${v%\"}
                 r[${k:-_}]=$v
         done <<< "${REPLY//,/$'\n'}"
 
@@ -864,8 +863,8 @@ do
         esac
 
         echo wine reg add \
-            "'${r[root]//\"/}\\${r[subkey]//\"/}'" \
-            /v "${r[valueName]//\"/}" \
+            "'${r[root]//\"}\\${r[subkey]//\"}'" \
+            /v "'${r[valueName]//\"}'" \
             /t "${r[valueType]}" \
             /d "'${r[valueData]}'" /f
 done < <(jq -cr '.actions[].install|select(.action=="setRegistry").arguments')

@@ -99,6 +99,10 @@ EOF
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
 EOF
+        $cat << 'EOF' >> "$portage/package.mask/colord.conf"
+# Stay on the stable branch of colord until cross-compiling is supported.
+>=x11-misc/colord-1.4
+EOF
         $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
 # Unmask Rust users to bypass bad architecture profiles.
 dev-lang/rust
@@ -197,10 +201,8 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues.
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept gtk+-3.24.28 to fix build ordering.
-        echo '<x11-libs/gtk+-3.24.29 ~*' >> "$portage/package.accept_keywords/gtk.conf"
-        # Accept pango-1.48 to fix host dependencies and support gtk4.
-        echo '<x11-libs/pango-1.49 ~*' >> "$portage/package.accept_keywords/pango.conf"
+        # Accept opus-1.3.1 to fix SIMD intrinsics usage.
+        echo '<media-libs/opus-1.3.2 ~*' >> "$portage/package.accept_keywords/opus.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -331,13 +333,13 @@ EOF
         $cat << 'EOF' > "$buildroot/usr/bin/using"
 #!/usr/bin/env python3
 import portage, sys
-def using(atom, flag):
+def using(atom, flags):
     settings = portage.config(clone=portage.settings)
     matches = portage.portdb.match(atom)
     if len(matches) >= 1:
         settings.setcpv(portage.best(matches), mydb=portage.portdb)
-    return flag in settings.get('PORTAGE_USE', '').split()
-sys.exit(0 if len(sys.argv) == 3 and using(sys.argv[1], sys.argv[2]) else 1)
+    return {f for f in settings.get('PORTAGE_USE', '').split() if f in flags} == flags
+sys.exit(2 if len(sys.argv) < 3 else 0 if using(sys.argv[1], set(sys.argv[2:])) else 1)
 EOF
         $chmod 0755 "$buildroot/usr/bin/using"
 
@@ -381,12 +383,18 @@ sed -i -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}'
 if test "x$*" != "x${*/erofs-utils}"
 then
         mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
-        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=682180' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.2.1.ebuild
-        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.2.1.ebuild | sed -n '1s/ .*//p') = x90e922110aacc3912a2c9caecf440d15088a415efaf39d967bc8199fc947a3cb
-        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.2.1.tar.gz' > /var/cache/distfiles/erofs-utils-1.2.1.tar.gz
-        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.2.1.tar.gz | sed -n '1s/ .*//p') = x6b2ea15c3b092bd9a3abd966f78bc01c6caacb94022643ff34cf69893ee04e84
-        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.2.1.ebuild manifest --force
+        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=712905' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild
+        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild | sed -n '1s/ .*//p') = x1fba80f68f88494061f8f478be686fe29ec99f9ae40b22d08c89e020fe4bba41
+        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.3.tar.gz' > /var/cache/distfiles/erofs-utils-1.3.tar.gz
+        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.3.tar.gz | sed -n '1s/ .*//p') = x132635740039bbe76d743aea72378bfae30dbf034e123929f5d794198d4c0b12
+        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild manifest --force
 fi
+# Restore the colord stable branch.
+curl -L 'https://raw.githubusercontent.com/gentoo/gentoo/07fda8151b11d904d0b90b82fb87904ab547256f^/x11-misc/colord/colord-1.3.5.ebuild' > /var/db/repos/gentoo/x11-misc/colord/colord-1.3.5.ebuild
+test x$(sha256sum /var/db/repos/gentoo/x11-misc/colord/colord-1.3.5.ebuild | sed -n '1s/ .*//p') = x06d50b69650b88b379e94a85e503fa381d30301801b2eb936a71b735427192a1
+curl -L 'https://www.freedesktop.org/software/colord/releases/colord-1.3.5.tar.xz' > /var/cache/distfiles/colord-1.3.5.tar.xz
+test x$(sha256sum /var/cache/distfiles/colord-1.3.5.tar.xz | sed -n '1s/ .*//p') = x2daa8ffd2a532d7094927cd1a4af595b8310cea66f7707edcf6ab743460feed2
+ebuild /var/db/repos/gentoo/x11-misc/colord/colord-1.3.5.ebuild manifest --force
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
@@ -464,11 +472,12 @@ EOF
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
         # Cheat bootstrapping packages with circular dependencies.
-        USE='-* kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
+        USE='-* drm kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
             $(using media-libs/freetype harfbuzz && echo media-libs/harfbuzz) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && echo media-libs/libwebp) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && echo sys-fs/cryptsetup) \
             $(using sys-libs/libcap pam && using sys-libs/pam filecaps && echo sys-libs/libcap) \
+            $(using media-libs/mesa gallium vaapi && using x11-libs/libva opengl && echo x11-libs/libva) \
             sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.

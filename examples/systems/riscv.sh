@@ -73,7 +73,7 @@ function initialize_buildroot() {
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -gui -policykit -repart -X'"'
+            -gtk -gui -repart -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
@@ -92,6 +92,10 @@ EOF
 
         # Block GCC 11 since it won't cross-compile.
         echo '>=sys-devel/gcc-11' >> "$portage/package.mask/gcc.conf"
+
+        # Fix the spidermonkey linker since gold does not exist for riscv.
+        echo 'EXTRA_ECONF="--enable-linker=bfd"' >> "$portage/env/spidermonkey.conf"
+        echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"
 
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
@@ -118,7 +122,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

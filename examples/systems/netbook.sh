@@ -133,9 +133,9 @@ EOF
         echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
 
-        # Stop this package from building unexecutable NEON code (#752069).
-        echo 'EXTRA_ECONF="--disable-intrinsics"' >> "$portage/env/opus.conf"
-        echo 'media-libs/opus opus.conf' >> "$portage/package.env/opus.conf"
+        # Stop this package from failing to build NEON code (#792810).
+        echo 'MYCMAKEARGS="-DWITH_SIMD:BOOL=OFF"' >> "$portage/env/libjpeg-turbo.conf"
+        echo 'media-libs/libjpeg-turbo libjpeg-turbo.conf' >> "$portage/package.env/libjpeg-turbo.conf"
 
         # Disable SIMD in SpiderMonkey Rust crates.
         echo 'EXTRA_ECONF="--disable-rust-simd"' >> "$portage/env/spidermonkey.conf"
@@ -148,7 +148,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

@@ -47,7 +47,7 @@ do
             d) options[distro]=$OPTARG ;;
             h) usage ; exit 0 ;;
             k) options[signing_key]=$OPTARG ;;
-            o) [[ $OPTARG == *=* ]] ; options[${OPTARG%%=*}]=${OPTARG#*=} ;;
+            o) options[${OPTARG%%=*}]=${OPTARG#*=} ;;
             p) options[packages]=$OPTARG ;;
             u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
             *) usage 1>&2 ; exit 1 ;;

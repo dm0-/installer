@@ -110,7 +110,7 @@ function initialize_buildroot() {
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
-            -gallium -gui -networkmanager -repart -wifi'"'
+            -gui -networkmanager -repart -wifi'"'
 
         # Install VLC.
         fix_package vlc
@@ -123,7 +123,7 @@ function customize_buildroot() {
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -gallium -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config
