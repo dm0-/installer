@@ -201,6 +201,8 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues.
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
+        # Accept libjpeg-turbo-2.1.0 to fix SIMD intrinsics usage.
+        echo '<media-libs/libjpeg-turbo-2.1.1 ~*' >> "$portage/package.accept_keywords/libjpeg-turbo.conf"
         # Accept opus-1.3.1 to fix SIMD intrinsics usage.
         echo '<media-libs/opus-1.3.2 ~*' >> "$portage/package.accept_keywords/opus.conf"
 
@@ -389,12 +391,6 @@ then
         test x$(sha256sum /var/cache/distfiles/erofs-utils-1.3.tar.gz | sed -n '1s/ .*//p') = x132635740039bbe76d743aea72378bfae30dbf034e123929f5d794198d4c0b12
         ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild manifest --force
 fi
-# Restore the colord stable branch.
-curl -L 'https://raw.githubusercontent.com/gentoo/gentoo/07fda8151b11d904d0b90b82fb87904ab547256f^/x11-misc/colord/colord-1.3.5.ebuild' > /var/db/repos/gentoo/x11-misc/colord/colord-1.3.5.ebuild
-test x$(sha256sum /var/db/repos/gentoo/x11-misc/colord/colord-1.3.5.ebuild | sed -n '1s/ .*//p') = x06d50b69650b88b379e94a85e503fa381d30301801b2eb936a71b735427192a1
-curl -L 'https://www.freedesktop.org/software/colord/releases/colord-1.3.5.tar.xz' > /var/cache/distfiles/colord-1.3.5.tar.xz
-test x$(sha256sum /var/cache/distfiles/colord-1.3.5.tar.xz | sed -n '1s/ .*//p') = x2daa8ffd2a532d7094927cd1a4af595b8310cea66f7707edcf6ab743460feed2
-ebuild /var/db/repos/gentoo/x11-misc/colord/colord-1.3.5.ebuild manifest --force
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \

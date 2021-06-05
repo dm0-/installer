@@ -88,7 +88,7 @@ declare -f unmount_root | $sed 's/tune2fs -O read-only/: &/'
 
 # Override the SELinux labeling VM to add more old CentOS 7 kernel modules.
 eval "$(declare -f relabel | $sed 's, /[^ ]*/vmlinuz , /boot/vmlinuz-* ,
-s/\(-name \)\?sd_mod\(.ko.xz -o\)\?/\1crct10dif_common\2 \1crc-t10dif\2 &/')"
+s/\(-name \)\?t10-pi\(.ko.xz -o\)\?/\1crct10dif_common\2 \1crc-t10dif\2/')"
 
 # Override verity formatting to skip ancient broken bash syntax.
 eval "$(declare -f verity | $sed 's/"[^ ]*#opt_params.*"/0/')"

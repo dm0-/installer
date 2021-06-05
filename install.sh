@@ -103,5 +103,6 @@ fi
 if opt uefi_path
 then
         $mkdir -p "${options[uefi_path]%/*}"
-        $cp -p "$output/BOOTX64.EFI" "${options[uefi_path]}"
+        $cp -p "$output/BOOT$(archmap_uefi ${options[arch]-}).EFI" \
+            "${options[uefi_path]}"
 fi

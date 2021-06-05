@@ -133,10 +133,6 @@ EOF
         echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
 
-        # Stop this package from failing to build NEON code (#792810).
-        echo 'MYCMAKEARGS="-DWITH_SIMD:BOOL=OFF"' >> "$portage/env/libjpeg-turbo.conf"
-        echo 'media-libs/libjpeg-turbo libjpeg-turbo.conf' >> "$portage/package.env/libjpeg-turbo.conf"
-
         # Disable SIMD in SpiderMonkey Rust crates.
         echo 'EXTRA_ECONF="--disable-rust-simd"' >> "$portage/env/spidermonkey.conf"
         echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"

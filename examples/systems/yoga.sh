@@ -132,6 +132,10 @@ EOF
         # Block PolicyKit since Mozilla stuff won't build for x32.
         echo xfce-extra/thunar-volman-9999 >> "$portage/profile/package.provided"
 
+        # Block glibc-2.33 since it won't build for x32.
+        echo ">=cross-${options[host]}/glibc-2.33" >> "$buildroot/etc/portage/package.mask/glibc.conf"
+        echo '>=sys-libs/glibc-2.33' >> "$portage/package.mask/glibc.conf"
+
         # Fix librsvg.
         $mkdir -p "$portage/patches/gnome-base/librsvg"
         $curl -L https://github.com/heycam/thin-slice/pull/1/commits/5db6f6cc8322e7b0211c51d61ace9552d8d820ee.patch > "$portage/patches/gnome-base/librsvg/x32.patch"

@@ -72,7 +72,7 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp && convert -background none /usr/share/redhat-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || build_systemd_ramdisk /boot/*/*/initrd
+        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 
@@ -100,7 +100,7 @@ export PATH=/bin
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
-for mod in sd_mod libata ata_piix jbd2 mbcache ext4
+for mod in t10-pi sd_mod libata ata_piix jbd2 mbcache ext4
 do insmod "/lib/$mod.ko"
 done
 mount /dev/sda /sysroot
@@ -124,7 +124,7 @@ EOF
             /usr/*bin/{bash,load_policy,mount,setfiles,umount}
         cp /usr/bin/kmod "$root/bin/insmod"
         find /usr/lib/modules/*/kernel '(' \
-            -name sd_mod.ko.xz -o \
+            -name t10-pi.ko.xz -o -name sd_mod.ko.xz -o \
             -name libata.ko.xz -o -name ata_piix.ko.xz -o \
             -name ext4.ko.xz -o -name jbd2.ko.xz -o -name mbcache.ko.xz -o \
             -false ')' -exec cp -at "$root/lib" '{}' +
@@ -338,18 +338,18 @@ eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
 
 # CentOS container releases are horribly broken.  Pin them to static versions.
 function archmap_container() case "$DEFAULT_ARCH" in
-    aarch64) echo 88b3ec90d3e01f637cab87ad124e8917f60839af ;;
-    ppc64le) echo cf1c88f0b706f6c6192e4e80ec8ec5be5c499eaa ;;
-    x86_64)  echo ccd17799397027acf9ee6d660e75b8fce4c852e8 ;;
+    aarch64) echo b649af7d618145e62853f15a0b37f99620e6dc4d ;;
+    ppc64le) echo 02e70e31f1bf6d943911ae42ef10680a6dc96f7e ;;
+    x86_64)  echo 58a64e21019ae263ab18743c305cb0d85bba1b62 ;;
     *) return 1 ;;
 esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case "$DEFAULT_ARCH" in
-            aarch64) echo 4b3a73e7f354a9a4e0ce73b63e66db0be6be887f2b1bc1b8f561e121c43b5f45 ;;
-            ppc64le) echo d6abf6111500397ebbe2fc811c34bacca02ac31acaff2963ad18c03e352753ba ;;
-            x86_64)  echo 45e655330e7290265fd9cc6bc9478d1a93bc476b284cfe2f40fbb525b76b8e89 ;;
+            aarch64) echo 4b6f19fa15795d41bd2cd44e6f0461e24c36ba0af336002ceb0e688e76db5d71 ;;
+            ppc64le) echo a2b4f92de1fa8c1333d81f296f896241cee7281e898a1877b1f8b7827a851ba9 ;;
+            x86_64)  echo 00ecde5596f4380b4ae0c6f6be20683aeecb4fbbe76b415cf640ba41f5574bd3 ;;
         esac)
 ]]
 
