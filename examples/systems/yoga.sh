@@ -99,7 +99,7 @@ EOF
 
         # Use the i915 video driver for the integrated GPU.
         echo 'VIDEO_CARDS="intel i915"' >> "$portage/make.conf"
-        echo 'media-libs/mesa -classic -vaapi -video_cards_intel' >> "$portage/package.use/mesa.conf"
+        echo 'media-libs/mesa -classic -video_cards_intel' >> "$portage/package.use/mesa.conf"
 
         # Use the proprietary Broadcom drivers.
         echo 'USE="$USE broadcom-sta kmod"' >> "$portage/make.conf"
@@ -190,13 +190,13 @@ EOF
         $cat << 'EOF' >> "$portage/patches/app-emulation/qemu/x32.patch"
 --- a/configure
 +++ b/configure
-@@ -6955,7 +6955,7 @@
-         echo "system = 'linux'" >> $cross
-     fi
-     case "$ARCH" in
--        i386|x86_64)
-+        i386|x32|x86_64)
+@@ -6362,7 +6362,7 @@
+         i386)
              echo "cpu_family = 'x86'" >> $cross
+             ;;
+-        x86_64)
++        x86_64|x32)
+             echo "cpu_family = 'x86_64'" >> $cross
              ;;
          ppc64le)
 EOF

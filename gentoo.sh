@@ -140,10 +140,10 @@ EOF
 media-libs/libcanberra -gtk
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
-# Disable trying to build an initrd since it won't run in a chroot.
-sys-kernel/gentoo-kernel -initramfs
-# Apply patches to support additional CPU optimizations.
-sys-kernel/gentoo-sources experimental
+# Disable trying to build an initrd, and use hardened options.
+sys-kernel/gentoo-kernel hardened -initramfs
+# Apply patches to support more CPU optimizations, and link a default version.
+sys-kernel/gentoo-sources experimental symlink
 EOF
         $cat << 'EOF' >> "$portage/package.use/llvm.conf"
 # Make clang use its own linker by default.

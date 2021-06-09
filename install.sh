@@ -102,6 +102,7 @@ fi
 # Save the UEFI binary.
 if opt uefi_path
 then
+        [[ ${options[uefi_path]} == *[^/]/* ]] &&
         $mkdir -p "${options[uefi_path]%/*}"
         $cp -p "$output/BOOT$(archmap_uefi ${options[arch]-}).EFI" \
             "${options[uefi_path]}"

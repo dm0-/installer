@@ -78,7 +78,7 @@ function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_8 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
+app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_9 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
 dev-libs/glib static-libs
 dev-libs/libffi static-libs
 dev-libs/libpcre static-libs
