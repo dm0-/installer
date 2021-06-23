@@ -135,6 +135,7 @@ EOF
         # Block glibc-2.33 since it won't build for x32.
         echo ">=cross-${options[host]}/glibc-2.33" >> "$buildroot/etc/portage/package.mask/glibc.conf"
         echo '>=sys-libs/glibc-2.33' >> "$portage/package.mask/glibc.conf"
+        echo '<sys-libs/glibc-2.33' >> "$portage/package.unmask/glibc.conf"
 
         # Fix librsvg.
         $mkdir -p "$portage/patches/gnome-base/librsvg"
@@ -246,8 +247,9 @@ function customize() {
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -smp 1,cores=4 -m 4G -vga std -soundhw hda -nic user \
+    -cpu host -smp 1,cores=4 -m 4G -vga std -nic user \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
+    -device intel-hda -device hda-output \
     "$@"
 EOF
 }

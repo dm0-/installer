@@ -141,8 +141,9 @@ EOF
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -soundhw hda -nic user \
+    -cpu host -m 8G -vga std -nic user \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
+    -device intel-hda -device hda-output \
     "$@"
 EOF
 }

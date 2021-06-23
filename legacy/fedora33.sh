@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=33).
 
+# Override UEFI splash screen creation for the old logo.
+eval "$(declare -f save_boot_files | $sed "s|\(convert.* \)\([^ ]*svg\)|sed \
+'/id=.g524[17]/,/[/]/{/</,/>/d;}' \2 > /root/logo.svg \&\& \1/root/logo.svg|")"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN

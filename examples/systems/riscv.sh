@@ -90,7 +90,8 @@ sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
 
-        # Block GCC 11 since it won't cross-compile.
+        # Block GCC 11 since it won't cross-compile (GCC#100017).
+        echo ">=cross-${options[host]}/gcc-11" >> "$buildroot/etc/portage/package.mask/gcc.conf"
         echo '>=sys-devel/gcc-11' >> "$portage/package.mask/gcc.conf"
 
         # Fix the spidermonkey linker since gold does not exist for riscv.
@@ -117,6 +118,12 @@ EOF
         $curl -L https://github.com/u-boot/u-boot/archive/v2021.04.tar.gz > "$buildroot/root/u-boot.tgz"
         test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
             xc51a62092c7c18c249febe31457f3c811d2d3296a9186d241ad23a2fb0a794f2
+
+        # Work around the broken baselayout migration code (#796893).
+        $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
+
+        # Work around the broken glibc paths (#797679).
+        $ln -fst "$buildroot/usr/lib64" "../${options[host]}/usr/lib64/lp64d"
 }
 
 function customize_buildroot() {
@@ -126,6 +133,9 @@ function customize_buildroot() {
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config
+
+        # Work around the broken baselayout migration code (#796893).
+        mkdir -p "root/usr/lib64"
 }
 
 function customize() {

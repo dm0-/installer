@@ -199,12 +199,10 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept baselayout-2.7 to fix a couple target root issues.
+        # Accept baselayout-2.7 to fix a couple target root issues (#795393).
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept libjpeg-turbo-2.1.0 to fix SIMD intrinsics usage.
-        echo '<media-libs/libjpeg-turbo-2.1.1 ~*' >> "$portage/package.accept_keywords/libjpeg-turbo.conf"
-        # Accept opus-1.3.1 to fix SIMD intrinsics usage.
-        echo '<media-libs/opus-1.3.2 ~*' >> "$portage/package.accept_keywords/opus.conf"
+        # Accept libjpeg-turbo-2.1.0 to fix SIMD intrinsics usage (#795390).
+        echo 'media-libs/libjpeg-turbo *' >> "$portage/package.accept_keywords/libjpeg-turbo.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -331,7 +329,25 @@ EOF
         # Prevent accidentally disabling required modules.
         echo 'dev-libs/libxml2 python' >> "$portage/profile/package.use.force/libxml2.conf"
 
-        # Write a portage script for querying USE flags later.
+        # Write portage scripts for bootstrapping circular dependencies later.
+        $cat << 'EOF' > "$buildroot/usr/bin/deepdeps"
+#!/usr/bin/env python3
+import portage, sys
+def process(atom):
+    matches = portage.portdb.match(atom)
+    if len(matches) < 1: return
+    settings.setcpv(portage.best(matches), mydb=portage.portdb)
+    global deps
+    if settings.mycpv in deps: return
+    deps += [settings.mycpv]
+    for dep in portage.dep.use_reduce(settings.get('DEPEND', '') + '\n' + settings.get('PDEPEND', '') + '\n' + settings.get('RDEPEND', ''), uselist=settings.get('PORTAGE_USE', '').split()):
+        if type(dep) is not str or dep == '||' or dep.startswith('!'): continue
+        process(dep.split('[')[0])
+deps = []
+settings = portage.config(clone=portage.settings)
+for arg in sys.argv[1:]: process(arg)
+for pkg in deps: print(pkg)
+EOF
         $cat << 'EOF' > "$buildroot/usr/bin/using"
 #!/usr/bin/env python3
 import portage, sys
@@ -343,7 +359,7 @@ def using(atom, flags):
     return {f for f in settings.get('PORTAGE_USE', '').split() if f in flags} == flags
 sys.exit(2 if len(sys.argv) < 3 else 0 if using(sys.argv[1], set(sys.argv[2:])) else 1)
 EOF
-        $chmod 0755 "$buildroot/usr/bin/using"
+        $chmod 0755 "$buildroot"/usr/bin/{deepdeps,using}
 
         # Write cross-clang wrappers.  They'll fail if clang isn't installed.
         $cat << 'EOF' > "$buildroot/usr/bin/${options[host]}-clang"
@@ -401,15 +417,18 @@ sed -i -e '/^[^#]/d' /etc/python-exec/python-exec.conf
 portageq envvar PYTHON_SINGLE_TARGET |
 sed s/_/./g >> /etc/python-exec/python-exec.conf
 
-# Create the cross-compiler toolchain in the native build root.
+# Create the sysroot layout and cross-compiler toolchain.
+export {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host"
+mkdir -p "$ROOT"/usr/{bin,src}
+ln -fns bin "$ROOT/usr/sbin"
+ln -fst "$ROOT" usr/{bin,sbin}
+emerge --jobs=4 --nodeps --oneshot --verbose sys-apps/baselayout
+stable=$(portageq envvar ACCEPT_KEYWORDS | grep -Fqs -e '~' -e '**' || echo 1)
+unset {PORTAGE_CONFIG,,SYS}ROOT
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
 location = /var/db/repos/crossdev
 EOG
-mkdir -p /usr/"$host"/usr/{bin,lib,lib32,lib64,libx32,src}
-ln -fns bin /usr/"$host"/usr/sbin
-ln -fst "/usr/$host" usr/{bin,lib,lib32,lib64,libx32,sbin}
-stable=$(env {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host" portageq envvar ACCEPT_KEYWORDS | grep -Fqs -e '~' -e '**' || echo 1)
 crossdev ${stable:+--stable} --target "$host"
 
 # Install all requirements for building the target image.
@@ -425,13 +444,12 @@ function install_packages() {
 
         opt bootable || opt networkd && packages+=(acct-group/mail sys-apps/systemd)
         opt selinux && packages+=(sec-policy/selinux-base-policy)
-        packages+=(sys-apps/baselayout)
 
-        # If system-specific kernel configs were not given, use dist-kernel.
+        # If a system-specific kernel config was not given, use dist-kernel.
         if opt bootable
         then
-                test "x$(cd /etc/kernel/config.d ; compgen -G '*.config')" \
-                    = xbase.config || : ${options[raw_kernel]=1}
+                test -s /etc/kernel/config.d/system.config &&
+                : ${options[raw_kernel]=1}
                 cat << EOF >> /etc/kernel/config.d/keys.config
 CONFIG_MODULE_SIG_KEY="$keydir/sign.pem"
 $(opt verity_sig || echo '#')CONFIG_SYSTEM_TRUSTED_KEYS="$keydir/verity.crt"
@@ -439,7 +457,7 @@ EOF
                 if ! opt raw_kernel
                 then
                         chgrp portage "$keydir" ; chmod g+x "$keydir"
-                        packages_sysroot+=(sys-kernel/gentoo-kernel virtual/libelf)
+                        packages_sysroot+=(sys-kernel/gentoo-kernel)
                 fi
         fi
 
@@ -468,40 +486,41 @@ EOF
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
         # Cheat bootstrapping packages with circular dependencies.
+        deepdeps "${packages[@]}" "${packages_sysroot[@]}" "$@" | sed 's/-[0-9].*//' > /root/xdeps
         USE='-* drm kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
-            $(using media-libs/freetype harfbuzz && echo media-libs/harfbuzz) \
-            $(using media-libs/libwebp tiff && using media-libs/tiff webp && echo media-libs/libwebp) \
-            $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && echo sys-fs/cryptsetup) \
-            $(using sys-libs/libcap pam && using sys-libs/pam filecaps && echo sys-libs/libcap) \
-            $(using media-libs/mesa gallium vaapi && using x11-libs/libva opengl && echo x11-libs/libva) \
+            $(using media-libs/freetype harfbuzz && grep -Foxm1 media-libs/harfbuzz /root/xdeps) \
+            $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
+            $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
+            $(using sys-libs/libcap pam && using sys-libs/pam filecaps && grep -Foxm1 sys-libs/libcap /root/xdeps) \
+            $(using media-libs/mesa gallium vaapi && using x11-libs/libva opengl && grep -Foxm1 x11-libs/libva /root/xdeps) \
             sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
             "${packages[@]}" "${packages_sysroot[@]}" "$@"
 
+        # Without GDB, assume debuginfo is unwanted to be like other distros.
+        test -x "$ROOT/usr/bin/gdb" && : ${options[debuginfo]=1}
+        opt debuginfo || local -rx INSTALL_MASK='/usr/lib/.build-id /usr/lib/debug /usr/share/gdb /usr/src'
+
         # Install the target root from binaries with no build dependencies.
-        mkdir -p root/{dev,etc,home,proc,run,srv,sys,usr/{bin,lib},var}
+        mkdir -p root/{dev,home,proc,srv,sys,usr/bin}
         mkdir -pm 0700 root/root
         ln -fns bin root/usr/sbin
-        if [[ ${options[arch]-} =~ 64 ]]
-        then
-                [[ ${options[host]-} == *x32 ]] &&
-                mkdir -p root/usr/libx32 ||
-                ln -fns lib root/usr/lib64
-        fi
-        (cd root ; exec ln -fst . usr/*)
+        ln -fst root usr/{bin,sbin}
         ln -fns .. "root$ROOT"  # Lazily work around bad packaging.
+        emerge --{,sys}root=root --jobs="$(nproc)" -1KOv sys-apps/baselayout
         emerge --{,sys}root=root --jobs="$(nproc)" -1Kv "${packages[@]}" "$@"
         mv -t root/usr/bin root/gcc-bin/*/* ; rm -fr root/{binutils,gcc}-bin
 
         # Create a UTF-8 locale so things work.
         localedef --prefix=root -c -f UTF-8 -i en_US en_US.UTF-8
 
-        # If a modular kernel was configured, install the stripped modules.
+        # If a modular unpackaged kernel was configured, install the modules.
         opt raw_kernel && grep -Fqsx CONFIG_MODULES=y /usr/src/linux/.config &&
         make -C /usr/src/linux modules_install \
-            INSTALL_MOD_PATH=/wd/root INSTALL_MOD_STRIP=1 \
+            INSTALL_MOD_PATH=/wd/root \
+            INSTALL_MOD_STRIP=$(opt debuginfo || echo 1) \
             ARCH="$kernel_arch" CROSS_COMPILE="${options[host]}-" V=1
 
         # List everything installed in the image and what was used to build it.
@@ -517,10 +536,6 @@ function distro_tweaks() {
 
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
-
-        # Without GDB, assume debuginfo is unwanted to be like other distros.
-        test -x root/usr/bin/gdb && : ${options[debuginfo]=1}
-        opt debuginfo || drop_debugging
 
         # Add a mount point to support the ESP mount generator.
         opt uefi && mkdir root/boot
@@ -1037,7 +1052,7 @@ function archmap_profile() {
             armv7a)   echo default/linux/arm/17.0/armv7a ;;
             i[3-6]86) echo default/linux/x86/17.0/hardened ;;
             powerpc)  echo default/linux/ppc/17.0 ;;
-            riscv64)  echo default/linux/riscv/17.0/rv64gc/lp64d ;;
+            riscv64)  echo default/linux/riscv/20.0/rv64gc/lp64d ;;
             x86_64)   echo default/linux/amd64/17.1$nomulti/hardened ;;
             *) return 1 ;;
         esac
@@ -1105,15 +1120,6 @@ EOF
 }
 
 # OPTIONAL (IMAGE)
-
-function drop_debugging() {
-        exclude_paths+=(
-                usr/lib/.build-id
-                usr/lib/debug
-                usr/share/gdb
-                usr/src
-        )
-}
 
 function drop_development() {
         exclude_paths+=(
