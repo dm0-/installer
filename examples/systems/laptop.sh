@@ -96,7 +96,7 @@ function initialize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
@@ -109,7 +109,7 @@ function initialize_buildroot() {
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gui -networkmanager -repart -wifi'"'
 
         # Install VLC.
@@ -123,7 +123,7 @@ function customize_buildroot() {
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config
@@ -255,7 +255,7 @@ CONFIG_NET_SCHED=y
 CONFIG_NET_SCH_DEFAULT=y
 CONFIG_NET_SCH_FQ_CODEL=y
 # TARGET HARDWARE: Lenovo Thinkpad P1 (Gen 2)
-CONFIG_MNATIVE=y  # Assume the build system is the target.
+CONFIG_MNATIVE_INTEL=y  # Assume the build system is the target.
 CONFIG_PCI_MSI=y
 CONFIG_PM=y
 ## Bundle firmware/microcode
@@ -300,7 +300,6 @@ CONFIG_SND_HDA_INTEL=y
 CONFIG_SND_HDA_CODEC_CONEXANT=y
 ## NVIDIA Quadro T2000 (enable modules to build the proprietary driver)
 CONFIG_MODULES=y
-CONFIG_MODULE_COMPRESS=y
 CONFIG_MODULE_COMPRESS_XZ=y
 CONFIG_MTRR=y
 CONFIG_MTRR_SANITIZER=y

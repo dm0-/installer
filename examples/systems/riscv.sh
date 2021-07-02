@@ -59,7 +59,7 @@ function initialize_buildroot() {
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
@@ -72,7 +72,7 @@ function initialize_buildroot() {
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gtk -gui -repart -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
@@ -124,12 +124,15 @@ EOF
 
         # Work around the broken glibc paths (#797679).
         $ln -fst "$buildroot/usr/lib64" "../${options[host]}/usr/lib64/lp64d"
+
+        # Work around broken UEFI booting on Linux 5.13.
+        echo '>=sys-kernel/gentoo-sources-5.13' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

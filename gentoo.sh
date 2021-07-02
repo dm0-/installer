@@ -43,7 +43,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE system-icu"
+USE="\$USE system-icu -fortran"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -182,7 +182,7 @@ sslv3
 EOF
 
         # Permit selectively toggling important features.
-        echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
+        echo -e '-audit\n-caps\n-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
         echo -e '-cet\n-clang\n-systemd' >> "$portage/profile/use.mask"
 
         # Write build environment modifiers for later use.
@@ -201,8 +201,6 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues (#795393).
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept libjpeg-turbo-2.1.0 to fix SIMD intrinsics usage (#795390).
-        echo 'media-libs/libjpeg-turbo *' >> "$portage/package.accept_keywords/libjpeg-turbo.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -366,7 +364,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/11/bin/${name##*-}"
+prog="/usr/lib/llvm/12/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/${options[host]}-clang"
@@ -761,6 +759,7 @@ then
 CONFIG_ACPI=y
 CONFIG_BASE_FULL=y
 CONFIG_BLOCK=y
+CONFIG_EXPERT=y
 CONFIG_JUMP_LABEL=y
 CONFIG_KERNEL_'$([[ ${options[arch]} =~ [3-6x]86 ]] && echo ZSTD || echo XZ)'=y
 CONFIG_MULTIUSER=y
@@ -880,7 +879,8 @@ fi
 
 function build_relabel_kernel() if opt selinux
 then
-        echo > "$buildroot/root/config.relabel" '# Target the native CPU.
+        echo > "$buildroot/root/config.relabel" 'CONFIG_EXPERT=y
+# Target the native CPU.
 '$([[ $DEFAULT_ARCH =~ 64 ]] || echo '#')'CONFIG_64BIT=y
 CONFIG_MNATIVE=y
 CONFIG_SMP=y
@@ -1134,8 +1134,8 @@ function drop_development() {
         )
 
         # Drop developer commands, then remove their dead links.
-        rm -f root/usr/*bin/"${options[host]}"-*
-        find root/usr/*bin -type l | while read
+        rm -f root/usr/bin/"${options[host]}"-*
+        find root/usr/bin -type l | while read
         do
                 path=$(readlink "$REPLY")
                 if [[ $path == /* ]]

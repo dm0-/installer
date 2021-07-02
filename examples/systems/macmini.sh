@@ -101,7 +101,7 @@ EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
@@ -114,7 +114,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -ffmpeg -networkmanager -repart'"'
 
         # Install QEMU to run graphical virtual machines and Intel programs.
@@ -142,7 +142,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

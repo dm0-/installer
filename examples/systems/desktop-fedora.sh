@@ -10,7 +10,6 @@
 
 options+=(
         [gpt]=1         # Generate a VM disk image for fast testing.
-        [networkd]=     # Disable networkd so GNOME can use NetworkManager.
         [selinux]=1     # Enforce a targeted SELinux policy.
         [squash]=1      # Use a highly compressed file system to save space.
         [uefi]=1        # Create a UEFI executable that boots into this image.

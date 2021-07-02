@@ -107,7 +107,7 @@ EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
@@ -120,7 +120,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gui -networkmanager -wifi'"'
 
         # Pass FPU flags through LDFLAGS so this package works with LTO.
@@ -134,7 +134,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Download an NVRAM file for the wireless driver.
         local -r commit=ce86506f6ee3f4d1fc9e9cdc2c36645a6427c223  # Initial import in overlays.
@@ -217,7 +217,7 @@ then
     description = "Gentoo";
     #address-cells = <1>;
     images {
-        kernel@1 {
+        kernel-1 {
             description = "Gentoo Linux";
             data = /incbin/("/usr/src/linux/arch/arm/boot/zImage");
             type = "kernel_noload";
@@ -227,7 +227,7 @@ then
             load = <0>;
             entry = <0>;
         };
-        fdt@1 {
+        fdt-1 {
             description = "Veyron Minnie (ASUS Chromebook Flip C100P)";
             data = /incbin/("$dtb");
             type = "flat_dt";
@@ -236,11 +236,11 @@ then
         };
     };
     configurations {
-        default = "conf@1";
-        conf@1 {
+        default = "conf-1";
+        conf-1 {
             description = "Gentoo Minnie";
-            kernel = "kernel@1";
-            fdt = "fdt@1";
+            kernel = "kernel-1";
+            fdt = "fdt-1";
         };
     };
 };

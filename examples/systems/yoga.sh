@@ -110,7 +110,7 @@ EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
-            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 ncurses pcre2 readline sqlite udev uuid xml \
+            berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
             apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
@@ -123,7 +123,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
             -gui -networkmanager -policykit -repart -udisks -wifi'"'
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
@@ -132,10 +132,8 @@ EOF
         # Block PolicyKit since Mozilla stuff won't build for x32.
         echo xfce-extra/thunar-volman-9999 >> "$portage/profile/package.provided"
 
-        # Block glibc-2.33 since it won't build for x32.
-        echo ">=cross-${options[host]}/glibc-2.33" >> "$buildroot/etc/portage/package.mask/glibc.conf"
-        echo '>=sys-libs/glibc-2.33' >> "$portage/package.mask/glibc.conf"
-        echo '<sys-libs/glibc-2.33' >> "$portage/package.unmask/glibc.conf"
+        # Enable extra bootstrapping objects for x32.
+        echo 'sys-libs/glibc multilib-bootstrap' >> "$portage/package.use/glibc.conf"
 
         # Fix librsvg.
         $mkdir -p "$portage/patches/gnome-base/librsvg"
@@ -206,7 +204,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -fortran -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
 
         # Work around EAPI 6 multilib package dependencies until they're gone.
         echo 'ABI_X86="64 x32"' >> /etc/portage/make.conf
@@ -379,7 +377,6 @@ CONFIG_USB_XHCI_HCD=y
 CONFIG_USB_XHCI_PCI=y
 ## Broadcom wireless BCM43142 (enable modules to build the proprietary driver)
 CONFIG_MODULES=y
-CONFIG_MODULE_COMPRESS=y
 CONFIG_MODULE_COMPRESS_XZ=y
 CONFIG_NETDEVICES=y
 CONFIG_WIRELESS=y
