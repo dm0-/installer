@@ -23,6 +23,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -72,7 +73,7 @@ function initialize_buildroot() {
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
             -gtk -gui -repart -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
@@ -115,9 +116,9 @@ EOF
         $curl -L https://github.com/riscv/opensbi/archive/v0.9.tar.gz > "$buildroot/root/opensbi.tgz"
         test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
             x60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0
-        $curl -L https://github.com/u-boot/u-boot/archive/v2021.04.tar.gz > "$buildroot/root/u-boot.tgz"
+        $curl -L https://github.com/u-boot/u-boot/archive/v2021.07.tar.gz > "$buildroot/root/u-boot.tgz"
         test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
-            xc51a62092c7c18c249febe31457f3c811d2d3296a9186d241ad23a2fb0a794f2
+            x6cc8e2c9ed8898750c8979e0f75317818c1a7493b21f8ba4154f88888b675b5f
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
@@ -132,7 +133,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

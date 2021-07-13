@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-packages=()
 packages_buildroot=()
 
 function create_buildroot() {
         local -r arch=${options[arch]:=$DEFAULT_ARCH}
+        : ${options[hardfp]=$([[ ${options[host]-} == *hf || $arch == armv[67]* && -z ${options[host]-} ]] && echo 1)}
+        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)${options[hardfp]:+hf}}
         local -r profile=${options[profile]-$(archmap_profile "$arch")}
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
-        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi$([[ $arch == armv[67]* ]] && echo hf))}
 
         opt bootable || opt selinux && packages_buildroot+=(sys-kernel/gentoo-sources)
         opt gpt && opt uefi && packages_buildroot+=(sys-fs/dosfstools sys-fs/mtools)
@@ -29,7 +29,7 @@ function create_buildroot() {
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
         $mv "$portage" "$portage.stage3"
-        $mkdir -p "$portage"/{env,make.profile,package.{accept_keywords,env,license,mask,unmask,use},profile/package.use.{force,mask},repos.conf}
+        $mkdir -p "$portage"/{env,make.profile,package.{accept_keywords,env,license,mask,unmask,use},profile/{package.,}use.{force,mask},repos.conf}
         $cp -at "$portage" "$portage.stage3/make.conf"
         $cat << EOF >> "$portage/make.profile/parent"
 gentoo:$(archmap_profile)
@@ -43,7 +43,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE system-icu -fortran"
+USE="\$USE system-icu -fortran -introspection -vala"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -81,7 +81,7 @@ sec-policy/* ~*
 sys-kernel/gentoo-kernel ~*
 sys-kernel/gentoo-sources ~*
 sys-kernel/git-sources ~*
-sys-kernel/linux-headers ~*
+<sys-kernel/linux-headers-5.13 ~*
 virtual/dist-kernel ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
@@ -175,15 +175,15 @@ EOF
 # Allow sharing LLVM and the native Rust for cross-bootstrapping.
 dev-lang/rust -system-bootstrap -system-llvm
 EOF
-        $cat << 'EOF' >> "$portage/profile/use.mask"
+        $cat << 'EOF' >> "$portage/profile/use.mask/ssl.conf"
 # Mask support for insecure protocols.
 sslv2
 sslv3
 EOF
 
         # Permit selectively toggling important features.
-        echo -e '-audit\n-caps\n-selinux\n-static\n-static-libs' >> "$portage/profile/use.force"
-        echo -e '-cet\n-clang\n-systemd' >> "$portage/profile/use.mask"
+        echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force/unforce.conf"
+        echo -e '-cet\n-clang\n-systemd' >> "$portage/profile/use.mask/unmask.conf"
 
         # Write build environment modifiers for later use.
         echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
@@ -201,6 +201,14 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues (#795393).
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
+        # Accept emacs-27.2 to fix host dependencies.
+        echo '<app-editors/emacs-27.3 ~*' >> "$portage/package.accept_keywords/emacs.conf"
+        # Accept libnotify-0.7.9 to fix host dependencies.
+        echo '<x11-libs/libnotify-0.8 ~*' >> "$portage/package.accept_keywords/libnotify.conf"
+        # Accept mpg123-1.28.0 to fix host dependencies (#800953).
+        echo 'media-sound/mpg123 *' >> "$portage/package.accept_keywords/mpg123.conf"
+        # Accept python-3.9.6 to fix host dependencies.
+        echo '<dev-lang/python-3.10 ~*' >> "$portage/package.accept_keywords/python.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -256,16 +264,20 @@ EOF
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
+        echo 'LIBASSUAN_CONFIG="/usr/bin/$CHOST-pkg-config libassuan"' >> "$portage/env/cross-libassuan.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
+        echo 'EXTRA_EMAKE="PYTHON_INCLUDES=/usr/\$(host)/usr/include/\$\${PYTHON##*/}"' >> "$portage/env/cross-libxml2-python.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
+app-crypt/gpgme cross-libassuan.conf
 app-i18n/ibus cross-glib-genmarshal.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
+dev-libs/libxml2 cross-libxml2-python.conf
 gnome-base/gnome-settings-daemon meson-pkgconfig.conf
 gnome-base/librsvg cross-emake-utils.conf
 net-libs/libmbim cross-emake-utils.conf
@@ -290,7 +302,8 @@ sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
 x11-drivers/xf86-video-intel no-lto.conf
 EOF
-        echo split-usr >> "$portage/profile/use.mask"
+        echo -e '-audit\n-caps' >> "$portage/profile/use.force/selinux.conf"
+        echo split-usr >> "$portage/profile/use.mask/usrmerge.conf"
 
         # Write portage profile settings that only apply to the native root.
         portage="$buildroot/etc/portage"
@@ -305,6 +318,8 @@ EOF
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
+        # Preserve JIT support in libpcre2 to avoid a needless rebuild.
+        echo 'dev-libs/libpcre2 jit' >> "$portage/package.use/libpcre2.conf"
         # Rust isn't built into the stage3 to bootstrap, but it can share LLVM.
         echo 'dev-lang/rust system-llvm -system-bootstrap' >> "$portage/package.use/rust.conf"
         # Disable journal compression to skip the massive cmake dependency.
@@ -360,60 +375,47 @@ EOF
         $chmod 0755 "$buildroot"/usr/bin/{deepdeps,using}
 
         # Write cross-clang wrappers.  They'll fail if clang isn't installed.
-        $cat << 'EOF' > "$buildroot/usr/bin/${options[host]}-clang"
+        $cat << 'EOF' > "$buildroot/usr/bin/$host-clang"
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
 prog="/usr/lib/llvm/12/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
-        $chmod 0755 "$buildroot/usr/bin/${options[host]}-clang"
-        $ln -fn "$buildroot/usr/bin/${options[host]}-clang"{,++}
+        $chmod 0755 "$buildroot/usr/bin/$host-clang"
+        $ln -fn "$buildroot/usr/bin/$host-clang"{,++}
 
         # Work around bad PolicyKit dependencies.
         $mkdir -p "$buildroot/usr/share/gettext/its"
         $ln -fst "$buildroot/usr/share/gettext/its" \
-            "/usr/${options[host]}/usr/share/gettext/its"/polkit.{its,loc}
+            "/usr/$host/usr/share/gettext/its"/polkit.{its,loc}
 
         write_base_kernel_config
         initialize_buildroot "$@"
 
-        script "$host" "${packages_buildroot[@]}" << 'EOF'
+        $cat <(declare -f write_overlay) - << 'EOF' | script "$host" "${packages_buildroot[@]}"
 host=$1 ; shift
 
-# Fetch the latest package definitions, and fix them.
+# Fetch the latest package definitions, and fix them in an overlay.
 emerge-webrsync
-## Support cross-compiling musl (#732482).
-sed -i -e '/ -e .*ld-musl/d' /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild
-for ebuild in /var/db/repos/gentoo/sys-libs/musl/musl-*.ebuild ; do ebuild "$ebuild" manifest ; done
-## Support cross-compiling with LLVM on EAPI 7 (#745744).
-sed -i -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' /var/db/repos/gentoo/eclass/llvm.eclass
-## Support compiling basic qt5 packages in a sysroot.
-sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"' /var/db/repos/gentoo/dev-qt/qtgui/qtgui-*.ebuild
-sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"' /var/db/repos/gentoo/dev-qt/qtwidgets/qtwidgets-*.ebuild
-sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' /var/db/repos/gentoo/dev-qt/qtsvg/qtsvg-*.ebuild
-sed -i -e '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"' /var/db/repos/gentoo/dev-qt/qtx11extras/qtx11extras-*.ebuild
-for ebuild in /var/db/repos/gentoo/dev-qt/qt{gui,widgets,svg,x11extras}/qt*.ebuild ; do ebuild "$ebuild" manifest ; done
-sed -i -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' /var/db/repos/gentoo/eclass/qt5-build.eclass
-## Support erofs-utils (#701284).
-if test "x$*" != "x${*/erofs-utils}"
-then
-        mkdir -p /var/cache/distfiles /var/db/repos/gentoo/sys-fs/erofs-utils
-        curl -L 'https://701284.bugs.gentoo.org/attachment.cgi?id=712905' > /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild
-        test x$(sha256sum /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild | sed -n '1s/ .*//p') = x1fba80f68f88494061f8f478be686fe29ec99f9ae40b22d08c89e020fe4bba41
-        curl -L 'https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.3.tar.gz' > /var/cache/distfiles/erofs-utils-1.3.tar.gz
-        test x$(sha256sum /var/cache/distfiles/erofs-utils-1.3.tar.gz | sed -n '1s/ .*//p') = x132635740039bbe76d743aea72378bfae30dbf034e123929f5d794198d4c0b12
-        ebuild /var/db/repos/gentoo/sys-fs/erofs-utils/erofs-utils-1.3.ebuild manifest --force
-fi
+mkdir -p /var/db/repos/fixes/{eclass,metadata}
+cat << 'EOG' > /var/db/repos/fixes/metadata/layout.conf
+masters = gentoo
+repo-name = fixes
+EOG
+tee {,/usr/"$host"}/etc/portage/repos.conf/fixes.conf << 'EOG'
+[fixes]
+location = /var/db/repos/fixes
+EOG
+write_overlay /var/db/repos/fixes
+(cd /var/db/repos/gentoo/eclass ; exec ln -fst . ../../fixes/eclass/*)
 
 # Update the native build root packages to the latest versions.
+echo 'media-libs/harfbuzz -* truetype' > /etc/portage/package.use/harfbuzz.conf
+qlist media-libs/freetype > /dev/null || echo 'media-libs/freetype -*' >> /etc/portage/package.use/harfbuzz.conf
 emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
-    @world sys-devel/crossdev
-
-# Ensure Python defaults to the version in the profile before continuing.
-sed -i -e '/^[^#]/d' /etc/python-exec/python-exec.conf
-portageq envvar PYTHON_SINGLE_TARGET |
-sed s/_/./g >> /etc/python-exec/python-exec.conf
+    @world media-libs/harfbuzz sys-devel/crossdev
+echo 'media-libs/freetype harfbuzz' > /etc/portage/package.use/harfbuzz.conf
 
 # Create the sysroot layout and cross-compiler toolchain.
 export {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host"
@@ -882,7 +884,6 @@ then
         echo > "$buildroot/root/config.relabel" 'CONFIG_EXPERT=y
 # Target the native CPU.
 '$([[ $DEFAULT_ARCH =~ 64 ]] || echo '#')'CONFIG_64BIT=y
-CONFIG_MNATIVE=y
 CONFIG_SMP=y
 # Support executing programs and scripts.
 CONFIG_BINFMT_ELF=y
@@ -1000,7 +1001,7 @@ yqu4wb67pwMX312ABdpW
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
         $gpg --verify "$1"
-        test x$($sed -n '/^[0-9a-f]/{s/ .*//p;q;}' "$1") = x$($sha512sum "$2" | $sed -n '1s/ .*//p')
+        test x$($sed -n '/^# SHA512/,+1{/^[^#]/{s/ .*//p;q;};}' "$1") = x$($sha512sum "$2" | $sed -n '1s/ .*//p')
 }
 
 function archmap() case "${*:-$DEFAULT_ARCH}" in
@@ -1062,8 +1063,8 @@ function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
     aarch64)  echo aarch64-unknown-linux-gnu ;;
     armv4t*)  echo armv4t-unknown-linux-gnueabi ;;
     armv5te*) echo armv5te-unknown-linux-gnueabi ;;
-    armv6*)   echo arm-unknown-linux-gnueabihf ;;
-    armv7*)   echo armv7-unknown-linux-gnueabihf ;;
+    armv6*)   echo arm-unknown-linux-gnueabi${options[hardfp]:+hf} ;;
+    armv7*)   echo armv7-unknown-linux-gnueabi${options[hardfp]:+hf} ;;
     i386)     echo i386-unknown-linux-gnu ;;
     i486)     echo i486-unknown-linux-gnu ;;
     i586)     echo i586-unknown-linux-gnu ;;
@@ -1077,8 +1078,8 @@ esac
 function archmap_stage3() {
         local -r arch=${*:-$DEFAULT_ARCH}
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
-        local -r hardfp=$([[ $arch == armv[67]* ]] && echo _hardfp)
-        local -r nomulti=$(opt multilib || echo +nomultilib)
+        local -r hardfp=${options[hardfp]:+_hardfp}
+        local -r nomulti=$(opt multilib || echo -nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
 
         local stage3
@@ -1088,16 +1089,91 @@ function archmap_stage3() {
             armv5tel) stage3=stage3-armv5tel-systemd ;;
             armv6*j*) stage3=stage3-armv6j$hardfp-systemd ;;
             armv7a)   stage3=stage3-armv7a$hardfp-systemd ;;
-            i[45]86)  stage3=stage3-i486 ;;
-            i686)     stage3=stage3-i686-hardened ;;
+            i[45]86)  stage3=stage3-i486-openrc ;;
+            i686)     stage3=stage3-i686-hardened-openrc ;;
             powerpc)  stage3=stage3-ppc ;;
-            x86_64)   stage3=stage3-amd64-hardened$selinux$nomulti ;;
+            x86_64)   stage3=stage3-amd64-hardened$nomulti$selinux-openrc ;;
             *) return 1 ;;
         esac
 
         local -r build=$($curl -L "$base/latest-$stage3.txt" | $sed -n '/^[0-9]\{8\}T[0-9]\{6\}Z/{s/Z.*/Z/p;q;}')
-        [[ $stage3 =~ hardened ]] && stage3="hardened/$stage3"
         echo "$base/$build/$stage3-$build.tar.xz"
+}
+
+function write_overlay() {
+        local -r gentoo=/var/db/repos/gentoo
+        local -r overlay=$1
+
+        function edit() {
+                local file from="$gentoo/$1" to="$overlay/$1" ; shift
+                mkdir -p "$to"
+                cp -pt "$to" "$from/metadata.xml"
+                [[ -d $from/files ]] && cp -at "$to" "$from/files"
+                sed /^EBUILD/d "$from/Manifest" > "$to/Manifest"
+                for file in "$from"/*.ebuild
+                do sed "$@" "$file" > "$to/${file##*/}"
+                done
+                ebuild "$to/${file##*/}" manifest
+        }
+
+        # Support cross-compiling with LLVM (#745744).
+        sed -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' \
+            "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
+
+        # Support autotools with EAPI 8.
+        sed -e 's/7) B/*) B/;s/7)$/*)/' \
+            "$gentoo/eclass/autotools.eclass" > "$overlay/eclass/autotools.eclass"
+
+        # Support compiling basic qt5 packages in a sysroot.
+        sed \
+            -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \
+            -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' \
+            "$gentoo/eclass/qt5-build.eclass" > "$overlay/eclass/qt5-build.eclass"
+        edit dev-qt/qtgui '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"'
+        edit dev-qt/qtwidgets '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"'
+        edit dev-qt/qtsvg '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
+        edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
+
+        # Support cross-compiling musl (#732482).
+        edit sys-libs/musl '/ -e .*ld-musl/d'
+
+        # Drop the buildroot multilib requirement for Rust (#753764).
+        edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//'
+
+        # Fix sestatus installation with UsrMerge (or unified bindir, really).
+        edit sys-apps/policycoreutils '/setfiles/ause split-usr || rm -f "${ED}/usr/sbin/sestatus"'
+
+        # Remove eselect from the sysroot.
+        edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
+        edit app-editors/emacs 's/.*[^"]app-eselect.*[^"]//'
+        edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
+        edit media-libs/fontconfig '/^PDEPEND=.*eselect/s/".*/"/'
+        edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
+
+        # Support erofs-utils (#701284).
+        mkdir -p "$overlay/sys-fs/erofs-utils"
+        cat << 'EOF' > "$overlay/sys-fs/erofs-utils/erofs-utils-1.3.ebuild"
+EAPI=7
+inherit autotools
+DESCRIPTION="Userspace tools for EROFS images"
+HOMEPAGE="https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git"
+SRC_URI="${HOMEPAGE}/snapshot/${P}.tar.gz"
+LICENSE="GPL-2+"
+SLOT="0"
+KEYWORDS="amd64 arm ppc ~riscv x86"
+IUSE="fuse lz4 selinux +uuid"
+RDEPEND="fuse? ( sys-fs/fuse:0 ) lz4? ( >=app-arch/lz4-1.9 ) selinux? ( sys-libs/libselinux ) uuid? ( sys-apps/util-linux )"
+DEPEND="${RDEPEND}"
+BDEPEND="virtual/pkgconfig"
+src_prepare() { default ; eautoreconf ; }
+src_configure() { econf $(use_enable fuse) $(use_enable lz4) $(use_with selinux) $(use_with uuid) ; }
+src_install() { default ; use fuse || rm "${ED}/usr/share/man/man1/erofsfuse.1" || die ; }
+EOF
+        echo DIST erofs-utils-1.3.tar.gz 66135 \
+            BLAKE2B 1051cf387d059d71b91e0a940c86b819593902606ae4665a7801e9597dd72987385bee997d2d63b186c493557ee22118aff23161e48e25ee8f4859f9f6e46f14 \
+            SHA512  6ddd8402dab80b0375b012ed51ff02b40cbeca9a4a1ba250b14ec6aeb97317ab575e315e9d4dc77ed1d7826c202396d9c0775917106ecbd7b4048168aca0fa6c \
+            > "$overlay/sys-fs/erofs-utils/Manifest"
+        ebuild "$overlay/sys-fs/erofs-utils/erofs-utils-1.3.ebuild" manifest
 }
 
 # OPTIONAL (BUILDROOT)

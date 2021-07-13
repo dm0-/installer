@@ -13,7 +13,6 @@ options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [bootable]=1     # Build a kernel for this system.
         [gpt]=1          # Generate a ready-to-boot GPT disk image.
-        [multilib]=1     # Operate with a multilib stage3 and profile.
         [networkd]=1     # Let systemd manage the network configuration.
         [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=          # This platform does not support UEFI.
@@ -29,6 +28,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -117,7 +117,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
             -gui -networkmanager -repart'"'
 
         # Build GRUB to boot from legacy BIOS.
@@ -128,10 +128,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
-        # Work around EAPI 6 multilib package dependencies until they're gone.
-        echo 'ABI_X86="32 64"' >> /etc/portage/make.conf
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

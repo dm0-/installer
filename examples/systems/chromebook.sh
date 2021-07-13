@@ -33,6 +33,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -120,7 +121,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
             -gui -networkmanager -wifi'"'
 
         # Pass FPU flags through LDFLAGS so this package works with LTO.
@@ -134,7 +135,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
 
         # Download an NVRAM file for the wireless driver.
         local -r commit=ce86506f6ee3f4d1fc9e9cdc2c36645a6427c223  # Initial import in overlays.

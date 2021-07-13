@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-packages=()
 packages_buildroot=()
 
 options[selinux]=
@@ -115,7 +114,7 @@ if [[ $device =~ ^[A-Z]+= ]]
 then
         tag=${device%%=*} tag=${tag,,}
         device=${device#*=}
-        [ $tag = partuuid ] && device=${device,,}
+        [[ $tag == partuuid ]] && device=${device,,}
         device="/dev/disk/by-$tag/$device"
 fi
 device=$(systemd-escape --path "$device").device

@@ -31,6 +31,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -114,7 +115,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
             -ffmpeg -networkmanager -repart'"'
 
         # Install QEMU to run graphical virtual machines and Intel programs.
@@ -142,7 +143,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

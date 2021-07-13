@@ -51,7 +51,7 @@ function install_packages() {
 
         opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
         zypper --non-interactive --installroot="$PWD/root" \
-            install "${packages[@]:-filesystem}" "$@" || [ 107 -eq "$?" ]
+            install "${packages[@]:-filesystem}" "$@" || [[ $? -eq 107 ]]
 
         # Define basic users and groups prior to configuring other stuff.
         grep -qs '^wheel:' root/etc/group ||
@@ -139,7 +139,7 @@ if [[ $device =~ ^[A-Z]+= ]]
 then
         tag=${device%%=*} tag=${tag,,}
         device=${device#*=}
-        [ $tag = partuuid ] && device=${device,,}
+        [[ $tag == partuuid ]] && device=${device,,}
         device="/dev/disk/by-$tag/$device"
 fi
 device=$(systemd-escape --path "$device").device

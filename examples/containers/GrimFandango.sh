@@ -35,7 +35,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        unzip grim.sh -d /grim -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [ 1 -eq $? ]
+        unzip grim.sh -d /grim -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [[ $? -eq 1 ]]
         mv /grim/data/noarch/game/bin root/grim
         mkdir -p root/grim/Saves
         rm -f grim.sh

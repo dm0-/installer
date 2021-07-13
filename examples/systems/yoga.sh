@@ -11,7 +11,6 @@ options+=(
         [arch]=x86_64    # Target Intel Pentium N3530 CPUs.
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [gpt]=1          # Generate a VM disk image for fast testing.
-        [multilib]=1     # Operate with a multilib stage3 and profile.
         [networkd]=1     # Let systemd manage the network configuration.
         [squash]=1       # Use a highly compressed file system to save space.
         [uefi]=1         # Create a UEFI executable that boots into this image.
@@ -31,6 +30,7 @@ packages+=(
         app-shells/bash
         dev-util/strace
         dev-vcs/git
+        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -123,7 +123,7 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
             -gui -networkmanager -policykit -repart -udisks -wifi'"'
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
@@ -204,11 +204,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -introspection -llvm -oss -perl -python -sendmail -tcpd -vala -X'"'
-
-        # Work around EAPI 6 multilib package dependencies until they're gone.
-        echo 'ABI_X86="64 x32"' >> /etc/portage/make.conf
-        echo -abi_x86_x32 >> /etc/portage/profile/use.mask
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config

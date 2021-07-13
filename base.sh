@@ -2,6 +2,7 @@
 DEFAULT_ARCH=$($uname -m)
 disk=
 exclude_paths=({boot,dev,media,proc,run,srv,sys,tmp}/'*')
+packages=()
 
 declare -A options
 options[distro]=fedora
@@ -228,7 +229,7 @@ then
         e4defrag root
         umount root
         opt read_only && tune2fs -O read-only /dev/loop-root
-        e2fsck -Dfy /dev/loop-root || [ 1 -eq "$?" ]
+        e2fsck -Dfy /dev/loop-root || [[ $? -eq 1 ]]
 fi
 
 function relabel() if opt selinux
