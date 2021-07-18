@@ -201,12 +201,10 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues (#795393).
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept emacs-27.2 to fix host dependencies.
-        echo '<app-editors/emacs-27.3 ~*' >> "$portage/package.accept_keywords/emacs.conf"
+        # Accept eselect-pinentry-0.7.2 to fix host dependencies.
+        echo '<app-eselect/eselect-pinentry-0.7.3 ~*' >> "$portage/package.accept_keywords/pinentry.conf"
         # Accept libnotify-0.7.9 to fix host dependencies.
         echo '<x11-libs/libnotify-0.8 ~*' >> "$portage/package.accept_keywords/libnotify.conf"
-        # Accept mpg123-1.28.0 to fix host dependencies (#800953).
-        echo 'media-sound/mpg123 *' >> "$portage/package.accept_keywords/mpg123.conf"
         # Accept python-3.9.6 to fix host dependencies.
         echo '<dev-lang/python-3.10 ~*' >> "$portage/package.accept_keywords/python.conf"
 
@@ -1145,7 +1143,7 @@ function write_overlay() {
 
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
-        edit app-editors/emacs 's/.*[^"]app-eselect.*[^"]//'
+        edit app-editors/emacs 's/.{IDEPEND}//'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
         edit media-libs/fontconfig '/^PDEPEND=.*eselect/s/".*/"/'
         edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
@@ -1160,7 +1158,7 @@ HOMEPAGE="https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git"
 SRC_URI="${HOMEPAGE}/snapshot/${P}.tar.gz"
 LICENSE="GPL-2+"
 SLOT="0"
-KEYWORDS="amd64 arm ppc ~riscv x86"
+KEYWORDS="amd64 arm arm64 ppc ppc64 ~riscv x86"
 IUSE="fuse lz4 selinux +uuid"
 RDEPEND="fuse? ( sys-fs/fuse:0 ) lz4? ( >=app-arch/lz4-1.9 ) selinux? ( sys-libs/libselinux ) uuid? ( sys-apps/util-linux )"
 DEPEND="${RDEPEND}"

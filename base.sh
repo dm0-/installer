@@ -720,7 +720,7 @@ then
             ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=0x30000} \
             ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
             --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
-            ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x3000000} \
+            ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x4000000} \
             "/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub" unsigned.efi
 
         if opt secureboot

@@ -1,12 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# This is an example Gentoo build for a specific target system, the Lenovo
-# Thinkpad P1 (Gen 2).  It demonstrates native compilation where the build
-# system is the target system, which uses automatic detection of CPU features.
+# This is a standalone Gentoo workstation image that aims to demonstrate an
+# alternative to the Fedora workstation example.  It should be approximately
+# equivalent so that they are interchangeable (in terms of applications; i.e.
+# Firefox, VLC, Emacs, QEMU, etc. are available).  The main difference is this
+# build uses Xfce instead of GNOME for the desktop environment.
+#
+# Since this is Gentoo, it shows off some pointless build optimizations by
+# tuning binaries for the CPU detected on the build system.  To disable this
+# and build a generic image, delete the two sections of code containing the
+# words "native" and "cpuid2cpuflags".
+#
+# The proprietary NVIDIA drivers are optionally installed here.
 
 options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
         [gpt]=1          # Generate a VM disk image for fast testing.
-        [networkd]=1     # Let systemd manage the network configuration.
         [nvme]=1         # Support root on an NVMe disk.
         [selinux]=1      # Load a targeted SELinux policy in permissive mode.
         [squash]=1       # Use a highly compressed file system to save space.
@@ -15,6 +23,8 @@ options+=(
 )
 
 packages+=(
+        sys-kernel/gentoo-kernel sys-kernel/linux-firmware
+
         # Utilities
         app-arch/cpio
         app-arch/tar
@@ -70,12 +80,13 @@ packages+=(
         www-client/firefox
 )
 
-packages_buildroot+=(
-        # Automatically generate the supported instruction set flags.
+# Support generating native instruction set flags for supported CPUs.
+[[ $DEFAULT_ARCH =~ [3-6x]86|aarch|arm|powerpc ]] && packages_buildroot+=(
         app-portage/cpuid2cpuflags
+)
 
-        # The target hardware requires firmware.
-        net-wireless/wireless-regdb
+# Install early microcode updates for x86 CPUs.
+[[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(
         sys-firmware/intel-microcode
         sys-kernel/linux-firmware
 )
@@ -88,9 +99,11 @@ function initialize_buildroot() {
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
             "$portage/make.conf"
         echo 'RUSTFLAGS="-C target-cpu=native"' >> "$portage/make.conf"
+        $sed -n '/^vendor_id.*GenuineIntel$/q0;$q1' /proc/cpuinfo && echo CONFIG_MNATIVE_INTEL=y >> "$buildroot/etc/kernel/config.d/native.config"
+        $sed -n '/^vendor_id.*AuthenticAMD$/q0;$q1' /proc/cpuinfo && echo CONFIG_MNATIVE_AMD=y >> "$buildroot/etc/kernel/config.d/native.config"
 
-        # Use the latest NVIDIA drivers.
-        echo -e 'USE="$USE kmod"\nVIDEO_CARDS="nvidia"' >> "$portage/make.conf"
+        # Use the latest NVIDIA drivers when requested.
+        echo 'USE="$USE dist-kernel kmod"' >> "$portage/make.conf"
         echo -e 'media-libs/nv-codec-headers\nx11-drivers/nvidia-drivers' >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
@@ -111,7 +124,12 @@ function initialize_buildroot() {
             aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
-            -gui -networkmanager -repart -wifi'"'
+            -gui -modemmanager -ppp -repart'"'
+
+        # Support a bunch of common video drivers.
+        $sed -i -e '/^LLVM_TARGETS=/s/" *$/ AMDGPU&/' "$buildroot/etc/portage/make.conf" "$portage/make.conf"
+        echo 'USE="$USE llvm"' >> "$portage/make.conf"
+        echo "VIDEO_CARDS=\"amdgpu fbdev intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
 
         # Install VLC.
         fix_package vlc
@@ -120,44 +138,41 @@ function initialize_buildroot() {
 
 function customize_buildroot() {
         # Enable flags for instruction sets supported by this CPU.
+        test -x /usr/bin/cpuid2cpuflags &&
         cpuid2cpuflags | sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "/usr/${options[host]}/etc/portage/make.conf"
+
+        # Bundle x86 early microcode updates into the kernel for no initrd.
+        [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] &&
+        echo "CONFIG_EXTRA_FIRMWARE=\"$(cd /lib/firmware && echo *-ucode/*)\"" >> /etc/kernel/config.d/firmware.config
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
             -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
 
-        # Configure the kernel by only enabling this system's settings.
-        write_system_kernel_config
+        # Block terribly broken binutils-config from deleting all libraries.
+        ln -fns /bin/true /usr/bin/binutils-config
 }
 
 function customize() {
-        double_display_scale
         drop_development
         store_home_on_var +root
 
-        echo laptop > root/etc/hostname
+        echo "desktop-${options[distro]}" > root/etc/hostname
 
         # Drop extra unused paths.
         exclude_paths+=(
-                usr/lib/firmware
+                usr/lib/firmware/{'*'-ucode,liquidio,mellanox,mrvl,netronome,qcom,qed}
                 usr/local
                 usr/share/qemu/'*'{aarch,arm,hppa,ppc,riscv,s390,sparc}'*'
         )
 
-        # Start the wireless interface if it is configured.
-        mkdir -p root/usr/lib/systemd/system/network.target.wants
-        ln -fns ../wpa_supplicant-nl80211@.service \
-            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlp82s0.service
-
-        # Sign the out-of-tree kernel modules due to required signatures.
-        for module in root/lib/modules/*/video/nvidia*.ko
-        do
-                /usr/src/linux/scripts/sign-file \
-                    sha512 "$keydir/sign.key" "$keydir/sign.crt" "$module"
-        done
+        # Sign kernel modules manually since the dist-kernel package is weird.
+        find root/lib/modules -name '*.ko' -exec \
+            "/usr/${options[host]}/usr/src/linux/scripts/sign-file" \
+            sha512 "$keydir/sign.key" "$keydir/sign.crt" {} ';'
 
         # Make NVIDIA use kernel mode setting and the page attribute table.
-        cat << 'EOF' > root/usr/lib/modprobe.d/nvidia-config.conf
+        opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia-config.conf
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
 softdep nvidia post: nvidia-uvm
@@ -174,154 +189,3 @@ exec qemu-kvm -nodefaults \
     "$@"
 EOF
 }
-
-function write_system_kernel_config() if opt bootable
-then
-        cat << 'EOF' >> /etc/kernel/config.d/qemu.config
-# TARGET HARDWARE: QEMU
-## QEMU default graphics
-CONFIG_DRM_BOCHS=m
-## QEMU default network
-CONFIG_E1000=m
-## QEMU default disk
-CONFIG_ATA=y
-CONFIG_ATA_SFF=y
-CONFIG_ATA_BMDMA=y
-CONFIG_BLK_DEV_SD=y
-CONFIG_ATA_PIIX=y
-## QEMU default serial port
-CONFIG_SERIAL_8250=y
-CONFIG_SERIAL_8250_CONSOLE=y
-EOF
-        cat >> /etc/kernel/config.d/system.config
-fi << 'EOF'
-# Show initialization messages.
-CONFIG_PRINTK=y
-# Support CPU microcode updates.
-CONFIG_MICROCODE=y
-# Enable bootloader interaction for managing system image updates.
-CONFIG_EFI_VARS=y
-CONFIG_EFI_BOOTLOADER_CONTROL=y
-# Support ext2/ext3/ext4 (which is not included for read-only images).
-CONFIG_EXT4_FS=y
-CONFIG_EXT4_FS_POSIX_ACL=y
-CONFIG_EXT4_FS_SECURITY=y
-CONFIG_EXT4_USE_FOR_EXT2=y
-# Support encrypted partitions.
-CONFIG_BLK_DEV_DM=y
-CONFIG_DM_CRYPT=m
-CONFIG_DM_INTEGRITY=m
-# Support FUSE.
-CONFIG_FUSE_FS=m
-# Support running virtual machines in QEMU.
-CONFIG_HIGH_RES_TIMERS=y
-CONFIG_VIRTUALIZATION=y
-CONFIG_KVM=y
-# Support running containers in nspawn.
-CONFIG_POSIX_MQUEUE=y
-CONFIG_SYSVIPC=y
-CONFIG_IPC_NS=y
-CONFIG_NET_NS=y
-CONFIG_PID_NS=y
-CONFIG_USER_NS=y
-CONFIG_UTS_NS=y
-# Support mounting disk images.
-CONFIG_BLK_DEV=y
-CONFIG_BLK_DEV_LOOP=y
-# Provide a fancy framebuffer console.
-CONFIG_FB_EFI=y
-CONFIG_TTY=y
-CONFIG_VT=y
-CONFIG_VT_CONSOLE=y
-CONFIG_VGA_CONSOLE=y
-CONFIG_FRAMEBUFFER_CONSOLE=y
-CONFIG_DRM=y
-CONFIG_DRM_FBDEV_EMULATION=y
-# Support basic nftables firewall options.
-CONFIG_NETFILTER=y
-CONFIG_NF_CONNTRACK=y
-CONFIG_NF_TABLES=y
-CONFIG_NF_TABLES_IPV4=y
-CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
-CONFIG_NFT_CT=y
-## Support translating iptables to nftables.
-CONFIG_NFT_COMPAT=y
-CONFIG_NETFILTER_XTABLES=y
-CONFIG_NETFILTER_XT_MATCH_STATE=y
-# Support some optional systemd functionality.
-CONFIG_COREDUMP=y
-CONFIG_MAGIC_SYSRQ=y
-CONFIG_NET_SCHED=y
-CONFIG_NET_SCH_DEFAULT=y
-CONFIG_NET_SCH_FQ_CODEL=y
-# TARGET HARDWARE: Lenovo Thinkpad P1 (Gen 2)
-CONFIG_MNATIVE_INTEL=y  # Assume the build system is the target.
-CONFIG_PCI_MSI=y
-CONFIG_PM=y
-## Bundle firmware/microcode
-CONFIG_EXTRA_FIRMWARE="intel/ibt-20-1-3.ddc intel/ibt-20-1-3.sfi intel-ucode/06-9e-0d iwlwifi-cc-a0-48.ucode regulatory.db regulatory.db.p7s"
-## Intel Core i7 9850H
-CONFIG_ARCH_RANDOM=y
-CONFIG_CPU_SUP_INTEL=y
-CONFIG_CRYPTO_SHA256_SSSE3=y
-CONFIG_KVM_INTEL=y
-CONFIG_MICROCODE_INTEL=y
-CONFIG_SCHED_MC=y
-CONFIG_SCHED_MC_PRIO=y
-## USB 3 support
-CONFIG_USB_SUPPORT=y
-CONFIG_USB=y
-CONFIG_USB_PCI=y
-CONFIG_USB_XHCI_HCD=y
-CONFIG_USB_XHCI_PCI=y
-## Intel e1000e gigabit Ethernet
-CONFIG_NETDEVICES=y
-CONFIG_ETHERNET=y
-CONFIG_NET_VENDOR_INTEL=y
-CONFIG_E1000E=y
-## Intel Wi-Fi 6 AX200
-CONFIG_CFG80211=y
-CONFIG_MAC80211=y
-CONFIG_WLAN=y
-CONFIG_WLAN_VENDOR_INTEL=y
-CONFIG_IWLMVM=y
-CONFIG_IWLWIFI=y
-## Bluetooth (built in 5.0 over USB)
-CONFIG_BT=y
-CONFIG_BT_HCIBTUSB=y
-CONFIG_BT_BREDR=y
-CONFIG_BT_LE=y
-CONFIG_BT_HS=y
-## Conexant CX8070 audio
-CONFIG_SOUND=y
-CONFIG_SND=y
-CONFIG_SND_PCI=y
-CONFIG_SND_HDA_INTEL=y
-CONFIG_SND_HDA_CODEC_CONEXANT=y
-## NVIDIA Quadro T2000 (enable modules to build the proprietary driver)
-CONFIG_MODULES=y
-CONFIG_MODULE_COMPRESS_XZ=y
-CONFIG_MTRR=y
-CONFIG_MTRR_SANITIZER=y
-CONFIG_SYSVIPC=y
-CONFIG_X86_PAT=y
-CONFIG_ZONE_DMA=y
-## Input
-CONFIG_HID=y
-CONFIG_HID_BATTERY_STRENGTH=y
-CONFIG_HID_GENERIC=y
-CONFIG_INPUT=y
-CONFIG_INPUT_EVDEV=y
-## Keyboard, touchpad, and trackpoint
-CONFIG_INPUT_KEYBOARD=y
-CONFIG_INPUT_MOUSE=y
-CONFIG_KEYBOARD_ATKBD=y
-CONFIG_MOUSE_PS2=y
-## Optional USB devices
-CONFIG_SND_USB=y
-CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
-CONFIG_SND_USB_AUDIO=m  # headsets
-CONFIG_USB_ACM=m        # fit-PC status LED
-CONFIG_USB_HID=m        # mice and keyboards
-EOF

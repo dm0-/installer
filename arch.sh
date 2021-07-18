@@ -22,11 +22,12 @@ function create_buildroot() {
         $tar --strip-components=1 -C "$buildroot" -xzf "$output/image.tgz"
         $rm -f "$output/image.tgz"
 
-        # Use the kernel.org and rackspace.com mirrors.
+        # Use the kernel.org and mit.edu mirrors with parallel downloads.
         $sed -i \
-            -e '1,/https.*rackspace/{/https.*rackspace/s/^#*//;}' \
             -e '/https.*kernel.org/s/^#*//' \
+            -e '/https.*mit.edu/s/^#*//' \
             "$buildroot/etc/pacman.d/mirrorlist"
+        $sed -i -e '/^#ParallelDownloads/s/^#//' "$buildroot/etc/pacman.conf"
 
         configure_initrd_generation
         initialize_buildroot "$@"
