@@ -9,6 +9,7 @@ options[distro]=fedora
 options[append]=      # The arguments to append to the kernel command-line
 options[bootable]=    # Include a kernel and init system to boot the image
 options[gpt]=         # Create a partitioned GPT disk image
+options[hardfp]=      # Use the hard-float ABI for ARMv6 and ARMv7 targets
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
 options[nvme]=        # Support root on an NVMe disk
 options[partuuid]=    # The partition UUID for verity to map into the root FS
@@ -94,6 +95,9 @@ Help options:
 }
 
 function imply_options() {
+        local k ; for k in "${!cli_options[@]}"
+        do options[$k]=${cli_options[$k]}
+        done
         opt sb_cert && opt sb_key && options[secureboot]=1
         opt verity_cert && opt verity_key && options[verity_sig]=1
         opt secureboot || opt uefi_path && options[uefi]=1
@@ -103,12 +107,16 @@ function imply_options() {
         opt uefi && options[secureboot]=1  # Always sign the UEFI executable.
         opt gpt && ! opt ramdisk && ! opt partuuid &&
         options[partuuid]=$(</proc/sys/kernel/random/uuid)
+        [[ ${options[arch]:-$DEFAULT_ARCH} == armv[67]* ]] && options[hardfp]=1
         opt distro || options[distro]=fedora  # This can't be unset.
 }
 
 function validate_options() {
+        local k ; for k in "${!cli_options[@]}"
+        do options[$k]=${cli_options[$k]}
+        done
         # Require both a certificate and key for each signing option.
-        local k ; for k in sb signing verity
+        for k in sb signing verity
         do
                 opt "${k}_cert" && opt "${k}_key"
                 opt "${k}_key" && opt "${k}_cert"
@@ -132,7 +140,7 @@ function validate_options() {
         opt distro
 }
 
-function opt() { test -n "${options["${*?}"]-}" ; }
+function opt() [[ -n ${options[${*?}]-} ]]
 
 function enter() {
         local -r console=$($nspawn --help |& $sed -n /--console=/p)
@@ -596,6 +604,7 @@ function configure_system() {
         test -s root/etc/profile &&
         sed -i -e 's/ umask 0[0-7]*/ umask 022/' root/etc/profile
 
+        mkdir -p root/etc/skel
         cat << 'EOF' >> root/etc/skel/.bashrc
 function defer() {
         local -r cmd="$(trap -p EXIT)"
@@ -657,7 +666,7 @@ function finalize_packages() {
                         uid=${spec#*:} uid=${uid%%:*}
                         groups=${spec#*:*:} groups=${groups%%:*}
                         gecos=${spec#*:*:*:} gecos=${gecos%%:*}
-                        useradd --prefix root \
+                        useradd --prefix /wd/root \
                             ${gecos:+--comment="$gecos"} \
                             ${groups:+--groups="$groups"} \
                             ${uid:+--uid="$uid"} \
@@ -694,18 +703,6 @@ EOF
         # Save /etc/os-release outside the image after all customizations.
         test ! -s root/etc/os-release || cp -pt . root/etc/os-release
 }
-
-function archmap_uefi() case "${*:-$DEFAULT_ARCH}" in
-    aarch64)  echo AA64 ;;
-    arm*)     echo ARM ;;
-    i[3-6]86) echo IA32 ;;
-    ia64)     echo IA64 ;;
-    riscv32)  echo RISCV32 ;;
-    riscv64)  echo RISCV64 ;;
-    riscv128) echo RISCV128 ;;
-    x86_64)   echo X64 ;;
-    *) return 1 ;;
-esac
 
 function produce_uefi_exe() if opt uefi
 then
@@ -790,6 +787,68 @@ EOF
         fi
 fi
 
+function archmap_go() case ${*:-$DEFAULT_ARCH} in
+    aarch64)     echo arm64 ;;
+    arm*)        echo arm ;;
+    i[3-6]86)    echo 386 ;;
+    powerpc64)   echo ppc64 ;;
+    powerpc64le) echo ppc64le ;;
+    riscv64)     echo riscv64 ;;
+    x86_64)      echo amd64 ;;
+    *) return 1 ;;
+esac
+
+function archmap_kernel() case ${*:-$DEFAULT_ARCH} in
+    aarch64)  echo arm64 ;;
+    arm*)     echo arm ;;
+    i[3-6]86) echo x86 ;;
+    powerpc*) echo powerpc ;;
+    riscv*)   echo riscv ;;
+    sh*)      echo sh ;;
+    x86_64)   echo x86 ;;
+    *) return 1 ;;
+esac
+
+function archmap_llvm() case ${*:-$DEFAULT_ARCH} in
+    aarch64)  echo AArch64 ;;
+    arm*)     echo ARM ;;
+    i[3-6]86) echo X86 ;;
+    powerpc*) echo PowerPC ;;
+    riscv64)  echo RISCV ;;
+    x86_64)   echo X86 ;;
+    *) return 1 ;;
+esac
+
+function archmap_rust() case ${*:-$DEFAULT_ARCH} in
+    aarch64)     echo aarch64-unknown-linux-gnu ;;
+    armv4t*)     echo armv4t-unknown-linux-gnueabi ;;
+    armv5te*)    echo armv5te-unknown-linux-gnueabi ;;
+    armv6*)      echo arm-unknown-linux-gnueabi${options[hardfp]:+hf} ;;
+    armv7*)      echo armv7-unknown-linux-gnueabi${options[hardfp]:+hf} ;;
+    i386)        echo i386-unknown-linux-gnu ;;
+    i486)        echo i486-unknown-linux-gnu ;;
+    i586)        echo i586-unknown-linux-gnu ;;
+    i686)        echo i686-unknown-linux-gnu ;;
+    powerpc)     echo powerpc-unknown-linux-gnu ;;
+    powerpc64)   echo powerpc64-unknown-linux-gnu ;;
+    powerpc64le) echo powerpc64le-unknown-linux-gnu ;;
+    riscv64)     echo riscv64gc-unknown-linux-gnu ;;
+    x86_64)      echo x86_64-unknown-linux-gnu ;;
+    *) return 1 ;;
+esac
+
+function archmap_uefi() case ${*:-$DEFAULT_ARCH} in
+    aarch64)  echo AA64 ;;
+    arm*)     echo ARM ;;
+    i[3-6]86) echo IA32 ;;
+    ia64)     echo IA64 ;;
+    riscv32)  echo RISCV32 ;;
+    riscv64)  echo RISCV64 ;;
+    riscv128) echo RISCV128 ;;
+    x86_64)   echo X64 ;;
+    *) return 1 ;;
+esac
+
 # OPTIONAL (IMAGE)
 
 function double_display_scale() {
@@ -852,7 +911,7 @@ do
                 r[${k:-_}]=$v
         done <<< "${REPLY//,/$'\n'}"
 
-        case "${r[valueType]}" in
+        case ${r[valueType]} in
             string)
                 r[valueData]=${r[valueData]//{app\}/Z:${1//\//\\}}
                 r[valueType]=REG_SZ

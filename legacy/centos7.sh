@@ -240,7 +240,7 @@ eval "$(declare -f store_home_on_var | $sed 's/Q /d /')"
 # WORKAROUNDS
 
 # CentOS container releases are horribly broken.  Pin them to static versions.
-function archmap_container() case "$DEFAULT_ARCH" in
+function archmap_container() case $DEFAULT_ARCH in
     aarch64)  echo 02ea5808a8a155bad28677dd5857c8d382027e14 ;;
     i[3-6]86) echo 206003c215684a869a686cf9ea5f9697e577c546 ;;
     ppc64le)  echo a8e4f3da8300d18da4c0e5256d64763965e66810 ;;
@@ -250,7 +250,7 @@ esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
-        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case "$DEFAULT_ARCH" in
+        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case $DEFAULT_ARCH in
             aarch64)  echo 6db9d6b9c8122e9fe7e7fc422e630ee10ff8b671ea5c8f7f16017b9b1c012f67 ;;
             i[3-6]86) echo 5aba6af141b5c1c5218011470da2e75a9d93a0fff5b62a30cc277945cd12ba2b ;;
             ppc64le)  echo cc60b971d00aa3c57e0fc913de8317bcc74201af9bdbd8f5c85eedbd29b93abc ;;

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+packages=(app-shells/bash sys-apps/coreutils)
 packages_buildroot=()
 
 function create_buildroot() {
         local -r arch=${options[arch]:=$DEFAULT_ARCH}
-        : ${options[hardfp]=$([[ ${options[host]-} == *hf || $arch == armv[67]* && -z ${options[host]-} ]] && echo 1)}
-        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi)${options[hardfp]:+hf}}
+        local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi${options[hardfp]:+hf})}
         local -r profile=${options[profile]-$(archmap_profile "$arch")}
         local -r stage3=${options[stage3]:-$(archmap_stage3)}
 
@@ -102,6 +102,10 @@ EOF
         $cat << 'EOF' >> "$portage/package.mask/colord.conf"
 # Stay on the stable branch of colord until cross-compiling is supported.
 >=x11-misc/colord-1.4
+EOF
+        $cat << 'EOF' >> "$portage/package.mask/shadow.conf"
+# The useradd program aborts since 4.9 due to bad memory handling.
+>=sys-apps/shadow-4.9
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
 # Unmask Rust users to bypass bad architecture profiles.
@@ -532,11 +536,12 @@ function distro_tweaks() {
         ln -fns ../lib/systemd/systemd root/usr/sbin/init
         ln -fns ../proc/self/mounts root/etc/mtab
 
+        test -s root/etc/bash/bashrc &&
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
 
         # Add a mount point to support the ESP mount generator.
-        opt uefi && mkdir root/boot
+        opt uefi && mkdir -p root/boot
 
         # Create some usual stuff in /var that is missing.
         echo 'd /var/empty' > root/usr/lib/tmpfiles.d/var-compat.conf
@@ -575,6 +580,10 @@ Section "InputClass"
 EndSection
 EOF
 
+        # Don't hijack key presses for searching in the web browser.
+        test -s root/usr/lib/firefox/browser/defaults/preferences/all-gentoo.js &&
+        sed -i -e /typeaheadfind/d root/usr/lib/firefox/browser/defaults/preferences/all-gentoo.js
+
         # Prioritize available daemons for the user audio service socket.
         local dir=root/usr/lib/systemd/user
         local daemon ; for daemon in pipewire-pulse pulseaudio
@@ -588,6 +597,9 @@ EOF
         done
         test -s "$dir/pipewire.socket" &&
         ln -fst "$dir/sockets.target.wants" ../pipewire.socket
+        test -s "$dir/pipewire-media-session.service" &&
+        mkdir -p "$dir/pipewire.service.wants" &&
+        ln -fst "$dir/pipewire.service.wants" ../pipewire-media-session.service
 
         # Select a default desktop environment for startx, or default to twm.
         local wm ; for wm in Xfce4 wmaker
@@ -1002,7 +1014,7 @@ EOF
         test x$($sed -n '/^# SHA512/,+1{/^[^#]/{s/ .*//p;q;};}' "$1") = x$($sha512sum "$2" | $sed -n '1s/ .*//p')
 }
 
-function archmap() case "${*:-$DEFAULT_ARCH}" in
+function archmap() case ${*:-$DEFAULT_ARCH} in
     aarch64)  echo arm64 ;;
     arm*)     echo arm ;;
     i[3-6]86) echo x86 ;;
@@ -1012,38 +1024,9 @@ function archmap() case "${*:-$DEFAULT_ARCH}" in
     *) return 1 ;;
 esac
 
-function archmap_go() case "${*:-$DEFAULT_ARCH}" in
-    aarch64)  echo arm64 ;;
-    arm*)     echo arm ;;
-    i[3-6]86) echo 386 ;;
-    riscv64)  echo riscv64 ;;
-    x86_64)   echo amd64 ;;
-    *) return 1 ;;
-esac
-
-function archmap_kernel() case "${*:-$DEFAULT_ARCH}" in
-    aarch64)  echo arm64 ;;
-    arm*)     echo arm ;;
-    i[3-6]86) echo x86 ;;
-    powerpc)  echo powerpc ;;
-    riscv64)  echo riscv ;;
-    x86_64)   echo x86 ;;
-    *) return 1 ;;
-esac
-
-function archmap_llvm() case "${*:-$DEFAULT_ARCH}" in
-    aarch64)  echo AArch64 ;;
-    arm*)     echo ARM ;;
-    i[3-6]86) echo X86 ;;
-    powerpc)  echo PowerPC ;;
-    riscv64)  echo RISCV ;;
-    x86_64)   echo X86 ;;
-    *) return 1 ;;
-esac
-
 function archmap_profile() {
         local -r nomulti=$(opt multilib || echo /no-multilib)
-        case "${*:-$DEFAULT_ARCH}" in
+        case ${*:-$DEFAULT_ARCH} in
             aarch64)  echo default/linux/arm64/17.0 ;;
             armv4t*)  echo default/linux/arm/17.0/armv4t ;;
             armv5te*) echo default/linux/arm/17.0/armv5te ;;
@@ -1057,31 +1040,14 @@ function archmap_profile() {
         esac
 }
 
-function archmap_rust() case "${*:-$DEFAULT_ARCH}" in
-    aarch64)  echo aarch64-unknown-linux-gnu ;;
-    armv4t*)  echo armv4t-unknown-linux-gnueabi ;;
-    armv5te*) echo armv5te-unknown-linux-gnueabi ;;
-    armv6*)   echo arm-unknown-linux-gnueabi${options[hardfp]:+hf} ;;
-    armv7*)   echo armv7-unknown-linux-gnueabi${options[hardfp]:+hf} ;;
-    i386)     echo i386-unknown-linux-gnu ;;
-    i486)     echo i486-unknown-linux-gnu ;;
-    i586)     echo i586-unknown-linux-gnu ;;
-    i686)     echo i686-unknown-linux-gnu ;;
-    powerpc)  echo powerpc-unknown-linux-gnu ;;
-    riscv64)  echo riscv64gc-unknown-linux-gnu ;;
-    x86_64)   echo x86_64-unknown-linux-gnu ;;
-    *) return 1 ;;
-esac
-
 function archmap_stage3() {
-        local -r arch=${*:-$DEFAULT_ARCH}
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
         local -r hardfp=${options[hardfp]:+_hardfp}
         local -r nomulti=$(opt multilib || echo -nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
 
         local stage3
-        case "$arch" in
+        case ${*:-$DEFAULT_ARCH} in
             aarch64)  stage3=stage3-arm64-systemd ;;
             armv4tl)  stage3=stage3-armv4tl-systemd ;;
             armv5tel) stage3=stage3-armv5tel-systemd ;;
@@ -1178,7 +1144,7 @@ EOF
 
 function fix_package() {
         local -r portage="$buildroot/usr/${options[host]}/etc/portage"
-        case "$*" in
+        case $* in
             vlc)
                 [[ ${options[arch]} =~ 64 ]] &&
                 echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf" ||

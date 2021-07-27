@@ -27,10 +27,8 @@ packages+=(
         app-arch/tar
         app-arch/unzip
         app-editors/emacs
-        app-shells/bash
         dev-util/strace
         dev-vcs/git
-        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -121,10 +119,10 @@ EOF
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
+            aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
-            -gui -networkmanager -policykit -repart -udisks -wifi'"'
+            -gui -networkmanager -policykit -realtime -repart -udisks -wifi'"'
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
         echo 'sys-apps/systemd gnuefi' >> "$buildroot/etc/portage/package.use/systemd.conf"

@@ -29,26 +29,27 @@ uname=${UNAME:-uname}
 . base.sh
 
 # Parse command-line options.
+declare -A cli_options
 while getopts :BE:IKP:RSUVZa:c:d:hk:o:p:u opt
 do
-        case "$opt" in
-            B) options[bootable]=1 ;;
-            E) options[uefi_path]=$OPTARG ;;
-            I) options[install_to_disk]=1 ;;
-            K) options[ramdisk]=1 ;;
-            P) options[partuuid]=${OPTARG,,} ;;
-            R) options[read_only]=1 ;;
-            S) options[squash]=1 ;;
-            U) options[uefi]=1 ;;
-            V) options[verity]=1 ;;
-            Z) options[selinux]=1 ;;
-            a) options[adduser]+="${OPTARG//$'\n'/ }"$'\n' ;;
-            c) options[signing_cert]=$OPTARG ;;
-            d) options[distro]=$OPTARG ;;
+        case $opt in
+            B) cli_options[bootable]=1 ;;
+            E) cli_options[uefi_path]=$OPTARG ;;
+            I) cli_options[install_to_disk]=1 ;;
+            K) cli_options[ramdisk]=1 ;;
+            P) cli_options[partuuid]=${OPTARG,,} ;;
+            R) cli_options[read_only]=1 ;;
+            S) cli_options[squash]=1 ;;
+            U) cli_options[uefi]=1 ;;
+            V) cli_options[verity]=1 ;;
+            Z) cli_options[selinux]=1 ;;
+            a) cli_options[adduser]+="${OPTARG//$'\n'/ }"$'\n' ;;
+            c) cli_options[signing_cert]=$OPTARG ;;
+            d) cli_options[distro]=$OPTARG ;;
             h) usage ; exit 0 ;;
-            k) options[signing_key]=$OPTARG ;;
-            o) options[${OPTARG%%=*}]=${OPTARG#*=} ;;
-            p) options[packages]=$OPTARG ;;
+            k) cli_options[signing_key]=$OPTARG ;;
+            o) cli_options[${OPTARG%%=*}]=${OPTARG#*=} ;;
+            p) cli_options[packages]=$OPTARG ;;
             u) usage | { read -rs ; echo "$REPLY" ; } ; exit 0 ;;
             *) usage 1>&2 ; exit 1 ;;
         esac
@@ -59,7 +60,7 @@ shift $(( OPTIND - 1 ))
 ${*:+. "$1"}
 imply_options
 . "${options[distro]}".sh
-test -n "$*" && { . "$1" ; shift ; }
+[[ -n $* ]] && { . "$1" ; shift ; }
 validate_options
 
 # Define output directories

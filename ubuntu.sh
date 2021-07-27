@@ -291,7 +291,7 @@ EOF
         test x$($sed -n 's/ .*root.tar.xz$//p' "$1") = x$($sha256sum "$3" | $sed -n '1s/ .*//p')
 }
 
-function archmap() case "${*:-$DEFAULT_ARCH}" in
+function archmap() case ${*:-$DEFAULT_ARCH} in
     i[3-6]86) echo i386 ;;
     x86_64)   echo amd64 ;;
     *) return 1 ;;

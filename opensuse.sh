@@ -55,7 +55,7 @@ function install_packages() {
 
         # Define basic users and groups prior to configuring other stuff.
         grep -qs '^wheel:' root/etc/group ||
-        groupadd --prefix root --system --gid=10 wheel
+        groupadd --prefix /wd/root --system --gid=10 wheel
 
         # List everything installed in the image and what was used to build it.
         rpm -qa | sort > packages-buildroot.txt

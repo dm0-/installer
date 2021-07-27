@@ -89,6 +89,7 @@ packages+=(
         NetworkManager-branding-openSUSE
         pipewire{,-pulseaudio}
         upower
+        wallpaper-branding-openSUSE
 
         # Graphics
         Mesa-{dri{,-nouveau},lib{d3d,OpenCL,va}}

@@ -337,7 +337,7 @@ eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
 # WORKAROUNDS
 
 # CentOS container releases are horribly broken.  Pin them to static versions.
-function archmap_container() case "$DEFAULT_ARCH" in
+function archmap_container() case $DEFAULT_ARCH in
     aarch64) echo b649af7d618145e62853f15a0b37f99620e6dc4d ;;
     ppc64le) echo 02e70e31f1bf6d943911ae42ef10680a6dc96f7e ;;
     x86_64)  echo 58a64e21019ae263ab18743c305cb0d85bba1b62 ;;
@@ -346,7 +346,7 @@ esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
-        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case "$DEFAULT_ARCH" in
+        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case $DEFAULT_ARCH in
             aarch64) echo 4b6f19fa15795d41bd2cd44e6f0461e24c36ba0af336002ceb0e688e76db5d71 ;;
             ppc64le) echo a2b4f92de1fa8c1333d81f296f896241cee7281e898a1877b1f8b7827a851ba9 ;;
             x86_64)  echo 00ecde5596f4380b4ae0c6f6be20683aeecb4fbbe76b415cf640ba41f5574bd3 ;;

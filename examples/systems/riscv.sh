@@ -20,10 +20,8 @@ packages+=(
         app-arch/tar
         app-arch/unzip
         app-editors/emacs
-        app-shells/bash
         dev-util/strace
         dev-vcs/git
-        sys-apps/coreutils
         sys-apps/diffutils
         sys-apps/file
         sys-apps/findutils
@@ -71,10 +69,10 @@ function initialize_buildroot() {
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
-            aio branding haptic jit lto offensive pcap system-info threads udisks utempter vte \
+            aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
-            -gtk -gui -repart -X'"'
+            -gtk -gui -opengl -repart -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
