@@ -209,8 +209,8 @@ EOF
         echo '<app-eselect/eselect-pinentry-0.7.3 ~*' >> "$portage/package.accept_keywords/pinentry.conf"
         # Accept libnotify-0.7.9 to fix host dependencies.
         echo '<x11-libs/libnotify-0.8 ~*' >> "$portage/package.accept_keywords/libnotify.conf"
-        # Accept python-3.9.6 to fix host dependencies.
-        echo '<dev-lang/python-3.10 ~*' >> "$portage/package.accept_keywords/python.conf"
+        # Accept python-3.9.6 to fix host dependencies (#804273).
+        echo 'dev-lang/python *' >> "$portage/package.accept_keywords/python.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -1088,6 +1088,14 @@ function write_overlay() {
         sed -e 's/7) B/*) B/;s/7)$/*)/' \
             "$gentoo/eclass/autotools.eclass" > "$overlay/eclass/autotools.eclass"
 
+        # Support tmpfiles with EAPI 8.
+        sed -e 's/7)/7|8)/;s/R\(DEPEND=.*\)/[[ ${EAPI} -lt 8 ]] \&\& & || I\1/' \
+            "$gentoo/eclass/tmpfiles.eclass" > "$overlay/eclass/tmpfiles.eclass"
+
+        # Support installing the distro kernel without /usr/src.
+        sed -e '/^kernel-install_pkg_preinst/a[[ ${MERGE_TYPE} == binary ]] && return' \
+            "$gentoo/eclass/kernel-install.eclass" > "$overlay/eclass/kernel-install.eclass"
+
         # Support compiling basic qt5 packages in a sysroot.
         sed \
             -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \
@@ -1106,6 +1114,9 @@ function write_overlay() {
 
         # Fix sestatus installation with UsrMerge (or unified bindir, really).
         edit sys-apps/policycoreutils '/setfiles/ause split-usr || rm -f "${ED}/usr/sbin/sestatus"'
+
+        # Fix cryptsetup dependencies.
+        edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
 
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
