@@ -110,12 +110,12 @@ packages+=(
 # Install the akmod package to build the proprietary NVIDIA drivers.
 function initialize_buildroot() if opt nvidia
 then
-        enable_repo_rpmfusion +nonfree
+        enable_repo_rpmfusion_nonfree
         $mkdir -p  "$buildroot/usr/lib/modprobe.d"
         echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
         packages_buildroot+=(akmod-nvidia)
         packages+=(rpmfusion-nonfree-release{,-rawhide,-tainted})
-else enable_repo_rpmfusion
+else enable_repo_rpmfusion_free
 fi
 
 # Install packages for building bare kernel modules.

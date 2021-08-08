@@ -108,7 +108,7 @@ EOF
                 $mkdir -p "$buildroot$gendir"
                 echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
 read -rs cmdline < /proc/cmdline
-test "x${cmdline}" != "x${cmdline%%DVR=\"*\"*}" || exit 0
+[[ $cmdline == *DVR=\"*\"* ]] || exit 0
 concise=${cmdline##*DVR=\"} concise=${concise%%\"*}
 device=${concise#* * * * } device=${device%% *}
 if [[ $device =~ ^[A-Z]+= ]]
@@ -149,7 +149,9 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$1" "$2"
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQENBE2heeUBCADDi8aOa7BFXWVCO/Ygol5pHptu1I9Cndg7OLj4enLeSoRFBgc2
@@ -180,5 +182,3 @@ PaV57JIEBaX7QHbz8PUH/841YU7RV/ecLaDT3GDrTCAEafzno2swR2kVvjSFsgr4
 =I12s
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$@"
-}

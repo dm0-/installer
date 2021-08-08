@@ -10,7 +10,10 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$1"
+        [[ $($sha256sum "$2") == $($sed -n '/=/{s/.* //p;q;}' "$1")\ * ]]
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBFturGcBEACv0xBo91V2n0uEC2vh69ywCiSyvUgN/AQH8EZpCVtM7NyjKgKm
@@ -40,16 +43,14 @@ pMuo7ZHMfveBngv8yP+ZD/1sS6l+dfExvdaJdOdgFCnp4p3gPbw5+Lv70HrMjA==
 =BfZ/
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$1"
-        test x$($sed -n '/=/{s/.* //p;q;}' "$1") = x$($sha256sum "$2" | $sed -n '1s/ .*//p')
-}
 
 # OPTIONAL (BUILDROOT)
 
-function enable_repo_rpmfusion() {
+function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-fedora-${options[release]}"
         local url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -81,16 +82,19 @@ fs3khghy5i2AU/bOChxRngX2QWR1A117IeADWtuspMFEOyeU5BlMcqjkFdOZI3jX
 =S0gf
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-free.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
+curl -L "$1" > rpmfusion-free.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
 rpm --checksig rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
-        test "x$*" = x+nonfree || return 0
-        key=${key//free/nonfree}
-        url=${url//free/nonfree}
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+
+function enable_repo_rpmfusion_nonfree() {
+        local key="RPM-GPG-KEY-rpmfusion-nonfree-fedora-${options[release]}"
+        local url="https://download1.rpmfusion.org/nonfree/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-nonfree-release-${options[release]}-1.noarch.rpm"
+        enable_repo_rpmfusion_free
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -122,12 +126,11 @@ shobGp/ukk6OFzG9MOnPFn19tnO1ZMB+ewATd968K+3yEwJ2woX02iguq77LGPj4
 =Gzco
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-nonfree.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
+curl -L "$1" > rpmfusion-nonfree.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
 rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
-}
 
-[[ ${options[release]} -ge $DEFAULT_RELEASE ]]
+[[ options[release] -ge DEFAULT_RELEASE ]]

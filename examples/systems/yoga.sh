@@ -136,8 +136,7 @@ EOF
         # Fix librsvg.
         $mkdir -p "$portage/patches/gnome-base/librsvg"
         $curl -L https://github.com/heycam/thin-slice/pull/1/commits/5db6f6cc8322e7b0211c51d61ace9552d8d820ee.patch > "$portage/patches/gnome-base/librsvg/x32.patch"
-        test x$($sha256sum "$portage/patches/gnome-base/librsvg/x32.patch" | $sed -n '1s/ .*//p') = \
-            x7f02638d7b895b7ef653f2eb2c8c7e174ff75fca4e26389c7b629855493da0ea
+        [[ $($sha256sum "$portage/patches/gnome-base/librsvg/x32.patch") == 7f02638d7b895b7ef653f2eb2c8c7e174ff75fca4e26389c7b629855493da0ea\ * ]]
         $sed -i -e 's,^[+-][+-][+-] [ab]/,&vendor/thin-slice/,' "$portage/patches/gnome-base/librsvg/x32.patch"
         $cat << 'EOF' >> "$portage/patches/gnome-base/librsvg/x32.patch"
 --- a/vendor/thin-slice/.cargo-checksum.json

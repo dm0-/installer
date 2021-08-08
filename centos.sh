@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 . fedora.sh  # Inherit Fedora's RPM functions.
 
+packages=(glibc-minimal-langpack)
+
 options[verity_sig]=
 
 DEFAULT_RELEASE=8
@@ -167,7 +169,9 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$1" "$2"
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBFzMWxkBEADHrskpBgN9OphmhRkc7P/YrsAGSvvl7kfu+e9KAaU6f5MeAVyn
@@ -198,15 +202,14 @@ yy+mHmSv
 =kkH7
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$@"
-}
 
 # OPTIONAL (BUILDROOT)
 
 function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -237,18 +240,18 @@ zKK4OjJ644NDcWCHa36znwVmkz3ixL8Q0auR15Oqq2BjR/fyog==
 =84m8
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > epel.rpm
+curl -L "$1" > epel.rpm
 rpm --checksig epel.rpm
 rpm --install epel.rpm
 exec rm -f epel.rpm
 EOF
-}
 
-function enable_repo_rpmfusion() {
+function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
         local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-0.1.noarch.rpm"
         enable_repo_epel
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -280,16 +283,19 @@ RmIw/1lMM/XnE/x+XQzvkcOQPHSxQ+iJjD5arhoROh2wCvfb3IPnYw==
 =Fpo1
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-free.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
+curl -L "$1" > rpmfusion-free.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
 rpm --checksig rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
-        test "x$*" = x+nonfree || return 0
-        key=${key//free/nonfree}
-        url=${url//free/nonfree}
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+
+function enable_repo_rpmfusion_nonfree() {
+        local key="RPM-GPG-KEY-rpmfusion-nonfree-el-${options[release]}"
+        local url="https://download1.rpmfusion.org/nonfree/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-nonfree-release-${options[release]}-0.1.noarch.rpm"
+        enable_repo_rpmfusion_free
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -321,13 +327,12 @@ dHObVLLxbTYoPqQl+lCZtfyyELWx13EYkn4VkG+y0D79aC7sxwEeZX1n5w==
 =WjVe
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-nonfree.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
+curl -L "$1" > rpmfusion-nonfree.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
 rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
-}
 
 # OPTIONAL (IMAGE)
 
@@ -346,12 +351,13 @@ esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
-        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case $DEFAULT_ARCH in
+        $($sha256sum "$1") == $(case $DEFAULT_ARCH in
             aarch64) echo 4b6f19fa15795d41bd2cd44e6f0461e24c36ba0af336002ceb0e688e76db5d71 ;;
             ppc64le) echo a2b4f92de1fa8c1333d81f296f896241cee7281e898a1877b1f8b7827a851ba9 ;;
             x86_64)  echo 00ecde5596f4380b4ae0c6f6be20683aeecb4fbbe76b415cf640ba41f5574bd3 ;;
-        esac)
+        esac)\ *
 ]]
 
 # The CentOS 7 implementation is so different that it needs its own file.
-test "x${options[release]-}" != x7 || . legacy/centos7.sh
+[[ ${options[release]:-$DEFAULT_RELEASE} -ge DEFAULT_RELEASE ]] ||
+. "legacy/centos$(( --DEFAULT_RELEASE )).sh"

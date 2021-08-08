@@ -148,6 +148,8 @@ EOF
 sys-kernel/gentoo-kernel hardened -initramfs
 # Apply patches to support more CPU optimizations, and link a default version.
 sys-kernel/gentoo-sources experimental symlink
+# Also link a default version when building release candidates.
+sys-kernel/git-sources symlink
 EOF
         $cat << 'EOF' >> "$portage/package.use/llvm.conf"
 # Make clang use its own linker by default.
@@ -209,8 +211,6 @@ EOF
         echo '<app-eselect/eselect-pinentry-0.7.3 ~*' >> "$portage/package.accept_keywords/pinentry.conf"
         # Accept libnotify-0.7.9 to fix host dependencies.
         echo '<x11-libs/libnotify-0.8 ~*' >> "$portage/package.accept_keywords/libnotify.conf"
-        # Accept python-3.9.6 to fix host dependencies (#804273).
-        echo 'dev-lang/python *' >> "$portage/package.accept_keywords/python.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -581,8 +581,8 @@ EndSection
 EOF
 
         # Don't hijack key presses for searching in the web browser.
-        test -s root/usr/lib/firefox/browser/defaults/preferences/all-gentoo.js &&
-        sed -i -e /typeaheadfind/d root/usr/lib/firefox/browser/defaults/preferences/all-gentoo.js
+        compgen -G 'root/usr/lib*/firefox/browser/defaults/preferences/all-gentoo.js' &&
+        sed -i -e /typeaheadfind/d root/usr/lib*/firefox/browser/defaults/preferences/all-gentoo.js
 
         # Prioritize available daemons for the user audio service socket.
         local dir=root/usr/lib/systemd/user

@@ -163,7 +163,7 @@ Requires=dev-mapper-root.device'
                 $mkdir -p "$buildroot$gendir"
                 echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
 read -rs cmdline < /proc/cmdline
-test "x${cmdline}" != "x${cmdline%%DVR=\"*\"*}" || exit 0
+[[ $cmdline == *DVR=\"*\"* ]] || exit 0
 concise=${cmdline##*DVR=\"} concise=${concise%%\"*}
 device=${concise#* * * * } device=${device%% *}
 if [[ $device =~ ^[A-Z]+= ]]
@@ -233,7 +233,10 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$2"
+        [[ $($sha256sum "$3") == $($sed -n 's/ .*root.tar.xz$//p' "$1")\ * ]]
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBFCMc9EBEADDKn9mOi9VZhW+0cxmu3aFZWMg0p7NEKuIokkEdd6P+BRITccO
@@ -287,9 +290,6 @@ p7vH1ewg+vd9ySST0+OkWXYpbMOIARfBKyrGM3nu
 =+MFT
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$2"
-        test x$($sed -n 's/ .*root.tar.xz$//p' "$1") = x$($sha256sum "$3" | $sed -n '1s/ .*//p')
-}
 
 function archmap() case ${*:-$DEFAULT_ARCH} in
     i[3-6]86) echo i386 ;;

@@ -100,8 +100,7 @@ EOF
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
         $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
-        test x$($sha256sum "$output/grub.mbox" | $sed -n '1s/ .*//p') = \
-            x32d142f8af7a0d4c1bf3cb0455e8cb9b4107125a04678da0f471044d90f28137
+        [[ $($sha256sum "$output/grub.mbox") == 32d142f8af7a0d4c1bf3cb0455e8cb9b4107125a04678da0f471044d90f28137\ * ]]
         $mkdir -p "$buildroot/etc/portage/patches/sys-boot/grub"
         local -i p ; for p in 1 2 3
         do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
@@ -112,11 +111,9 @@ EOF
 
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv/opensbi/archive/v0.9.tar.gz > "$buildroot/root/opensbi.tgz"
-        test x$($sha256sum "$buildroot/root/opensbi.tgz" | $sed -n '1s/ .*//p') = \
-            x60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0\ * ]]
         $curl -L https://github.com/u-boot/u-boot/archive/v2021.07.tar.gz > "$buildroot/root/u-boot.tgz"
-        test x$($sha256sum "$buildroot/root/u-boot.tgz" | $sed -n '1s/ .*//p') = \
-            x6cc8e2c9ed8898750c8979e0f75317818c1a7493b21f8ba4154f88888b675b5f
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 6cc8e2c9ed8898750c8979e0f75317818c1a7493b21f8ba4154f88888b675b5f\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"

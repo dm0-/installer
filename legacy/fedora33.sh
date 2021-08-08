@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=33).
 
+packages=(glibc-minimal-langpack)
+
 # Override UEFI splash screen creation for the old logo.
 eval "$(declare -f save_boot_files | $sed "s|\(convert.* \)\([^ ]*svg\)|sed \
 '/id=.g524[17]/,/[/]/{/</,/>/d;}' \2 > /root/logo.svg \&\& \1/root/logo.svg|")"
@@ -9,7 +11,10 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$1"
+        [[ $($sha256sum "$2") == $($sed -n '/=/{s/.* //p;q;}' "$1")\ * ]]
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBF4wBvsBEADQmcGbVUbDRUoXADReRmOOEMeydHghtKC9uRs9YNpGYZIB+bie
@@ -39,9 +44,6 @@ Aso1t2pypm/1zZexJdOV8yGME3g5l2W6PLgpz58DBECgqc/kda+VWgEAp7rO2A==
 =EPL3
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$1"
-        test x$($sed -n '/=/{s/.* //p;q;}' "$1") = x$($sha256sum "$2" | $sed -n '1s/ .*//p')
-}
 
-[[ ${options[release]} -ge $DEFAULT_RELEASE ]] ||
+[[ options[release] -ge DEFAULT_RELEASE ]] ||
 . "legacy/fedora$(( --DEFAULT_RELEASE )).sh"

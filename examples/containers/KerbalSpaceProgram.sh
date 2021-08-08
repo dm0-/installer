@@ -27,7 +27,7 @@ function initialize_buildroot() {
         # Support an option for running on a host with proprietary drivers.
         if opt nvidia
         then
-                enable_repo_rpmfusion +nonfree
+                enable_repo_rpmfusion_nonfree
                 packages+=(xorg-x11-drv-nvidia-libs)
         else packages+=(mesa-dri-drivers mesa-libGL)
         fi

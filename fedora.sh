@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-packages=(glibc-minimal-langpack)
 packages_buildroot=()
 
 DEFAULT_RELEASE=34
@@ -131,7 +130,7 @@ Requires=dev-mapper-root.device'
                 $mkdir -p "$buildroot$gendir"
                 echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
 read -rs cmdline < /proc/cmdline
-test "x${cmdline}" != "x${cmdline%%DVR=\"*\"*}" || exit 0
+[[ $cmdline == *DVR=\"*\"* ]] || exit 0
 concise=${cmdline##*DVR=\"} concise=${concise%%\"*}
 device=${concise#* * * * } device=${device%% *}
 if [[ $device =~ ^[A-Z]+= ]]
@@ -190,7 +189,10 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$1"
+        [[ $($sha256sum "$2") == $($sed -n '/=/{s/.* //p;q;}' "$1")\ * ]]
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBF8sAZIBEADKYvLg/5FdLXcVryAFd7Q8qrJq23R7ebxUT1u48Dc8xrsfYJZq
@@ -221,16 +223,14 @@ n5Si4l7NpIJubWPqjPoCoP5lsS8=
 =V2FG
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$1"
-        test x$($sed -n '/=/{s/.* //p;q;}' "$1") = x$($sha256sum "$2" | $sed -n '1s/ .*//p')
-}
 
 # OPTIONAL (BUILDROOT)
 
-function enable_repo_rpmfusion() {
+function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-fedora-${options[release]}"
         local url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 cat << 'EOG' > /tmp/key ; rpmkeys --import /tmp/key
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -262,16 +262,19 @@ HTJRq6E6GpCPn1avf1v797RM+3zzw9TYkadfVLIQQ4HYbYzienOgGGporclrtrQ=
 =oOVZ
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-free.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
+curl -L "$1" > rpmfusion-free.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
 rpm --checksig rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
-        test "x$*" = x+nonfree || return 0
-        key=${key//free/nonfree}
-        url=${url//free/nonfree}
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+
+function enable_repo_rpmfusion_nonfree() {
+        local key="RPM-GPG-KEY-rpmfusion-nonfree-fedora-${options[release]}"
+        local url="https://download1.rpmfusion.org/nonfree/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-nonfree-release-${options[release]}-1.noarch.rpm"
+        enable_repo_rpmfusion_free
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 cat << 'EOG' > /tmp/key ; rpmkeys --import /tmp/key
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -304,13 +307,12 @@ S6Y=
 =rOqq
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-nonfree.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
+curl -L "$1" > rpmfusion-nonfree.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
 rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
-}
 
 # OPTIONAL (IMAGE)
 
@@ -331,12 +333,12 @@ After=network.target network-online.target
 ExecStart=/bin/bash -eo pipefail -c 'declare -A total=() ; \
 for retry in 1 2 3 4 5 ; do while read -rs count type extra ; \
 do [[ $$count =~ [0-9]+ ]] && total[$$type]=$$count || \
-{ test "x$$count" = xError: && break ; } ; \
+{ [[ $$count == Error: ]] && break ; } ; \
 done < <(exec /usr/bin/dnf --quiet updateinfo summary --available 2>&1) ; \
-test -n "$$count" && /usr/bin/sleep 10 || break ; done ; \
-test -n "$$count" && exit 1 ; unset "total["{New,Moderate,Low}"]" ; \
+[[ -n $$count ]] && /usr/bin/sleep 10 || break ; done ; \
+[[ -n $$count ]] && exit 1 ; unset "total["{New,Moderate,Low}"]" ; \
 /usr/bin/mkdir -pZ /run/motd.d ; exec > /run/motd.d/image-update-check ; \
-test $${#total[@]} -gt 0 || exit 0 ; \
+[[ $${#total[@]} -gt 0 ]] || exit 0 ; \
 { (( total[Critical] + total[Important] )) && echo -n UPDATES REQUIRED ; } || \
 { (( total[Security] )) && echo -n Security updates are available ; } || \
 { (( total[Bugfix] )) && echo -n Bug fixes are available ; } || \
@@ -385,7 +387,7 @@ EOF
         fi
 
         # Only enable the units if explicitly requested.
-        if test "x$*" = x+updates
+        if [[ $* == +updates ]]
         then
                 ln -fst root/usr/lib/systemd/system/timers.target.wants \
                     ../image-update-check.timer

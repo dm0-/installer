@@ -132,7 +132,7 @@ EOF
                 $mkdir -p "$buildroot$gendir"
                 echo > "$buildroot$gendir/dmsetup-verity-root" '#!/bin/bash -eu
 read -rs cmdline < /proc/cmdline
-test "x${cmdline}" != "x${cmdline%%DVR=\"*\"*}" || exit 0
+[[ $cmdline == *DVR=\"*\"* ]] || exit 0
 concise=${cmdline##*DVR=\"} concise=${concise%%\"*}
 device=${concise#* * * * } device=${device%% *}
 if [[ $device =~ ^[A-Z]+= ]]
@@ -172,8 +172,7 @@ fi
 function enable_repo_nvidia() {
         local -r repo='https://download.nvidia.com/opensuse/tumbleweed'
         $curl -L "$repo/repodata/repomd.xml.key" > "$output/nvidia.key"
-        test x$($sha256sum "$output/nvidia.key" | $sed -n '1s/ .*//p') = \
-            x599aa39edfa43fb81e5bf5743396137c93639ce47738f9a2ae8b9a5732c91762
+        [[ $($sha256sum "$output/nvidia.key") == 599aa39edfa43fb81e5bf5743396137c93639ce47738f9a2ae8b9a5732c91762\ * ]]
         enter /usr/bin/rpmkeys --import nvidia.key
         $rm -f "$output/nvidia.key"
         echo -e > "$buildroot/etc/zypp/repos.d/nvidia.repo" \
@@ -184,8 +183,7 @@ function enable_repo_selinux() if opt selinux
 then
         local -r repo='https://download.opensuse.org/repositories/security:/SELinux/openSUSE_Factory'
         $curl -L "$repo/repodata/repomd.xml.key" > "$output/selinux.key"
-        test x$($sha256sum "$output/selinux.key" | $sed -n '1s/ .*//p') = \
-            xc8bfe12f4756a041e66e6a246455f4efe5710707591949f7377ec251aabbda91
+        [[ $($sha256sum "$output/selinux.key") == c8bfe12f4756a041e66e6a246455f4efe5710707591949f7377ec251aabbda91\ * ]]
         enter /usr/bin/rpmkeys --import selinux.key
         $rm -f "$output/selinux.key"
         echo -e > "$buildroot/etc/zypp/repos.d/selinux.repo" \
@@ -196,7 +194,10 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$2"
+        [[ $($sha256sum "$3") == $($sed -n 's/  .*//p' "$1")\ * ]]
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQENBEkUTD8BCADWLy5d5IpJedHQQSXkC1VK/oAZlJEeBVpSZjMCn8LiHaI9Wq3G
@@ -216,9 +217,6 @@ hqrPS+q2yftjNbsODagaOUb85ESfQGx/LqoMePD+7MqGpAXjKMZqsEDP0TbxTwSk
 =i2TA
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$2"
-        test x$($sed -n 's/  .*//p' "$1") = x$($sha256sum "$3" | $sed -n '1s/ .*//p')
-}
 
 # OPTIONAL (IMAGE)
 

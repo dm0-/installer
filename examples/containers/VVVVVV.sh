@@ -19,12 +19,11 @@ function customize_buildroot() {
 
         # Fetch the game assets.
         curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
-        test x$(sha256sum data.zip | sed -n '1s/ .*//p') = \
-            x6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0
+        [[ $(sha256sum data.zip) == 6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0\ * ]]
 
         # Build the game engine before installing packages into the image.
         git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
-        git -C VVVVVV reset --hard 3ca7b09012d10fd19393d237ff3d93e3abe9c22c
+        git -C VVVVVV reset --hard b114be88d53d4c0acb3f138af3b2275deb7f352e
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \
             -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C VVVVVV/desktop_version/build -j"$(nproc)" all

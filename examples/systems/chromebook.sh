@@ -139,7 +139,7 @@ function customize_buildroot() {
         local -r commit=ce86506f6ee3f4d1fc9e9cdc2c36645a6427c223  # Initial import in overlays.
         local -r file=/overlay-veyron/chromeos-base/chromeos-bsp-veyron/files/firmware/brcmfmac4354-sdio.txt
         curl -L "https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/$commit$file?format=TEXT" > /root/nvram.txt
-        test x$(sha256sum /root/nvram.txt | sed -n '1s/ .*//p') = x24a7cdfe790e0cb067b11fd7f13205684bcd4368cfb00ee81574fe983618f906
+        [[ $(sha256sum /root/nvram.txt) == 24a7cdfe790e0cb067b11fd7f13205684bcd4368cfb00ee81574fe983618f906\ * ]]
         base64 -d < /root/nvram.txt > "/lib/firmware/brcm/${file##*/}"
 
         # Configure the kernel by only enabling this system's settings.

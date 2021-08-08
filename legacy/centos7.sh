@@ -3,7 +3,6 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=centos [release]=7).
 
 packages=()
 
-DEFAULT_RELEASE=7
 options[secureboot]=
 options[uefi]=
 
@@ -109,7 +108,8 @@ eval "$(declare -f configure_initrd_generation | $sed /sysroot.mount/r<(echo \
 function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -140,18 +140,18 @@ RjsC7FDbL017qxS+ZVA/HGkyfiu4cpgV8VUnbql5eAZ+1Ll6Dw==
 =hdPa
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > epel.rpm
+curl -L "$1" > epel.rpm
 rpm --checksig epel.rpm
 rpm --install epel.rpm
 exec rm -f epel.rpm
 EOF
-}
 
-function enable_repo_rpmfusion() {
+function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
         local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
         enable_repo_epel
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -183,16 +183,19 @@ OEGWGYNPKeu56Dbc18pxBHez9m42
 =buWg
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-free.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
+curl -L "$1" > rpmfusion-free.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
 rpm --checksig rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
-        test "x$*" = x+nonfree || return 0
-        key=${key//free/nonfree}
-        url=${url//free/nonfree}
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script << EOF
+
+function enable_repo_rpmfusion_nonfree() {
+        local key="RPM-GPG-KEY-rpmfusion-nonfree-el-${options[release]}"
+        local url="https://download1.rpmfusion.org/nonfree/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-nonfree-release-${options[release]}-4.noarch.rpm"
+        enable_repo_rpmfusion_free
+        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+} << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -224,13 +227,12 @@ LMOlOqkf/TTZWb3HXsWQgLt6zIWSi6pS
 =h3MJ
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
-curl -L "$url" > rpmfusion-nonfree.rpm
-curl -L "${url/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
+curl -L "$1" > rpmfusion-nonfree.rpm
+curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
 rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
-}
 
 # OPTIONAL (IMAGE)
 
@@ -250,13 +252,15 @@ esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
-        x$($sha256sum "$1" | $sed -n '1s/ .*//p') = x$(case $DEFAULT_ARCH in
+        $($sha256sum "$1") == $(case $DEFAULT_ARCH in
             aarch64)  echo 6db9d6b9c8122e9fe7e7fc422e630ee10ff8b671ea5c8f7f16017b9b1c012f67 ;;
             i[3-6]86) echo 5aba6af141b5c1c5218011470da2e75a9d93a0fff5b62a30cc277945cd12ba2b ;;
             ppc64le)  echo cc60b971d00aa3c57e0fc913de8317bcc74201af9bdbd8f5c85eedbd29b93abc ;;
             x86_64)   echo 2b66ff1fa661f55d02a8e95597903008d55e0f98da8f65e3f47c04ac400f9b35 ;;
-        esac)
+        esac)\ *
 ]]
 
 # CentOS 7 is too old to provide sysusers, so just pretend it always works.
 function systemd-sysusers() { : ; }
+
+[[ options[release] -ge DEFAULT_RELEASE ]]
