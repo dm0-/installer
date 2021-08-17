@@ -18,3 +18,7 @@ then
                 fi
         done
 fi
+
+opt double_display_scale &&
+test -s root/usr/lib/systemd/system/lxdm.service &&
+sed -i -e '/^[[]Service]$/aEnvironment=GDK_SCALE=2' root/usr/lib/systemd/system/lxdm.service

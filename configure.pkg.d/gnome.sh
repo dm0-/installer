@@ -95,6 +95,15 @@ use-transparent-background=true
 use-theme-colors=false
 EOF
 
+opt double_display_scale &&
+test -s root/usr/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml &&
+cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_display.scale.gschema.override
+[org.gnome.desktop.interface]
+scaling-factor=2
+[org.gnome.settings-daemon.plugins.xsettings]
+overrides={'Gdk/WindowScalingFactor':<2>}
+EOF
+
 # Rewind changes for older versions.
 local -i major=$(sed -n 's,.*<platform>\([0-9]*\)</platform>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
 local -i minor=$(sed -n 's,.*<minor>\([0-9]*\)</minor>.*,\1,p' root/usr/share/gnome/gnome-version.xml)

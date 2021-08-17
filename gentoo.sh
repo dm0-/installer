@@ -1085,7 +1085,7 @@ function write_overlay() {
             "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
 
         # Support autotools with EAPI 8.
-        sed -e 's/7) B/*) B/;s/7)$/*)/' \
+        sed -e 's/7)$/*)/' \
             "$gentoo/eclass/autotools.eclass" > "$overlay/eclass/autotools.eclass"
 
         # Support tmpfiles with EAPI 8.
@@ -1115,8 +1115,9 @@ function write_overlay() {
         # Fix sestatus installation with UsrMerge (or unified bindir, really).
         edit sys-apps/policycoreutils '/setfiles/ause split-usr || rm -f "${ED}/usr/sbin/sestatus"'
 
-        # Fix cryptsetup dependencies.
+        # Fix tmpfiles dependencies.
         edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
+        edit sys-fs/lvm2 's/^EAPI=.*/EAPI=8/'
 
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'

@@ -94,6 +94,10 @@ function distro_tweaks() {
         test -s root/etc/inputrc &&
         sed -i -e '/history-search/s/^[# ]*//' root/etc/inputrc
 
+        opt double_display_scale &&
+        test -s root/etc/default/console-setup &&
+        sed -i -e '/^FONTSIZE="/s/"8x16"/"16x32"/' root/etc/default/console-setup
+
         test -s root/etc/default/keyboard &&
         sed -i -e '/^XKBOPTIONS=""$/s/""/"ctrl:nocaps"/' root/etc/default/keyboard &&
         compgen -G 'root/usr/share/keymaps/i386/qwerty/emacs2.*' &&

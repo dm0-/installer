@@ -593,9 +593,11 @@ fi
 
 eval "function configure_packages() {
 $($cat configure.pkg.d/[!.]*.sh 0<&-)
-}"
+return 0 ; }"
 
 function configure_system() {
+        opt read_only && exclude_paths+=(lost+found)
+
         sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
 
         test -s root/etc/sudoers &&
@@ -850,26 +852,6 @@ function archmap_uefi() case ${*:-$DEFAULT_ARCH} in
 esac
 
 # OPTIONAL (IMAGE)
-
-function double_display_scale() {
-        compgen -G 'root/usr/share/kbd/consolefonts/latarcyrheb-sun32.*' ||
-        compgen -G 'root/???/*/consolefonts/latarcyrheb-sun32.*' &&
-        sed -i -e '/^FONT=/d' root/etc/vconsole.conf &&
-        echo 'FONT="latarcyrheb-sun32"' >> root/etc/vconsole.conf
-
-        test -s root/etc/default/console-setup &&
-        sed -i -e '/^FONTSIZE="/s/"8x16"/"16x32"/' root/etc/default/console-setup
-
-        test -s root/usr/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml &&
-        cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_display.scale.gschema.override
-[org.gnome.desktop.interface]
-scaling-factor=2
-[org.gnome.settings-daemon.plugins.xsettings]
-overrides={'Gdk/WindowScalingFactor':<2>}
-EOF
-
-        return 0
-}
 
 function store_home_on_var() {
         opt selinux && local policy &&
