@@ -3,7 +3,7 @@
 # Program.  A single argument is required, the path to a Linux binary release
 # archive.
 #
-# The container installs dependencies not included with the game.  Persistent
+# The container includes dependencies not bundled with the game.  Persistent
 # game data is saved by mounting a path from the calling user's XDG data
 # directory as an overlay over the game's installation path.
 #

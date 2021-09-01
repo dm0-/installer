@@ -34,7 +34,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        (cd root/root ; exec innoextract ../../install.exe)
+        innoextract -md root/root install.exe
         rm -fr install.exe root/root/app/{gog*,__support,webcache.zip}
         mv root/root/app root/BGE
 

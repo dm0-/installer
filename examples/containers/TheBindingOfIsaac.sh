@@ -7,7 +7,7 @@
 # binary can't be verified since it is unsigned and they replace the file for
 # updates.  Also, they claim they'll stop hosting it at EOL by the end of 2020.
 #
-# The container installs dependencies of the Flash Player binary.  Persistent
+# The container includes dependencies of the Flash Player binary.  Persistent
 # Flash data for the game is mounted from the calling user's XDG data directory
 # to keep game saves independent of any native Flash installation data.
 #

@@ -89,13 +89,46 @@ sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
 
-        # Block GCC 11 since it won't cross-compile (GCC#100017).
-        echo ">=cross-${options[host]}/gcc-11" >> "$buildroot/etc/portage/package.mask/gcc.conf"
-        echo '>=sys-devel/gcc-11' >> "$portage/package.mask/gcc.conf"
+        # Patch GCC to fix cross-compilation.
+        $mkdir -p "$buildroot/etc/portage/patches/cross-${options[host]}/gcc" "$portage/patches/sys-devel/gcc"
+        $ln -fst "$portage/patches/sys-devel/gcc" "../../../../../../../etc/portage/patches/cross-${options[host]}/gcc/cross.patch"
+        $cat << 'EOF' > "$buildroot/etc/portage/patches/cross-${options[host]}/gcc/cross.patch"
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100017
+--- a/configure.ac
++++ b/configure.ac
+@@ -3515,7 +3515,7 @@
+ ACX_CHECK_INSTALLED_TARGET_TOOL(WINDRES_FOR_TARGET, windres)
+ ACX_CHECK_INSTALLED_TARGET_TOOL(WINDMC_FOR_TARGET, windmc)
+ 
+-RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
++RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET -nostdinc++"
+ 
+ GCC_TARGET_TOOL(ar, AR_FOR_TARGET, AR, [binutils/ar])
+ GCC_TARGET_TOOL(as, AS_FOR_TARGET, AS, [gas/as-new])
+--- a/configure
++++ b/configure
+@@ -16653,7 +16653,7 @@
+ fi
+ 
+ 
+-RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
++RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET -nostdinc++"
+ 
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking where to find the target ar" >&5
+ $as_echo_n "checking where to find the target ar... " >&6; }
+EOF
+
+        # Accept the latest glibc and prevent downgrading during bootstrapping.
+        echo -e "app-misc/pax-utils ~*\n<cross-${options[host]}/glibc-9999 **" >> "$buildroot/etc/portage/package.accept_keywords/glibc.conf"
+        echo '<sys-libs/glibc-9999 **' >> "$portage/package.accept_keywords/glibc.conf"
+        echo '<virtual/libcrypt-2' >> "$portage/package.mask/glibc.conf"
 
         # Fix the spidermonkey linker since gold does not exist for riscv.
         echo 'EXTRA_ECONF="--enable-linker=bfd"' >> "$portage/env/spidermonkey.conf"
         echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"
+
+        # Unmask systemd UEFI binaries.
+        echo 'sys-apps/systemd -gnuefi' >> "$portage/profile/package.use.mask/systemd.conf"
 
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
@@ -120,9 +153,6 @@ EOF
 
         # Work around the broken glibc paths (#797679).
         $ln -fst "$buildroot/usr/lib64" "../${options[host]}/usr/lib64/lp64d"
-
-        # Work around broken UEFI booting on Linux 5.13.
-        echo '>=sys-kernel/gentoo-sources-5.13' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {

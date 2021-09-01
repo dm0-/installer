@@ -7,5 +7,6 @@ then
             root/usr/share/xfwm4/defaults
 
         opt double_display_scale &&
+        test -d root/usr/share/themes/Default-xhdpi &&
         sed -i -e 's/^theme=Default$/&-xhdpi/' root/usr/share/xfwm4/defaults
 fi

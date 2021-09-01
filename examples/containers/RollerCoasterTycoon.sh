@@ -35,7 +35,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        (cd root/root ; exec innoextract ../../install.exe)
+        innoextract -md root/root install.exe
         rm -f install.exe
         wine_gog_script /RCT < root/root/app/goggame-1207658945.script > reg.sh
         mv root/root/app root/RCT

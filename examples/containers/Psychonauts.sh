@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # This builds a self-executing container image of the game Psychonauts.  A
-# single argument is required, the path to a self-extracing Linux installer.
+# single argument is required, the path to a Linux installer from GOG.
 #
-# The container installs dependencies not included with the game.  Persistent
+# The container includes dependencies not bundled with the game.  Persistent
 # game data paths are bound into the home directory of the calling user, so the
 # container is interchangeable with a native installation of the game.
 
@@ -16,10 +16,10 @@ packages+=(
         Mesa-libGL1
 )
 
-packages_buildroot+=(expect)
+packages_buildroot+=(unzip)
 
 function initialize_buildroot() {
-        $cp "${1:-psychonauts-linux-05062013-bin}" "$output/install"
+        $cp "${1:-gog_psychonauts_2.0.0.4.sh}" "$output/psychonauts.zip"
 }
 
 function customize_buildroot() {
@@ -36,16 +36,9 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        cp install root/install
-        chmod 0755 root/install
-        expect << 'EOF'
-set timeout -1
-spawn chroot root /install
-expect "> "
-send -- "/psychonauts\n"
-expect eof
-EOF
-        rm -f root/install install
+        unzip psychonauts.zip -d /psychonauts -x data/noarch/game/{Documents/'*',icon.bmp,psychonauts.png} || [[ $? -eq 1 ]]
+        mv /psychonauts/data/noarch/game root/psychonauts
+        rm -f psychonauts.zip
 
         cat << 'EOF' > root/init && chmod 0755 root/init
 #!/bin/sh -eu

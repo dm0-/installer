@@ -34,7 +34,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        (cd root/root ; exec innoextract ../../install.exe)
+        innoextract -md root/root install.exe
         rm -f install.exe
         mv root/root/app root/fallout
         sed '/^UAC_AWARE=/s/=1/=0/' root/fallout/f1_res.ini > root/fallout/f1_res.ini.orig

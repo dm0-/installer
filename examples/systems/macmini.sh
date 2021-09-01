@@ -136,6 +136,9 @@ EOF
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'dev-lang/spidermonkey -lto' >> "$portage/package.use/spidermonkey.conf"
+
+        # Stay on the LTS kernel since Linux 5.13 broke the graphics driver.
+        echo '>=sys-kernel/gentoo-sources-5.13' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {
@@ -315,6 +318,7 @@ CONFIG_UTS_NS=y
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
 # Provide a fancy framebuffer console.
+CONFIG_FB=y
 CONFIG_TTY=y
 CONFIG_VT=y
 CONFIG_VT_CONSOLE=y

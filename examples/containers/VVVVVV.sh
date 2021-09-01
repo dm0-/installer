@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # This builds a self-executing container image of the game VVVVVV.
 #
-# It fetches the free game assets and compiles the engine from Git.  Persistent
+# It compiles the free engine source and fetches the game assests.  Persistent
 # game data paths are bound into the home directory of the calling user, so the
 # container is interchangeable with a native installation of the game.
+#
+# This script implements an option to demonstrate supporting the proprietary
+# NVIDIA drivers on the host system.
 
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
 
@@ -12,21 +15,30 @@ packages+=(
         SDL2_mixer
 )
 
-packages_buildroot+=(cmake gcc-c++ git-core ninja-build SDL2_mixer-devel)
+packages_buildroot+=(cmake gcc-c++ ninja-build SDL2_mixer-devel)
+
+function initialize_buildroot() if opt nvidia
+then
+        enable_repo_rpmfusion_nonfree
+        packages+=(xorg-x11-drv-nvidia-libs)
+else packages+=(libGL mesa-dri-drivers)
+fi
 
 function customize_buildroot() {
         echo tsflags=nodocs >> /etc/dnf/dnf.conf
 
-        # Fetch the game assets.
-        curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
-        [[ $(sha256sum data.zip) == 6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0\ * ]]
-
         # Build the game engine before installing packages into the image.
-        git clone --branch=master https://github.com/TerryCavanagh/VVVVVV.git
-        git -C VVVVVV reset --hard 1252781a813bc832c848b4a011ac5e4bd0e92157
+        curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.1.tar.gz' > VVVVVV.tgz
+        [[ $(sha256sum VVVVVV.tgz) == 3abde2713738b3d29eaab1e8df22763d9a1cac36e5a9c73d65f898de45212027\ * ]]
+        tar --transform='s,^/*[^/]*,VVVVVV,' -xf VVVVVV.tgz
+        rm -f VVVVVV.tgz
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \
             -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C VVVVVV/desktop_version/build -j"$(nproc)" all
+
+        # Fetch the game assets.
+        curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
+        [[ $(sha256sum data.zip) == 6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0\ * ]]
 }
 
 function customize() {
@@ -44,7 +56,7 @@ function customize() {
 
         ln -fns VVVVVV root/init
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/VVVVVV" ] ||
@@ -52,7 +64,8 @@ mkdir -p "$XDG_DATA_HOME/VVVVVV"
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/VVVVVV:/home/$USER/.local/share/VVVVVV" \
-    --bind=/dev/dri \
+    --bind="+/tmp:/home/$USER/.cache" \
+    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \

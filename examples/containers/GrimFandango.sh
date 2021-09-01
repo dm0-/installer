@@ -2,7 +2,7 @@
 # This builds a self-executing container image of the game Grim Fandango.  A
 # single argument is required, the path to a Linux installer from GOG.
 #
-# The container installs dependencies not included with the game.  Persistent
+# The container includes dependencies not bundled with the game.  Persistent
 # game data paths are bound into the calling user's XDG data directory, so the
 # players have their own private save files.
 
@@ -18,7 +18,7 @@ packages+=(
 packages_buildroot+=(unzip)
 
 function initialize_buildroot() {
-        $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.sh"
+        $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.zip"
 }
 
 function customize_buildroot() {
@@ -35,10 +35,10 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        unzip grim.sh -d /grim -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [[ $? -eq 1 ]]
+        unzip grim.zip -d /grim -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [[ $? -eq 1 ]]
         mv /grim/data/noarch/game/bin root/grim
+        rm -f grim.zip
         mkdir -p root/grim/Saves
-        rm -f grim.sh
 
         ln -fns grim/GrimFandango root/init
 

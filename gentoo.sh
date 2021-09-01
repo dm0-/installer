@@ -207,8 +207,6 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues (#795393).
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept eselect-pinentry-0.7.2 to fix host dependencies.
-        echo '<app-eselect/eselect-pinentry-0.7.3 ~*' >> "$portage/package.accept_keywords/pinentry.conf"
         # Accept libnotify-0.7.9 to fix host dependencies.
         echo '<x11-libs/libnotify-0.8 ~*' >> "$portage/package.accept_keywords/libnotify.conf"
 
@@ -1126,10 +1124,14 @@ function write_overlay() {
         edit media-libs/fontconfig '/^PDEPEND=.*eselect/s/".*/"/'
         edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
 
+        # Support building riscv64 UEFI applications.
+        [[ $host == riscv64* ]] && ! grep -Fqs riscv64 "$gentoo"/sys-boot/gnu-efi/gnu-efi-*.ebuild &&
+        edit sys-boot/gnu-efi '/^KEYWORDS=/s/ ~\?x86/ ~riscv&/;/i.86.*ia32/{p;s/i.86\|ia32/riscv64/g;}'
+
         # Support erofs-utils (#701284).
         mkdir -p "$overlay/sys-fs/erofs-utils"
         cat << 'EOF' > "$overlay/sys-fs/erofs-utils/erofs-utils-1.3.ebuild"
-EAPI=7
+EAPI=8
 inherit autotools
 DESCRIPTION="Userspace tools for EROFS images"
 HOMEPAGE="https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git"

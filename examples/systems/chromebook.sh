@@ -306,6 +306,7 @@ CONFIG_UTS_NS=y
 CONFIG_BLK_DEV=y
 CONFIG_BLK_DEV_LOOP=y
 # Provide a fancy framebuffer console.
+CONFIG_FB=y
 CONFIG_TTY=y
 CONFIG_VT=y
 CONFIG_VT_CONSOLE=y
