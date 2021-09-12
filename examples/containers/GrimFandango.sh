@@ -5,14 +5,16 @@
 # The container includes dependencies not bundled with the game.  Persistent
 # game data paths are bound into the calling user's XDG data directory, so the
 # players have their own private save files.
+#
+# This script implements an option to demonstrate supporting the proprietary
+# NVIDIA drivers on the host system.
 
-options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.04 [squash]=1)
 
 packages+=(
-        alsa-plugins-pulse
-        libGLU1
-        libX{cursor1,i6,inerama1,randr2,ss1,xf86vm1}
-        Mesa-dri{,-nouveau}
+        libasound2-plugins
+        libglu1-mesa
+        libx{cursor1,i6,inerama1,randr2,ss1,xf86vm1}
 )
 
 packages_buildroot+=(unzip)
@@ -21,9 +23,11 @@ function initialize_buildroot() {
         $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.zip"
 }
 
-function customize_buildroot() {
-        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
-}
+function customize_buildroot() if opt nvidia
+then
+        echo 'deb http://archive.ubuntu.com/ubuntu/ impish restricted' >> /etc/apt/sources.list
+        packages+=(libnvidia-gl-470)
+fi
 
 function customize() {
         exclude_paths+=(
@@ -35,14 +39,14 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        unzip grim.zip -d /grim -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [[ $? -eq 1 ]]
-        mv /grim/data/noarch/game/bin root/grim
+        unzip grim.zip -d root/root -x data/noarch/game/bin/{runtime-README.txt,{amd64,i386,scripts}/'*'} || [[ $? -eq 1 ]]
+        mv root/root/data/noarch/game/bin root/grim
         rm -f grim.zip
         mkdir -p root/grim/Saves
 
         ln -fns grim/GrimFandango root/init
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/GrimFandango" ] ||
@@ -50,7 +54,7 @@ mkdir -p "$XDG_DATA_HOME/GrimFandango"
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/GrimFandango:/grim/Saves" \
-    --bind=/dev/dri \
+    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \

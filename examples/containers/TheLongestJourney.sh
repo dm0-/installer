@@ -7,13 +7,13 @@
 # container and extracts files from the installer.  Persistent game data is
 # saved by binding paths from the calling user's XDG data directory over the
 # game's save directory and configuration files.
+#
+# This script implements an option to demonstrate supporting the proprietary
+# NVIDIA drivers on the host system.
 
-options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.04 [squash]=1)
 
-packages+=(
-        Mesa-dri{,-nouveau}
-        wine
-)
+packages+=(wine32-development)
 
 packages_buildroot+=(innoextract jq)
 
@@ -22,9 +22,11 @@ function initialize_buildroot() {
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
 }
 
-function customize_buildroot() {
-        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
-}
+function customize_buildroot() if opt nvidia
+then
+        echo 'deb http://archive.ubuntu.com/ubuntu/ impish restricted' >> /etc/apt/sources.list
+        packages+=(libnvidia-gl-470)
+fi
 
 function customize() {
         exclude_paths+=(
@@ -38,7 +40,7 @@ function customize() {
 
         innoextract -md root/TLJ install.exe
         wine_gog_script /TLJ < root/TLJ/goggame-1207658794.script | sed 's/Z:/C:/g' > reg.sh
-        rm -fr install{.exe,-1.bin} root/TLJ/{app,commonappdata,goggame*,manual.pdf,__redist,tlj_faq*}
+        rm -fr install{.exe,-1.bin} root/TLJ/{app,commonappdata,gog*,manual.pdf,__redist,tlj_faq*}
         mkdir -p root/TLJ/Save
         cp root/TLJ/preferences.ini root/TLJ/preferences.ini.orig
 
@@ -52,7 +54,7 @@ ln -fst "$HOME/.wine/dosdevices/c:" /TLJ
 exec wine explorer /desktop=virtual,640x480 /TLJ/game.exe "$@"
 EOF
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheLongestJourney/Save" ] ||
@@ -64,7 +66,7 @@ touch "$XDG_DATA_HOME/TheLongestJourney/preferences.ini"
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/TheLongestJourney/Save:/TLJ/Save" \
     --bind="$XDG_DATA_HOME/TheLongestJourney/preferences.ini:/TLJ/preferences.ini" \
-    --bind=/dev/dri \
+    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \

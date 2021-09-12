@@ -21,15 +21,15 @@ function initialize_buildroot() if opt nvidia
 then
         enable_repo_rpmfusion_nonfree
         packages+=(xorg-x11-drv-nvidia-libs)
-else packages+=(libGL mesa-dri-drivers)
+else packages+=(mesa-dri-drivers mesa-libGL)
 fi
 
 function customize_buildroot() {
         echo tsflags=nodocs >> /etc/dnf/dnf.conf
 
         # Build the game engine before installing packages into the image.
-        curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.1.tar.gz' > VVVVVV.tgz
-        [[ $(sha256sum VVVVVV.tgz) == 3abde2713738b3d29eaab1e8df22763d9a1cac36e5a9c73d65f898de45212027\ * ]]
+        curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.4.tar.gz' > VVVVVV.tgz
+        [[ $(sha256sum VVVVVV.tgz) == 514b85ee21a3a8d9bfb9af00bc0cd56766d69f84c817799781da93506f30dd9c\ * ]]
         tar --transform='s,^/*[^/]*,VVVVVV,' -xf VVVVVV.tgz
         rm -f VVVVVV.tgz
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \

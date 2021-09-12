@@ -35,7 +35,7 @@ function customize() {
         )
 
         innoextract -md root/root install.exe
-        rm -fr install.exe root/root/app/{gog*,__support,webcache.zip}
+        rm -fr install.exe root/root/app/{gog*,manual.pdf,__support,webcache.zip}
         mv root/root/app root/BGE
 
         cat << 'EOF' > root/init && chmod 0755 root/init

@@ -49,7 +49,7 @@ function initialize_buildroot() {
         then
                 enable_repo_rpmfusion_nonfree
                 packages+=(xorg-x11-drv-nvidia-libs)
-        else packages+=(libGL mesa-dri-drivers)
+        else packages+=(mesa-dri-drivers mesa-libGL)
         fi
 }
 

@@ -5,15 +5,16 @@
 # The container includes dependencies not bundled with the game.  Persistent
 # game data paths are bound into the home directory of the calling user, so the
 # container is interchangeable with a native installation of the game.
+#
+# This script implements an option to demonstrate supporting the proprietary
+# NVIDIA drivers on the host system.
 
-options+=([arch]=i686 [distro]=opensuse [gpt]=1 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.04 [squash]=1)
 
 packages+=(
-        alsa-plugins-pulse
-        desktop-data-openSUSE
-        libXcursor1
-        Mesa-dri{,-nouveau}
-        Mesa-libGL1
+        libasound2-plugins
+        libgl1
+        libxcursor1
 )
 
 packages_buildroot+=(unzip)
@@ -22,9 +23,11 @@ function initialize_buildroot() {
         $cp "${1:-gog_psychonauts_2.0.0.4.sh}" "$output/psychonauts.zip"
 }
 
-function customize_buildroot() {
-        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
-}
+function customize_buildroot() if opt nvidia
+then
+        echo 'deb http://archive.ubuntu.com/ubuntu/ impish restricted' >> /etc/apt/sources.list
+        packages+=(libnvidia-gl-470)
+fi
 
 function customize() {
         exclude_paths+=(
@@ -36,8 +39,8 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        unzip psychonauts.zip -d /psychonauts -x data/noarch/game/{Documents/'*',icon.bmp,psychonauts.png} || [[ $? -eq 1 ]]
-        mv /psychonauts/data/noarch/game root/psychonauts
+        unzip psychonauts.zip -d root/root -x data/noarch/game/{Documents/'*',icon.bmp,psychonauts.png} || [[ $? -eq 1 ]]
+        mv root/root/data/noarch/game root/psychonauts
         rm -f psychonauts.zip
 
         cat << 'EOF' > root/init && chmod 0755 root/init
@@ -49,7 +52,7 @@ cp -t /tmp/save /psychonauts/DisplaySettings.ini
 exec /psychonauts/Psychonauts "$@"
 EOF
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/Psychonauts" ] ||
@@ -57,7 +60,7 @@ mkdir -p "$XDG_DATA_HOME/Psychonauts"
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/Psychonauts:/tmp/save" \
-    --bind=/dev/dri \
+    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \

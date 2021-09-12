@@ -37,6 +37,7 @@ exec apt-get --assume-yes --option=Acquire::Retries=5 install "$@"
 EOF
 
         # Fix the old pesign option name.
+        $mkdir -p "$buildroot/etc/popt.d"
         $sed -n '/certficate/q0;$q1' "$buildroot/etc/popt.d/pesign.popt" ||
         echo 'pesign alias --certificate --certficate' >> "$buildroot/etc/popt.d/pesign.popt"
 }

@@ -13,7 +13,7 @@ function create_buildroot() {
         opt ramdisk || opt selinux || opt verity_sig && packages_buildroot+=(app-arch/cpio)
         opt read_only && ! opt squash && packages_buildroot+=(sys-fs/erofs-utils)
         opt secureboot && packages_buildroot+=(app-crypt/pesign dev-libs/nss)
-        opt selinux && packages_buildroot+=(app-emulation/qemu)
+        opt selinux && packages_buildroot+=(app-emulation/qemu sys-apps/busybox)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt uefi && packages_buildroot+=('<gnome-base/librsvg-2.41' media-gfx/imagemagick x11-themes/gentoo-artwork)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
@@ -124,7 +124,11 @@ gnome-extra/*
 sys-apps/gentoo-systemd-integration
 sys-apps/systemd
 EOF
-        $cat << 'EOF' >> "$buildroot/etc/portage/package.use/cdrtools.conf"
+        $cat << 'EOF' >> "$portage/package.use/busybox.conf"
+# Make busybox static by default since nobody expects it to be otherwise.
+sys-apps/busybox static -pam
+EOF
+        $cat << 'EOF' >> "$portage/package.use/cdrtools.conf"
 # Support file capabilities when making ISO images.
 app-cdr/cdrtools caps
 EOF
