@@ -617,8 +617,10 @@ EOF
         sed -i -e '/^ANSI_COLOR=/s/32/35/' root/etc/os-release
 }
 
-# Override ramdisk creation to support a builtin initramfs for Gentoo.
-eval "$(declare -f squash | $sed 's/zstd --[^;]*/if opt monolithic ; then cat > /root/initramfs.cpio ; else & ; fi/')"
+# Override ramdisk creation to drop microcode and support a builtin initramfs.
+eval "$(declare -f squash | $sed \
+    -e 's/build_microcode_ramdisk/:/' \
+    -e 's/zstd --[^;]*/if opt monolithic ; then cat > /root/initramfs.cpio ; else & ; fi/')"
 
 function save_boot_files() if opt bootable
 then

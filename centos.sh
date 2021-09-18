@@ -22,11 +22,11 @@ function create_buildroot() {
         packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
+#       $curl -L "$image.asc" > "$output/image.tar.xz.asc"
         $curl -L "$image" > "$output/image.tar.xz"
-#       $curl -L "$image.asc" | verify_distro - "$output/image.tar.xz"
         verify_distro "$output/image.tar.xz"
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output/image.tar.xz"
+        $rm -f "$output"/image.tar.xz{.asc,}
 
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
@@ -158,6 +158,10 @@ eval "$(declare -f squash | $sed 's/ zstd .* 22 / xz /')"
 eval "$(declare -f configure_initrd_generation | $sed /compress=/d)"
 eval "$(declare -f squash build_systemd_ramdisk | $sed \
     -e 's/zstd --[^|>]*/xz --check=crc32 -9e /')"
+
+# Override early microcode ramdisk creation for CentOS Intel paths.
+eval "$(declare -f build_microcode_ramdisk | $sed \
+    -e s,lib/firmware/i,usr/share/microcode_ctl/ucode_with_caveats/intel/i,g)"
 
 # Override dm-init with userspace since the CentOS kernel is too old.
 eval "$(
@@ -343,18 +347,18 @@ eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
 
 # CentOS container releases are horribly broken.  Pin them to static versions.
 function archmap_container() case $DEFAULT_ARCH in
-    aarch64) echo b649af7d618145e62853f15a0b37f99620e6dc4d ;;
-    ppc64le) echo 02e70e31f1bf6d943911ae42ef10680a6dc96f7e ;;
-    x86_64)  echo 58a64e21019ae263ab18743c305cb0d85bba1b62 ;;
+    aarch64) echo e79ccf67325a31bf0bb79a8a0e82d3d8a4de2da8 ;;
+    ppc64le) echo 76f876b31bb82108a1acf2cee1032c1d2ebc3bd9 ;;
+    x86_64)  echo 607af70702bacc6f46fab2ded055ab23d9113831 ;;
     *) return 1 ;;
 esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo 4b6f19fa15795d41bd2cd44e6f0461e24c36ba0af336002ceb0e688e76db5d71 ;;
-            ppc64le) echo a2b4f92de1fa8c1333d81f296f896241cee7281e898a1877b1f8b7827a851ba9 ;;
-            x86_64)  echo 00ecde5596f4380b4ae0c6f6be20683aeecb4fbbe76b415cf640ba41f5574bd3 ;;
+            aarch64) echo 5beedefae3fcb64fa1e05d2facece2c764748791275e2d03f5be3518c7fd6429 ;;
+            ppc64le) echo 01afd6f91e7e97e9ce1e137ddec2d665c70aec9398facec1d7eb92f1da7985fe ;;
+            x86_64)  echo 6cc70032cb92991d1d916e8e77c2f3f6aedeacf0ba524af93bfac89c0a2438d9 ;;
         esac)\ *
 ]]
 

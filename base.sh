@@ -338,6 +338,7 @@ exec /usr/lib/systemd/systemd
 EOF
         else ln -fns usr/lib/systemd/systemd root/init
         fi
+        build_microcode_ramdisk > initrd.img
         find root -mindepth 1 -printf '%P\n' |
         grep -vxf <(
                 for path in "${exclude_paths[@]//\*/[^/]*}"
@@ -345,7 +346,7 @@ EOF
                 done
         ) |
         cpio -D root -H newc -o |
-        zstd --threads=0 --ultra -22 > initrd.img
+        zstd --threads=0 --ultra -22 >> initrd.img
 elif opt read_only && ! opt selinux
 then
         local -a args ; local path
@@ -419,6 +420,21 @@ then
             $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"") \
             $(opt verity_sig && echo dm-verity.require_signatures=1) \
             ${options[append]-}
+fi
+
+function build_microcode_ramdisk() if [[ ${options[arch]:-$DEFAULT_ARCH} == *86* ]]
+then
+        local -r dir=/root/earlycpio/kernel/x86/microcode
+        mkdir -p "$dir"
+        compgen -G '/lib/firmware/amd-ucode/*.bin' > /dev/null &&
+        cat /lib/firmware/amd-ucode/*.bin > "$dir/AuthenticAMD.bin"
+        compgen -G '/lib/firmware/intel-ucode/*' > /dev/null &&
+        cat /lib/firmware/intel-ucode/* > "$dir/GenuineIntel.bin"
+        (
+                cd "${dir%/kernel/*}" ; IFS=$'\n'
+                f=(kernel{,/x86{,/microcode}} kernel/x86/microcode/*.bin)
+                [[ ${#f[@]} -lt 4 ]] || exec cpio -H newc -o <<< "${f[*]}"
+        )
 fi
 
 function build_systemd_ramdisk() if opt ramdisk

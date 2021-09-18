@@ -17,10 +17,11 @@ function create_buildroot() {
         opt uefi && packages_buildroot+=(binutils librsvg imagemagick)
 
         $mkdir -p "$buildroot"
+        $curl -L "$image.sig" > "$output/image.tgz.sig"
         $curl -L "$image" > "$output/image.tgz"
-        $curl -L "$image.sig" | verify_distro - "$output/image.tgz"
+        verify_distro "$output"/image.tgz{.sig,}
         $tar --strip-components=1 -C "$buildroot" -xzf "$output/image.tgz"
-        $rm -f "$output/image.tgz"
+        $rm -f "$output"/image.tgz{.sig,}
 
         # Use the kernel.org and mit.edu mirrors with parallel downloads.
         $sed -i \

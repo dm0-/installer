@@ -20,11 +20,11 @@ function create_buildroot() {
         packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
+#       $curl -L "$image.asc" > "$output/image.tar.xz.asc"
         $curl -L "$image" > "$output/image.tar.xz"
-#       $curl -L "$image.asc" | verify_distro - "$output/image.tar.xz"
         verify_distro "$output/image.tar.xz"
         $tar -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output/image.tar.xz"
+        $rm -f "$output"/image.tar.xz{.asc,}
 
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/yum.conf"
