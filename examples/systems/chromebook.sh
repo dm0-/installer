@@ -183,7 +183,7 @@ EOF
 Label=ROOT-A
 SizeMaxBytes=$(( 0${options[squash]:+1} ? 1 << 30 : 3 << 29 ))
 SizeMinBytes=$(( 0${options[squash]:+1} ? 1 << 30 : 3 << 29 ))
-Type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+Type=linux-generic
 EOF
         sed s/KERN-A/KERN-B/ root/usr/lib/repart.d/15-kern-a.conf \
             > root/usr/lib/repart.d/25-kern-b.conf

@@ -21,10 +21,10 @@ function create_buildroot() {
         $mkdir -p "$buildroot"
         $curl -L "${image%/*}/SHA256SUMS" > "$output/checksum"
         $curl -L "${image%/*}/SHA256SUMS.gpg" > "$output/checksum.sig"
-        $curl -L "$image" > "$output/image.tar.xz"
-        verify_distro "$output"/checksum{,.sig} "$output/image.tar.xz"
-        $tar --exclude=etc/resolv.conf -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output"/checksum{,.sig} "$output/image.tar.xz"
+        $curl -L "$image" > "$output/image.txz"
+        verify_distro "$output"/checksum{,.sig} "$output/image.txz"
+        $tar --exclude=etc/resolv.conf -C "$buildroot" -xJf "$output/image.txz"
+        $rm -f "$output"/checksum{,.sig} "$output/image.txz"
 
         configure_initrd_generation
         initialize_buildroot "$@"

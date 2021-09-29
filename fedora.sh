@@ -22,10 +22,10 @@ function create_buildroot() {
 
         $mkdir -p "$buildroot"
         $curl -L "${image%-Base*}-${options[release]}-$cver-$DEFAULT_ARCH-CHECKSUM" > "$output/checksum"
-        $curl -L "$image" > "$output/image.tar.xz"
-        verify_distro "$output/checksum" "$output/image.tar.xz"
-        $tar -xJOf "$output/image.tar.xz" '*/layer.tar' | $tar -C "$buildroot" -x
-        $rm -f "$output/checksum" "$output/image.tar.xz"
+        $curl -L "$image" > "$output/image.txz"
+        verify_distro "$output/checksum" "$output/image.txz"
+        $tar -xJOf "$output/image.txz" '*/layer.tar' | $tar -C "$buildroot" -x
+        $rm -f "$output/checksum" "$output/image.txz"
 
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"

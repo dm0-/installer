@@ -215,7 +215,7 @@ EOF
 Label=ROOT-A
 SizeMaxBytes=$(( 1 << 30 ))
 SizeMinBytes=$(( 1 << 30 ))
-Type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+Type=linux-generic
 EOF
         sed s/ROOT-A/ROOT-B/ root/usr/lib/repart.d/20-root-a.conf \
             > root/usr/lib/repart.d/30-root-b.conf

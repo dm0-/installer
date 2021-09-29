@@ -21,10 +21,10 @@ function create_buildroot() {
 
         $mkdir -p "$buildroot"
         $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
-        $curl -L "$stage3" > "$output/stage3.tar.xz"
-        verify_distro "$output/digests" "$output/stage3.tar.xz"
-        $tar -C "$buildroot" -xJf "$output/stage3.tar.xz"
-        $rm -f "$output/digests" "$output/stage3.tar.xz"
+        $curl -L "$stage3" > "$output/stage3.txz"
+        verify_distro "$output/digests" "$output/stage3.txz"
+        $tar -C "$buildroot" -xJf "$output/stage3.txz"
+        $rm -f "$output/digests" "$output/stage3.txz"
 
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
@@ -81,7 +81,7 @@ sec-policy/* ~*
 sys-kernel/gentoo-kernel ~*
 sys-kernel/gentoo-sources ~*
 sys-kernel/git-sources ~*
-<sys-kernel/linux-headers-5.13 ~*
+sys-kernel/linux-headers ~*
 virtual/dist-kernel ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/rust.conf"
@@ -161,6 +161,10 @@ sys-devel/clang default-lld
 # Build gold support for LLVM to match binutils.
 sys-devel/llvm gold
 EOF
+        $cat << 'EOF' >> "$portage/package.use/selinux.conf"
+# Don't pull in qt5 for SELinux tools.
+app-admin/setools -X
+EOF
         $cat << 'EOF' >> "$portage/package.use/shadow.conf"
 # Don't use shadow's built in cracklib support since PAM provides it.
 sys-apps/shadow -cracklib
@@ -172,10 +176,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/sudo.conf"
 # Prefer gcrypt's digest functions instead of those from sudo or OpenSSL.
 app-admin/sudo gcrypt -ssl
-EOF
-        $cat << 'EOF' >> "$portage/profile/package.provided"
-# These Python tools are not useful, and they pull in horrific dependencies.
-app-admin/setools-9999
 EOF
         $cat << 'EOF' >> "$portage/profile/package.use.mask/emacs.conf"
 # Support Emacs browser widgets everywhere so Emacs can handle everything.
@@ -268,6 +268,7 @@ EOF
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
+        echo 'EXTRA_ECONF="--with-libgmp-prefix=$SYSROOT/usr"' >> "$portage/env/cross-gmp.conf"
         echo 'LIBASSUAN_CONFIG="/usr/bin/$CHOST-pkg-config libassuan"' >> "$portage/env/cross-libassuan.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
@@ -288,6 +289,7 @@ net-libs/libmbim cross-emake-utils.conf
 net-misc/modemmanager cross-emake-utils.conf
 net-misc/networkmanager cross-emake-utils.conf
 net-wireless/wpa_supplicant cross-libnl.conf
+sys-apps/coreutils cross-gmp.conf
 x11-drivers/xf86-input-libinput xf86-sdk.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
 EOF
@@ -320,8 +322,12 @@ EOF
         echo 'dev-lang/rust rust-map.conf' >> "$portage/package.env/rust.conf"
         # Link a required library for building the SELinux labeling initrd.
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
+        # Mask the self-dependent NSS edit in the native root.
+        echo 'dev-libs/nss::fixes' >> "$portage/package.mask/nss.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
+        # Make a static libcrypt in the buildroot for busybox.
+        echo -e 'sys-libs/libxcrypt static-libs\nvirtual/libcrypt static-libs' >> "$portage/package.use/libcrypt.conf"
         # Preserve JIT support in libpcre2 to avoid a needless rebuild.
         echo 'dev-libs/libpcre2 jit' >> "$portage/package.use/libpcre2.conf"
         # Rust isn't built into the stage3 to bootstrap, but it can share LLVM.
@@ -679,7 +685,7 @@ then
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
         opt verity && USE=static-libs \
         emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose \
-            dev-libs/libaio sys-apps/util-linux
+            dev-libs/libaio sys-apps/util-linux virtual/libcrypt
         USE='-* device-mapper-only static' \
         emerge --buildpkg=n --jobs=4 --nodeps --oneshot --verbose \
             sys-apps/busybox \
@@ -1121,7 +1127,13 @@ function write_overlay() {
 
         # Fix tmpfiles dependencies.
         edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
-        edit sys-fs/lvm2 's/^EAPI=.*/EAPI=8/'
+        edit sys-fs/lvm2 's/^EAPI=.*/EAPI=8/;/TMPFILES_OPTIONAL\|virtual.tmpfiles/d'
+
+        # Fix NSS self-dependency.
+        edit dev-libs/nss 's,^BDEPEND=",&dev-libs/nss ,;/^EAPI="*[^"67]/aIDEPEND="dev-libs/nss"'
+
+        # Fix udev dependency ordering.
+        edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
 
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'

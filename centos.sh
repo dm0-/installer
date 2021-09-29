@@ -22,11 +22,11 @@ function create_buildroot() {
         packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
-#       $curl -L "$image.asc" > "$output/image.tar.xz.asc"
-        $curl -L "$image" > "$output/image.tar.xz"
-        verify_distro "$output/image.tar.xz"
-        $tar -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output"/image.tar.xz{.asc,}
+#       $curl -L "$image.asc" > "$output/image.txz.asc"
+        $curl -L "$image" > "$output/image.txz"
+        verify_distro "$output"/image.txz{.asc,}
+        $tar -C "$buildroot" -xJf "$output/image.txz"
+        $rm -f "$output"/image.txz{.asc,}
 
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
@@ -355,7 +355,7 @@ esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
-        $($sha256sum "$1") == $(case $DEFAULT_ARCH in
+        $($sha256sum "$2") == $(case $DEFAULT_ARCH in
             aarch64) echo 5beedefae3fcb64fa1e05d2facece2c764748791275e2d03f5be3518c7fd6429 ;;
             ppc64le) echo 01afd6f91e7e97e9ce1e137ddec2d665c70aec9398facec1d7eb92f1da7985fe ;;
             x86_64)  echo 6cc70032cb92991d1d916e8e77c2f3f6aedeacf0ba524af93bfac89c0a2438d9 ;;

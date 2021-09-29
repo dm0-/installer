@@ -20,11 +20,11 @@ function create_buildroot() {
         packages_buildroot+=(e2fsprogs openssl)
 
         $mkdir -p "$buildroot"
-#       $curl -L "$image.asc" > "$output/image.tar.xz.asc"
-        $curl -L "$image" > "$output/image.tar.xz"
-        verify_distro "$output/image.tar.xz"
-        $tar -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output"/image.tar.xz{.asc,}
+#       $curl -L "$image.asc" > "$output/image.txz.asc"
+        $curl -L "$image" > "$output/image.txz"
+        verify_distro "$output"/image.txz{.asc,}
+        $tar -C "$buildroot" -xJf "$output/image.txz"
+        $rm -f "$output"/image.txz{.asc,}
 
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/yum.conf"
@@ -252,7 +252,7 @@ esac
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
-        $($sha256sum "$1") == $(case $DEFAULT_ARCH in
+        $($sha256sum "$2") == $(case $DEFAULT_ARCH in
             aarch64)  echo 6db9d6b9c8122e9fe7e7fc422e630ee10ff8b671ea5c8f7f16017b9b1c012f67 ;;
             i[3-6]86) echo 5aba6af141b5c1c5218011470da2e75a9d93a0fff5b62a30cc277945cd12ba2b ;;
             ppc64le)  echo cc60b971d00aa3c57e0fc913de8317bcc74201af9bdbd8f5c85eedbd29b93abc ;;

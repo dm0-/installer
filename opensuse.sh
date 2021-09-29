@@ -20,10 +20,10 @@ function create_buildroot() {
         $mkdir -p "$buildroot"
         $curl -L "$image.sha256" > "$output/checksum"
         $curl -L "$image.sha256.asc" > "$output/checksum.sig"
-        $curl -L "$image" > "$output/image.tar.xz"
-        verify_distro "$output"/checksum{,.sig} "$output/image.tar.xz"
-        $tar -C "$buildroot" -xJf "$output/image.tar.xz"
-        $rm -f "$output"/checksum{,.sig} "$output/image.tar.xz"
+        $curl -L "$image" > "$output/image.txz"
+        verify_distro "$output"/checksum{,.sig} "$output/image.txz"
+        $tar -C "$buildroot" -xJf "$output/image.txz"
+        $rm -f "$output"/checksum{,.sig} "$output/image.txz"
 
         # Disable non-OSS packages by default.
         $sed -i -e '/^enabled=/s/=.*/=0/' "$buildroot/etc/zypp/repos.d/repo-non-oss.repo"
