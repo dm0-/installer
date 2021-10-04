@@ -29,7 +29,7 @@ function create_buildroot() {
 
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
-        $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*modular*.repo
+        $sed -i -e 's/^enabled=1.*/enabled=0/' "$buildroot"/etc/yum.repos.d/*{cisco,modular}*.repo
 
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
@@ -75,8 +75,8 @@ function distro_tweaks() {
         test -s root/etc/dnf/dnf.conf &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
-        compgen -G 'root/etc/yum.repos.d/*modular*.repo' &&
-        sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*modular*.repo
+        compgen -G 'root/etc/yum.repos.d/*cisco*.repo' &&
+        sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*{cisco,modular}*.repo
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
@@ -99,7 +99,8 @@ function configure_initrd_generation() if opt bootable
 then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
-        $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        $cat << EOF > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+add_drivers+=" ${options[ramdisk]:+loop} "
 compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"
@@ -319,7 +320,7 @@ EOF
 # OPTIONAL (IMAGE)
 
 function save_rpm_db() {
-        opt selinux && echo /usr/lib/rpm-db /var/lib/rpm >> root/etc/selinux/targeted/contexts/files/file_contexts.subs
+        opt selinux && echo /usr/lib/rpm-db /var/lib/rpm >> root/etc/selinux/targeted/contexts/files/file_contexts.subs_dist
         mv root/var/lib/rpm root/usr/lib/rpm-db
         echo > root/usr/lib/tmpfiles.d/rpm-db.conf \
             'L /var/lib/rpm - - - - ../../usr/lib/rpm-db'

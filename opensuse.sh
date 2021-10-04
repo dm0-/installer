@@ -42,6 +42,9 @@ function create_buildroot() {
         enter /usr/bin/zypper --non-interactive update
         enter /usr/bin/zypper --non-interactive \
             install --allow-vendor-change "${packages_buildroot[@]}"
+
+        # Don't block important file systems in the initrd.
+        $rm -f "$buildroot/usr/lib/modprobe.d/60-blacklist_fs-erofs.conf"
 }
 
 function install_packages() {
@@ -63,7 +66,7 @@ function install_packages() {
 }
 
 function distro_tweaks() {
-        rm -fr root/etc/init.d root/etc/modprobe.d/60-blacklist_fs-erofs.conf
+        rm -fr root/etc/init.d root/usr/lib/modprobe.d/60-blacklist_fs-erofs.conf
 
         test -s root/usr/share/systemd/tmp.mount &&
         mv -t root/usr/lib/systemd/system root/usr/share/systemd/tmp.mount
@@ -99,12 +102,13 @@ then
         test -s vmlinuz || cp -pt . /boot/vmlinuz
 fi
 
-# Override relabeling to add the missing disk driver and fix pthread_cancel.
+# Override relabeling to add the missing modules and fix pthread_cancel.
 eval "$(declare -f relabel | $sed \
     -e '/ldd/iopt squash && cp -t "$root/lib" /lib*/libgcc_s.so.1' \
     -e '/find/iln -fns busybox "$root/bin/insmod"\
-xz -cd /lib/modules/*/*/drivers/ata/ata_piix.ko.xz > "$root/lib/ata_piix.ko"\
-sed -i -e "/sda/iinsmod /lib/ata_piix.ko" "$root/init"')"
+local mod ; for mod in drivers/ata/ata_piix fs/{jbd2/jbd2,mbcache,ext4/ext4}\
+do xz -cd /lib/modules/*/*/"$mod.ko.xz" > "$root/lib/${mod##*/}.ko"\
+sed -i -e "/sda/iinsmod /lib/${mod##*/}.ko" "$root/init" ; done')"
 
 # Override kernel arguments to use SELinux instead of AppArmor.
 eval "$(
@@ -119,7 +123,8 @@ function configure_initrd_generation() if opt bootable
 then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
-        $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        $cat << EOF > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+add_drivers+=" ${options[ramdisk]:+loop} "
 compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"

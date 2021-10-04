@@ -501,7 +501,6 @@ EOF
             $(using media-libs/freetype harfbuzz && grep -Foxm1 media-libs/harfbuzz /root/xdeps) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
-            $(using sys-libs/libcap pam && using sys-libs/pam filecaps && grep -Foxm1 sys-libs/libcap /root/xdeps) \
             $(using media-libs/mesa gallium vaapi && using x11-libs/libva opengl && grep -Foxm1 x11-libs/libva /root/xdeps) \
             sys-apps/util-linux
 
@@ -1125,6 +1124,9 @@ function write_overlay() {
         # Fix sestatus installation with UsrMerge (or unified bindir, really).
         edit sys-apps/policycoreutils '/setfiles/ause split-usr || rm -f "${ED}/usr/sbin/sestatus"'
 
+        # Fix the libcap dependency.
+        edit sys-libs/pam 's/^EAPI=.*/EAPI=8/'
+
         # Fix tmpfiles dependencies.
         edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
         edit sys-fs/lvm2 's/^EAPI=.*/EAPI=8/;/TMPFILES_OPTIONAL\|virtual.tmpfiles/d'
@@ -1184,7 +1186,7 @@ function fix_package() {
                 echo 'dev-qt/* pkgconfig-redundant.conf' >> "$portage/package.env/qt.conf"
                 $cat << 'EOF' >> "$portage/package.use/vlc.conf"
 dev-qt/qtgui -dbus
-dev-qt/qtwidgets -gtk
+dev-qt/qtwidgets -dbus -gtk
 sys-libs/zlib minizip
 EOF
                 ;;

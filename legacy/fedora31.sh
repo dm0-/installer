@@ -5,6 +5,10 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=31).
 eval "$(declare -f create_buildroot | $sed -e 's/cver=.*/cver=1.9/' \
     -e 's,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,')"
 
+# Override repository definitions to ignore disabled cisco stuff.
+eval "$(declare -f create_buildroot distro_tweaks |
+$sed 's/[^*]*cisco[^*]*/modular/')"
+
 # Override ramdisk creation since the kernel is too old to support zstd.
 eval "$(declare -f create_buildroot | $sed 's/ zstd//')"
 eval "$(declare -f configure_initrd_generation | $sed /compress=/d)"

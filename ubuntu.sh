@@ -135,7 +135,8 @@ function configure_initrd_generation() if opt bootable
 then
         # Don't expect that the build system is the target system.
         $mkdir -p "$buildroot/etc/dracut.conf.d"
-        $cat << 'EOF' > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+        $cat << EOF > "$buildroot/etc/dracut.conf.d/99-settings.conf"
+add_drivers+=" ${options[ramdisk]:+loop} "
 compress="zstd --threads=0 --ultra -22"
 hostonly="no"
 reproducible="yes"

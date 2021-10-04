@@ -31,6 +31,7 @@ packages+=(
         lsof
         man-{db,pages}
         p7zip
+        pinentry
         strace
         tar
         unzip

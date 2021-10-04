@@ -574,7 +574,7 @@ EOF
 
         opt selinux && local policy &&
         for policy in root/etc/selinux/*/contexts/files
-        do echo /run/etcgo/overlay /etc >> "$policy/file_contexts.subs"
+        do echo /run/etcgo/overlay /etc >> "$policy/file_contexts.subs_dist"
         done
 
         if test -x root/usr/bin/git
@@ -587,13 +587,13 @@ RefuseManualStop=yes
 
 [Service]
 ExecStartPre=/bin/bash -c "if ! compgen -G '*' > /dev/null ; then \
-/usr/bin/git init --bare ; \
+git -c init.defaultBranch=master init --bare ; \
 echo 'System configuration overlay tracker' > description ; \
 echo -e '[user]\n\tname = root\n\temail = root@localhost' >> config ; \
-/usr/bin/git --work-tree=/ commit --allow-empty --message='Repository created' ; \
+cp -pt hooks /usr/share/etcgo/post-checkout ; \
+exec git --work-tree=/ commit --allow-empty --message='Repository created' ; \
 fi"
 ExecStart=/usr/bin/git worktree add --force -B master ../../../run/etcgo/overlay master
-ExecStartPost=-/usr/sbin/restorecon -vFR /run/etcgo/overlay
 RemainAfterExit=yes
 RuntimeDirectory=etcgo etcgo/overlay etcgo/wd
 RuntimeDirectoryPreserve=yes
@@ -602,6 +602,30 @@ StateDirectoryMode=0700
 Type=oneshot
 WorkingDirectory=/var/lib/etcgo
 EOF
+                mkdir -p root/usr/share/etcgo
+                cat << 'EOF' > root/usr/share/etcgo/post-checkout
+#!/bin/bash -eu
+selinuxenabled &> /dev/null && restorecon -FR . || :
+[[ ! -s .gitattributes ]] || while read -a attrs
+do
+        [[ -n ${attrs-} && $attrs != \#* ]] || continue
+
+        args=(-path)
+        [[ $attrs == /* ]] && args+=(".$attrs") || args+=("*/$attrs")
+
+        for attr in "${attrs[@]:1}"
+        do
+                case $attr in
+                    owner=*) args+=(-exec chown "${attr#*=}" {} +) ;;
+                    group=*) args+=(-exec chgrp "${attr#*=}" {} +) ;;
+                    mode=*) args+=(-exec chmod "${attr#*=}" {} +) ;;
+                esac
+        done
+
+        find . "${args[@]}" > /dev/null
+done < .gitattributes
+EOF
+                chmod 0755 root/usr/share/etcgo/post-checkout
                 rm -f root/usr/lib/systemd/system/etc-overlay-setup.service
                 sed -i -e s/-overlay-setup/go/ root/usr/lib/systemd/system/etc.mount
         fi
@@ -635,6 +659,9 @@ EOF
         echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime
+
+        test -s root/usr/lib/systemd/system/docker.socket &&
+        ln -fst root/usr/lib/systemd/system/sockets.target.wants ../docker.socket
 
         # WORKAROUNDS
 
@@ -874,7 +901,7 @@ function store_home_on_var() {
         for policy in root/etc/selinux/*/contexts/files
         do
                 grep -qs ^/var/home "$policy/file_contexts.subs_dist" ||
-                echo /var/home /home >> "$policy/file_contexts.subs"
+                echo /var/home /home >> "$policy/file_contexts.subs_dist"
         done
         mv root/home root/var/home ; ln -fns var/home root/home
         echo 'Q /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf
@@ -883,7 +910,7 @@ function store_home_on_var() {
                 opt selinux && for policy in root/etc/selinux/*/contexts/files
                 do
                         grep -qs ^/var/roothome "$policy/file_contexts.subs_dist" ||
-                        echo /var/roothome /root >> "$policy/file_contexts.subs"
+                        echo /var/roothome /root >> "$policy/file_contexts.subs_dist"
                 done
                 mv root/root root/var/roothome ; ln -fns var/roothome root/root
                 cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
