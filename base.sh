@@ -371,7 +371,7 @@ then
         local -A verity
         local -a opt_params=()
         local root=/dev/sda
-        ! (( size % 4096 ))
+        (( !(size % 4096) ))
 
         opt partuuid && root=PARTUUID=${options[partuuid]}
         opt ramdisk && root=/dev/loop0
@@ -659,9 +659,6 @@ EOF
         echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
         ln -fns ../usr/share/zoneinfo/America/New_York root/etc/localtime
-
-        test -s root/usr/lib/systemd/system/docker.socket &&
-        ln -fst root/usr/lib/systemd/system/sockets.target.wants ../docker.socket
 
         # WORKAROUNDS
 

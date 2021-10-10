@@ -38,7 +38,8 @@ opt selinux && echo -e '\ngentoo:features/selinux')
 EOF
         echo "$buildroot"/etc/env.d/gcc/config-* | $sed 's,.*/[^-]*-\(.*\),\nCBUILD="\1",' >> "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
-FEATURES="\$FEATURES multilib-strict parallel-fetch parallel-install xattr -merge-sync -network-sandbox -news -selinux"
+EMERGE_DEFAULT_OPTS="--jobs=$(c=(/sys/devices/system/cpu/cpu[0-9]*);for((n=${#c[@]}>>2,p=2;p<n;p<<=1))do :;done;echo $p)"
+FEATURES="multilib-strict parallel-fetch parallel-install xattr -merge-sync -network-sandbox -news -selinux"
 GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}"
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
@@ -247,13 +248,18 @@ PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
 SYSROOT="$ROOT"
 USE="$USE -kmod -multiarch -static -static-libs"
 EOF
+        $cat << 'EOF' >> "$portage/package.use/gnutls.conf"
+# When a package requires a single TLS implementation, standardize on GnuTLS.
+net-misc/curl gnutls -curl_ssl_* curl_ssl_gnutls
+net-misc/networkmanager gnutls -nss
+EOF
         $cat << 'EOF' >> "$portage/package.use/kill.conf"
 # Use the kill command from util-linux to minimize systemd dependencies.
 sys-apps/util-linux kill
 sys-process/procps -kill
 EOF
         $cat << 'EOF' >> "$portage/package.use/nftables.conf"
-# Use the newer backend in iptables without switching applications to nftables.
+# Use the newer backend in iptables.
 net-firewall/iptables nftables
 EOF
         $cat << 'EOF' >> "$portage/package.use/portage.conf"
@@ -287,7 +293,6 @@ gnome-base/gnome-settings-daemon meson-pkgconfig.conf
 gnome-base/librsvg cross-emake-utils.conf
 net-libs/libmbim cross-emake-utils.conf
 net-misc/modemmanager cross-emake-utils.conf
-net-misc/networkmanager cross-emake-utils.conf
 net-wireless/wpa_supplicant cross-libnl.conf
 sys-apps/coreutils cross-gmp.conf
 x11-drivers/xf86-input-libinput xf86-sdk.conf
@@ -423,7 +428,7 @@ write_overlay /var/db/repos/fixes
 # Update the native build root packages to the latest versions.
 echo 'media-libs/harfbuzz -* truetype' > /etc/portage/package.use/harfbuzz.conf
 qlist media-libs/freetype > /dev/null || echo 'media-libs/freetype -*' >> /etc/portage/package.use/harfbuzz.conf
-emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
+emerge --changed-use --deep --update --verbose --with-bdeps=y \
     @world media-libs/harfbuzz sys-devel/crossdev
 echo 'media-libs/freetype harfbuzz' > /etc/portage/package.use/harfbuzz.conf
 
@@ -432,7 +437,7 @@ export {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host"
 mkdir -p "$ROOT"/usr/{bin,src}
 ln -fns bin "$ROOT/usr/sbin"
 ln -fst "$ROOT" usr/{bin,sbin}
-emerge --jobs=4 --nodeps --oneshot --verbose sys-apps/baselayout
+emerge --nodeps --oneshot --verbose sys-apps/baselayout
 stable=$(portageq envvar ACCEPT_KEYWORDS | grep -Fqs -e '~' -e '**' || echo 1)
 unset {PORTAGE_CONFIG,,SYS}ROOT
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
@@ -442,7 +447,7 @@ EOG
 crossdev ${stable:+--stable} --target "$host"
 
 # Install all requirements for building the target image.
-exec emerge --changed-use --jobs=4 --update --verbose "$@"
+exec emerge --changed-use --update --verbose "$@"
 EOF
 
         build_relabel_kernel
@@ -491,13 +496,13 @@ EOF
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
-        COLLISION_IGNORE='*' USE=-selinux emerge --jobs=4 --oneshot --verbose \
+        COLLISION_IGNORE='*' USE=-selinux emerge --oneshot --verbose \
             sys-devel/gcc virtual/libc virtual/os-headers
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
         # Cheat bootstrapping packages with circular dependencies.
         deepdeps "${packages[@]}" "${packages_sysroot[@]}" "$@" | sed 's/-[0-9].*//' > /root/xdeps
-        USE='-* drm kill nettle truetype' emerge --changed-use --jobs=4 --oneshot --verbose \
+        USE='-* drm kill nettle truetype' emerge --changed-use --oneshot --verbose \
             $(using media-libs/freetype harfbuzz && grep -Foxm1 media-libs/harfbuzz /root/xdeps) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
@@ -505,7 +510,7 @@ EOF
             sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
-        emerge --changed-use --deep --jobs=4 --update --verbose --with-bdeps=y \
+        emerge --changed-use --deep --update --verbose --with-bdeps=y \
             "${packages[@]}" "${packages_sysroot[@]}" "$@"
 
         # Without GDB, assume debuginfo is unwanted to be like other distros.
@@ -630,7 +635,7 @@ eval "$(declare -f squash | $sed \
 function save_boot_files() if opt bootable
 then
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
-        opt uefi && USE=gnuefi emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose sys-apps/systemd
+        opt uefi && USE=gnuefi emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
         opt uefi && test ! -s logo.bmp &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
         magick -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
@@ -662,7 +667,7 @@ EOF
                 if opt monolithic
                 then
                         chgrp portage /root ; chmod g+x /root
-                        emerge --buildpkg=n --jobs=4 --oneshot --verbose \
+                        emerge --buildpkg=n --oneshot --verbose \
                             sys-kernel/gentoo-kernel
                         chgrp root /root ; chmod g-x /root
                 fi
@@ -683,10 +688,10 @@ then
         # Cross-compile minimal static tools required for the initrd.
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
         opt verity && USE=static-libs \
-        emerge --buildpkg=n --changed-use --jobs=4 --oneshot --verbose \
+        emerge --buildpkg=n --changed-use --oneshot --verbose \
             dev-libs/libaio sys-apps/util-linux virtual/libcrypt
         USE='-* device-mapper-only static' \
-        emerge --buildpkg=n --jobs=4 --nodeps --oneshot --verbose \
+        emerge --buildpkg=n --nodeps --oneshot --verbose \
             sys-apps/busybox \
             ${options[verity]:+sys-fs/lvm2} \
             ${options[verity_sig]:+sys-apps/keyutils}
@@ -1136,6 +1141,9 @@ function write_overlay() {
 
         # Fix udev dependency ordering.
         edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
+
+        # Fix NetworkManager configuration.
+        edit net-misc/networkmanager '/docs/s/true/use_bool introspection/'
 
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'

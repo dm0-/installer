@@ -145,8 +145,8 @@ EOF
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv/opensbi/archive/v0.9.tar.gz > "$buildroot/root/opensbi.tgz"
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2021.07.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 6cc8e2c9ed8898750c8979e0f75317818c1a7493b21f8ba4154f88888b675b5f\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2021.10.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == b105ea21bb5694f779feb38bd4ba444d02c06fc10ae9ee46e031f8c88861c250\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
@@ -191,7 +191,7 @@ function customize() {
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
         # Build U-Boot to provide UEFI.
-        tar --transform='s,^/*[^/]*,u-boot,' -C /root -xf /root/u-boot.tgz
+        tar --transform='s,^/*u[^/]*,u-boot,' -C /root -xf /root/u-boot.tgz
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
@@ -200,7 +200,7 @@ EOF
         make -C /root/u-boot -j"$(nproc)" all CROSS_COMPILE="$host-" V=1
 
         # Build OpenSBI with a U-Boot payload for the firmware image.
-        tar --transform='s,^/*[^/]*,opensbi,' -C /root -xf /root/opensbi.tgz
+        tar --transform='s,^/*o[^/]*,opensbi,' -C /root -xf /root/opensbi.tgz
         make -C /root/opensbi -j"$(nproc)" all \
             CROSS_COMPILE="$host-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
         cp -p /root/opensbi/build/platform/generic/firmware/fw_payload.bin opensbi-uboot.bin
