@@ -754,6 +754,34 @@ function write_unconditional_patches() {
              die("Don't know how to translate {} for rustc".format(
 EOF
 
+        $mkdir -p "$patches/cross-${options[host]}/gcc" "$patches/sys-devel/gcc"
+        $cat << 'EOF' > "$patches/sys-devel/gcc/cross.patch"
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100017
+--- a/configure.ac
++++ b/configure.ac
+@@ -3515,7 +3515,7 @@
+ ACX_CHECK_INSTALLED_TARGET_TOOL(WINDRES_FOR_TARGET, windres)
+ ACX_CHECK_INSTALLED_TARGET_TOOL(WINDMC_FOR_TARGET, windmc)
+ 
+-RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
++RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET -nostdinc++"
+ 
+ GCC_TARGET_TOOL(ar, AR_FOR_TARGET, AR, [binutils/ar])
+ GCC_TARGET_TOOL(as, AS_FOR_TARGET, AS, [gas/as-new])
+--- a/configure
++++ b/configure
+@@ -16653,7 +16653,7 @@
+ fi
+ 
+ 
+-RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
++RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET -nostdinc++"
+ 
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking where to find the target ar" >&5
+ $as_echo_n "checking where to find the target ar... " >&6; }
+EOF
+        $ln -fst "$patches/cross-${options[host]}/gcc" "../../sys-devel/gcc/cross.patch"
+
         $mkdir -p "$patches/www-client/firefox"
         $cat << 'EOF' > "$patches/www-client/firefox/rust.patch"
 --- a/build/moz.configure/rust.configure

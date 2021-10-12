@@ -9,6 +9,8 @@ then
 
         # Disable things that store and send your confidential information.
         cat << 'EOF' > "$dir/privacy.js"
+// Prevent Mozilla from experimenting on default settings.
+pref("app.normandy.enabled", false);
 // Opt out of allowing Mozilla to install random studies.
 pref("app.shield.optoutstudies.enabled", false);
 // Disable the beacon API for analytical trash.
@@ -22,6 +24,9 @@ pref("browser.newtabpage.enabled", false);
 pref("browser.search.suggest.enabled", false);
 // Don't download autocomplete URLs.
 pref("browser.urlbar.speculativeConnect.enabled", false);
+// Don't send URL bar keystrokes to advertisers.
+pref("browser.urlbar.suggest.quicksuggest", false);
+pref("browser.urlbar.suggest.quicksuggest.sponsored", false);
 // Don't send information to Mozilla.
 pref("datareporting.healthreport.uploadEnabled", false);
 // Never give up laptop battery information.

@@ -68,6 +68,9 @@ function distro_tweaks() {
         test -s root/etc/dnf/dnf.conf &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
+        test -s root/etc/locale.conf ||
+        echo LANG=C.UTF-8 > root/etc/locale.conf
+
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
 
