@@ -528,7 +528,7 @@ EOF
         do
                 test -s "root/etc/pam.d/$name" &&
                 echo >> "root/etc/pam.d/$name" \
-                    'session     required      pam_mkhomedir.so' &&
+                    'session     optional      pam_mkhomedir.so' &&
                 break || continue
         done
 

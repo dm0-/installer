@@ -9,7 +9,7 @@
 # This script implements an option to demonstrate supporting the proprietary
 # NVIDIA drivers on the host system.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.04 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
 
 packages+=(
         libasound2-plugins
@@ -24,9 +24,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then
-        echo 'deb http://archive.ubuntu.com/ubuntu/ impish restricted' >> /etc/apt/sources.list
-        packages+=(libnvidia-gl-470)
+then packages+=(libnvidia-gl-470)
 fi
 
 function customize() {

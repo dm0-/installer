@@ -1138,6 +1138,10 @@ function write_overlay() {
         sed -e '/^kernel-install_pkg_preinst/a[[ ${MERGE_TYPE} == binary ]] && return' \
             "$gentoo/eclass/kernel-install.eclass" > "$overlay/eclass/kernel-install.eclass"
 
+        # Support building kernel modules in a sysroot.
+        sed -e 's,\(KERNEL_DIR:=\)\(/usr/src\),\1${ROOT%/}\2,' \
+            "$gentoo/eclass/linux-mod.eclass" > "$overlay/eclass/linux-mod.eclass"
+
         # Support compiling basic qt5 packages in a sysroot.
         sed \
             -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \

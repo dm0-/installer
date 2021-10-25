@@ -54,7 +54,7 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Feature Support
 
-Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (33 and the default 34), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (20.10 and the default 21.04).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
+Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (33 and the default 34), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (21.04 and the default 21.10).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
 
 | Status         | Definition                                     |
 | :---:          | :---                                           |

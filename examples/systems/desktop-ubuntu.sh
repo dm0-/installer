@@ -35,6 +35,7 @@ packages+=(
         strace
         tar
         unzip
+        xz-utils
         ## Accounts
         sudo
         ## Hardware
@@ -60,7 +61,8 @@ packages+=(
         sshfs
 
         # Host
-        qemu-kvm
+        ovmf
+        qemu-{kvm,system-gui}
         systemd-container
 
         # GNOME
@@ -76,7 +78,8 @@ packages+=(
         gnome-session
         gnome-terminal
         gucharmap
-        network-manager-config-connectivity-ubuntu
+        network-manager-gnome
+        pipewire-{media-session,pulse}
 
         # Graphics
         mesa-{va,vdpau,vulkan}-drivers

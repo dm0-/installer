@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 packages_buildroot=()
 
-DEFAULT_RELEASE=21.04
+DEFAULT_RELEASE=21.10
 
 function create_buildroot() {
-        local -Ar releasemap=([20.04]=focal [20.10]=groovy [21.04]=hirsute)
+        local -Ar releasemap=([20.04]=focal [20.10]=groovy [21.04]=hirsute [21.10]=impish)
         local -r release=${options[release]:=$DEFAULT_RELEASE}
         local -r name=${releasemap[$release]?Unsupported release version}
         local -r image="https://cloud-images.ubuntu.com/minimal/releases/$name/release/ubuntu-$release-minimal-cloudimg-$(archmap)-root.tar.xz"
@@ -14,17 +14,23 @@ function create_buildroot() {
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86 zstd)
-        opt uefi && packages_buildroot+=(binutils imagemagick ubuntu-mono)
+        opt uefi && packages_buildroot+=(binutils imagemagick librsvg2-bin ubuntu-mono)
         opt verity_sig && opt bootable && packages_buildroot+=(keyutils linux-headers-generic)
         packages_buildroot+=(debootstrap libglib2.0-bin)
 
         $mkdir -p "$buildroot"
-        $curl -L "${image%/*}/SHA256SUMS" > "$output/checksum"
-        $curl -L "${image%/*}/SHA256SUMS.gpg" > "$output/checksum.sig"
+        $curl -L "${image%/*}/SHA256SUMS.gpg" > "$output/checksum.gpg"
         $curl -L "$image" > "$output/image.txz"
-        verify_distro "$output"/checksum{,.sig} "$output/image.txz"
+        verify_distro "$output"/checksum.gpg "$output/image.txz"
         $tar --exclude=etc/resolv.conf -C "$buildroot" -xJf "$output/image.txz"
-        $rm -f "$output"/checksum{,.sig} "$output/image.txz"
+        $rm -f "$output"/checksum.gpg "$output/image.txz"
+
+        # Configure the package manager to behave sensibly.
+        $cat << 'EOF' >> "$buildroot/etc/apt/apt.conf.d/50fix-apt"
+Acquire::Retries "5";
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+EOF
 
         configure_initrd_generation
         initialize_buildroot "$@"
@@ -32,8 +38,8 @@ function create_buildroot() {
         script "${packages_buildroot[@]}" << 'EOF'
 export DEBIAN_FRONTEND=noninteractive INITRD=No
 apt-get update
-apt-get --assume-yes --option=Acquire::Retries=5 upgrade --with-new-pkgs
-exec apt-get --assume-yes --option=Acquire::Retries=5 install "$@"
+apt-get --assume-yes upgrade --with-new-pkgs
+exec apt-get --assume-yes install "$@"
 EOF
 
         # Fix the old pesign option name.
@@ -57,13 +63,20 @@ function install_packages() {
             "$(sed -n s/^UBUNTU_CODENAME=//p /etc/os-release)" \
             root http://archive.ubuntu.com/ubuntu
 
+        # Configure the package manager to behave sensibly.
+        cat << 'EOF' >> root/etc/apt/apt.conf.d/50fix-apt
+Acquire::Retries "5";
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+EOF
+
         local -rx DEBIAN_FRONTEND=noninteractive INITRD=No
         cp -p {,root}/etc/apt/sources.list
         for dir in dev proc sys ; do mount --bind {,root}/"$dir" ; done
         trap -- 'umount root/{dev,proc,sys,var/cache/apt} ; trap - RETURN' RETURN
         chroot root /usr/bin/apt-get update
-        chroot root /usr/bin/apt-get --assume-yes --option=Acquire::Retries=5 upgrade --with-new-pkgs
-        chroot root /usr/bin/apt-get --assume-yes --option=Acquire::Retries=5 install "${packages[@]}" "$@"
+        chroot root /usr/bin/apt-get --assume-yes upgrade --with-new-pkgs
+        chroot root /usr/bin/apt-get --assume-yes install "${packages[@]}" "$@"
 
         dpkg-query --show > packages-buildroot.txt
         dpkg-query --admindir=root/var/lib/dpkg --show > packages.txt
@@ -240,8 +253,8 @@ function verify_distro() {
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
-        $gpg --verify "$2"
-        [[ $($sha256sum "$3") == $($sed -n 's/ .*root.tar.xz$//p' "$1")\ * ]]
+        $gpg --decrypt "$1" | $sed -n 's/ .*root.tar.xz$//p' |
+        [[ $($sha256sum "$2") == $(</dev/stdin)\ * ]]
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 

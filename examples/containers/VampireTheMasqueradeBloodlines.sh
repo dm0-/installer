@@ -12,9 +12,14 @@
 # This script implements an option to demonstrate supporting the proprietary
 # NVIDIA drivers on the host system.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.04 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
 
-packages+=(wine32-development)
+packages+=(
+        dxvk
+        libglu1
+        libxcomposite1
+        wine-development
+)
 
 packages_buildroot+=(innoextract jq)
 
@@ -24,9 +29,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then
-        echo 'deb http://archive.ubuntu.com/ubuntu/ impish restricted' >> /etc/apt/sources.list
-        packages+=(libnvidia-gl-470)
+then packages+=(libnvidia-gl-470)
 fi
 
 function customize() {
