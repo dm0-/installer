@@ -66,7 +66,7 @@ function initialize_buildroot() {
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
-            acl caps cracklib fido2 fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
+            acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
@@ -88,11 +88,6 @@ sys-apps/util-linux static-libs
 sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
-
-        # Accept the latest glibc and prevent downgrading during bootstrapping.
-        echo -e "app-misc/pax-utils ~*\n<cross-${options[host]}/glibc-9999 **" >> "$buildroot/etc/portage/package.accept_keywords/glibc.conf"
-        echo '<sys-libs/glibc-9999 **' >> "$portage/package.accept_keywords/glibc.conf"
-        echo '<virtual/libcrypt-2' >> "$portage/package.mask/glibc.conf"
 
         # Fix the spidermonkey linker since gold does not exist for riscv.
         echo 'EXTRA_ECONF="--enable-linker=bfd"' >> "$portage/env/spidermonkey.conf"

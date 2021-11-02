@@ -11,7 +11,7 @@
 # implements an option to demonstrate supporting the proprietary NVIDIA drivers
 # on the host system.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 packages_buildroot=()
 
-DEFAULT_RELEASE=34
+DEFAULT_RELEASE=35
 
 function create_buildroot() {
         local -r cver=1.2
@@ -40,6 +40,12 @@ function create_buildroot() {
         $cp -a "$buildroot"/etc/resolv.conf{,.orig}
         script "${packages_buildroot[@]}" << 'EOF'
 dnf --assumeyes --setopt=tsflags=nodocs upgrade
+if grep -Fqsx VERSION_ID=35 /etc/os-release
+then
+        dnf --assumeyes --setopt=tsflags=nodocs install dnf-plugins-core
+        dnf --disablerepo='*' --enablerepo=updates --releasever=34 download shadow-utils
+        set -- "$@" ./shadow-utils-*.rpm
+fi
 dnf --assumeyes --setopt=tsflags=nodocs install "$@"
 for fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done
 EOF
@@ -198,32 +204,32 @@ function verify_distro() {
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBF8sAZIBEADKYvLg/5FdLXcVryAFd7Q8qrJq23R7ebxUT1u48Dc8xrsfYJZq
-aMcna/xw47wZNyek4Z6YpzqfmnjR7H8yRH/1hAPi/ixYnA6DVL7O3eGE5lYGJzN3
-E2ILTzBOI9o/pavvtOqW9N5WIus8cqSdA921v8YPzr3/BTKgGqC9biOrMA+3sNoe
-U4T+dztLg20SyBTr/rBH0eui2p/ipvIRuJvHLTKTubR+yG804yupI69M6qFBDebT
-rm+CBmwVyj/DY/92LgvCgYqV/TL5FU4qvtyB6jd8JkEeaz/G7UmDRB5JqzKEu6TB
-N3SY7nwLiRpIaXet1TWVW/8UKSB2JvYt1LbZyEO82/QOIXxqvV6h3kuBI21RvURz
-VxEjRlvPRGHMZ80OoAQqNPkLnVTcX1eLj2ClbwoXCmXFSm72cCCt1SzcAmlaWh8E
-rXSUZfs7XqkBrbphXHZ1e6Vxjt/RyKC5doklfOhbuF8gJ31CPo/kuOjFrHGzOwgi
-Llec+GHGMfI/cUOu59qo3W85GHsntvEMk83QLkKjBInEYjZSAajp/lS4QF+SD4pl
-Qj6Vc1mMCmci61cXX5CcIl1YxNJZzUfZEZNbUjDajqGzkYJoG9n2yJB0w4OiqsAe
-ZCirmUIeDUNeI082epc4RFuV33hByGYY9kRWSyM+aCF6PYVISj4l1o9KcQARAQAB
-tDFGZWRvcmEgKDM0KSA8ZmVkb3JhLTM0LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
-cmc+iQJOBBMBCAA4FiEEjFummQvbJuGfKhqAEWGuaUVxmjkFAl8sAZICGw8FCwkI
-BwIGFQoJCAsCBBYCAwECHgECF4AACgkQEWGuaUVxmjlVuA//QnMA02tydqwpM7r4
-WZ4OvlVqFWHhn3oDaBSwBvn6R1oC0MWbr79nnFDn3tpSkZDUdb7wyArmaF8kG8tI
-wit5xD/JAzqRBVa9z2hY3n1SFafU/hp3DwbGIL4vLUv3fRayCgWsGhGp0tZvDC9q
-PSvQZ675XpRG4pt/TGJB5gGXw7Jxoae/ffaJeblLLRDlSV/bKJt9sYpdu5InDG2i
-yIUHfamtYQtnENKL/bN6w7tU/IEgCHqxPmPRiJ0gTUAi5Yabp1+JHqskE85Hm2QF
-xMonX595Ry1yZzCjPGhCPAknJ4BhisXV+E/iV3Jyh8vxbJCo1//ygd1Xz8SkCuu/
-I0xPtFcVSIP2ikYpJwR2nwwQlLbQYIGCw/S1LV725oEYm/Z1xQ5zha2hBB+fxSwz
-7MHsD2XIHrP8NNwt3ywG3NV/BSSkvSSStGUNcQyGRi3O/x/BEIRtWRxgoNO9o3jE
-xtWFq3G5+gKY+wfYz/cTGlsWPDG7Fzx4lNisIGATKtLNqdedl7LASPK93z0XDdnS
-kfKF0HrT9rdzIKRu4xWatUVIq/65Gv7nsavdsRAQL/Y0jl6sjjQac/Te5J0fByHY
-6tGG1W0UWTd0rzFWitEZI/64/Bs83rGhjJNLqWXItZ5VqLe0TWzuxvRFLfM7oX8r
-n5Si4l7NpIJubWPqjPoCoP5lsS8=
-=V2FG
+mQINBGAcScoBEADLf8YHkezJ6adlMYw7aGGIlJalt8Jj2x/B2K+hIfIuxGtpVj7e
+LRgDU76jaT5pVD5mFMJ3pkeneR/cTmqqQkNyQshX2oQXwEzUSb1CNMCfCGgkX8Q2
+zZkrIcCrF0Q2wrKblaudhU+iVanADsm18YEqsb5AU37dtUrM3QYdWg9R+XiPfV8R
+KBjT03vVBOdMSsY39LaCn6Ip1Ovp8IEo/IeEVY1qmCOPAaK0bJH3ufg4Cueks+TS
+wQWTeCLxuZL6OMXoOPKwvMQfxbg1XD8vuZ0Ktj/cNH2xau0xmsAu9HJpekvOPRxl
+yqtjyZfroVieFypwZgvQwtnnM8/gSEu/JVTrY052mEUT7Ccb74kcHFTFfMklnkG/
+0fU4ARa504H3xj0ktbe3vKcPXoPOuKBVsHSv00UGYAyPeuy+87cU/YEhM7k3SVKj
+6eIZgyiMO0wl1YGDRKculwks9A+ulkg1oTb4s3zmZvP07GoTxW42jaK5WS+NhZee
+860XoVhbc1KpS+jfZojsrEtZ8PbUZ+YvF8RprdWArjHbJk2JpRKAxThxsQAsBhG1
+0Lux2WaMB0g2I5PcMdJ/cqjo08ccrjBXuixWri5iu9MXp8qT/fSzNmsdIgn8/qZK
+i8Qulfu77uqhW/wt2btnitgRsqjhxMujYU4Zb4hktF8hKU/XX742qhL5KwARAQAB
+tDFGZWRvcmEgKDM1KSA8ZmVkb3JhLTM1LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
+cmc+iQJOBBMBCAA4FiEEeH6mrhFH7uVsQLMM20Y5cZhnxY8FAmAcScoCGw8FCwkI
+BwIGFQoJCAsCBBYCAwECHgECF4AACgkQ20Y5cZhnxY+NYA/7BYpglySAZYHhjyKh
+/+f6zPfVvbH20Eq3kI7OFBN0nLX+BU1muvS+qTuS3WLrB3m3GultpKREJKLtm5ED
+1rGzXAoT1yp9YI8LADdMCCOyjAjsoWU87YUuC+/bnjrTeR2LROCfyPC76W985iOV
+m5S+bsQDw7C2LrldAM4MDuoyZ1SitGaZ4KQLVt+TEa14isYSGCjzo7PY8V3JOk50
+gqWg82N/bm2EzS7T83WEDb1lvj4IlvxgIqKeg11zXYxmrYSZJJCfvzf+lNS6uxgH
+jx/J0ylZ2LibGr6GAAyO9UWrAZSwSM0EcjT8wECnxkSDuyqmWwVvNBXuEIV8Oe3Y
+MiU1fJN8sd7DpsFx5M+XdnMnQS+HrjTPKD3mWrlAdnEThdYV8jZkpWhDys3/99eO
+hk0rLny0jNwkauf/iU8Oc6XvMkjLRMJg5U9VKyJuWWtzwXnjMN5WRFBqK4sZomMM
+ftbTH1+5ybRW/A3vBbaxRW2t7UzNjczekSZEiaLN9L/HcJCIR1QF8682DdAlEF9d
+k2gQiYSQAaaJ0JJAzHvRkRJLLgK2YQYiHNVy2t3JyFfsram5wSCWOfhPeIyLBTZJ
+vrpNlPbefsT957Tf2BNIugzZrC5VxDSKkZgRh1VGvSIQnCyzkQy6EU2qPpiW59G/
+hPIXZrKocK3KLS9/izJQTRltjMA=
+=PfT7
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 
@@ -322,6 +328,7 @@ EOF
 function save_rpm_db() {
         opt selinux && echo /usr/lib/rpm-db /var/lib/rpm >> root/etc/selinux/targeted/contexts/files/file_contexts.subs_dist
         mv root/var/lib/rpm root/usr/lib/rpm-db
+        ln -fns ../../usr/lib/rpm-db root/var/lib/rpm
         echo > root/usr/lib/tmpfiles.d/rpm-db.conf \
             'L /var/lib/rpm - - - - ../../usr/lib/rpm-db'
 

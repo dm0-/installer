@@ -14,7 +14,7 @@
 # This script implements an experimental function to minimize the container by
 # removing every file that is not explicitly required.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=34 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
