@@ -119,12 +119,8 @@ EOF
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gui -networkmanager -wifi'"'
-
-        # Pass FPU flags through LDFLAGS so this package works with LTO.
-        echo "LDFLAGS=\"\${LDFLAGS} $($sed -n 's/^COMMON_FLAGS=.* \(-mfpu=[^" ]*\).*/\1/p' "$portage/make.conf")\"" >> "$portage/env/ldflags-fpu.conf"
-        echo 'media-libs/libvpx ldflags-fpu.conf' >> "$portage/package.env/fix-cross-compiling.conf"
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
@@ -133,7 +129,7 @@ EOF
 function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -X'"'
 
         # Download an NVRAM file for the wireless driver.
         local -r commit=ce86506f6ee3f4d1fc9e9cdc2c36645a6427c223  # Initial import in overlays.
@@ -416,6 +412,7 @@ CONFIG_PHY_ROCKCHIP_USB=y
 ## GPIO
 CONFIG_GPIO_CDEV=y
 CONFIG_GPIO_CDEV_V1=y
+CONFIG_GPIO_ROCKCHIP=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y

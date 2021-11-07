@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=34).
 
+# Override the resolved provider for when it was bundled with systemd.
+eval "$(declare -f install_packages | $sed 's/ systemd-resolved//')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN

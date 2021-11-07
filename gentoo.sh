@@ -159,8 +159,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/llvm.conf"
 # Make clang use its own linker by default.
 sys-devel/clang default-lld
-# Build gold support for LLVM to match binutils.
-sys-devel/llvm gold
 EOF
         $cat << 'EOF' >> "$portage/package.use/selinux.conf"
 # Don't pull in qt5 for SELinux tools.
@@ -426,11 +424,8 @@ write_overlay /var/db/repos/fixes
 (cd /var/db/repos/gentoo/eclass ; exec ln -fst . ../../fixes/eclass/*)
 
 # Update the native build root packages to the latest versions.
-echo 'media-libs/harfbuzz -* truetype' > /etc/portage/package.use/harfbuzz.conf
-qlist media-libs/freetype > /dev/null || echo 'media-libs/freetype -*' >> /etc/portage/package.use/harfbuzz.conf
 emerge --changed-use --deep --update --verbose --with-bdeps=y \
-    @world media-libs/harfbuzz sys-devel/crossdev
-echo 'media-libs/freetype harfbuzz' > /etc/portage/package.use/harfbuzz.conf
+    @world sys-devel/crossdev
 
 # Create the sysroot layout and cross-compiler toolchain.
 export {PORTAGE_CONFIG,,SYS}ROOT="/usr/$host"
@@ -593,8 +588,8 @@ EndSection
 EOF
 
         # Don't hijack key presses for searching in the web browser.
-        compgen -G 'root/usr/lib*/firefox/browser/defaults/preferences/all-gentoo.js' &&
-        sed -i -e /typeaheadfind/d root/usr/lib*/firefox/browser/defaults/preferences/all-gentoo.js
+        compgen -G 'root/usr/lib*/firefox/browser/defaults/preferences/gentoo-prefs.js' &&
+        sed -i -e /typeaheadfind/d root/usr/lib*/firefox/browser/defaults/preferences/gentoo-prefs.js
 
         # Prioritize available daemons for the user audio service socket.
         local dir=root/usr/lib/systemd/user

@@ -85,6 +85,7 @@ UseMTU=yes
 EOF
 
         # Disable the DNS stub listener by default.
+        test -s root/etc/systemd/resolved.conf &&
         sed -i \
             -e '/^#*DNSStubListener=/{s/#*//;s/=.*/=no/;}' \
             root/etc/systemd/resolved.conf

@@ -121,7 +121,7 @@ function initialize_buildroot() {
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars user-session wide-int \
-            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd \
+            -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gui -modemmanager -ppp -repart'"'
 
         # Support a bunch of common video drivers.
@@ -145,7 +145,7 @@ function customize_buildroot() {
 
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
-            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -tcpd -X'"'
+            -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -X'"'
 
         # Block terribly broken binutils-config from deleting all libraries.
         ln -fns /bin/true /usr/bin/binutils-config

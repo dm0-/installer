@@ -55,7 +55,7 @@ EOF
 
 function install_packages() {
         opt bootable && packages+=(systemd)
-        opt networkd && packages+=(systemd-networkd)
+        opt networkd && packages+=(systemd-networkd systemd-resolved)
         opt selinux && packages+=(selinux-policy-targeted)
 
         mount -o bind,X-mount.mkdir {,root}/var/cache/dnf

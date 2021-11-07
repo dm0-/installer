@@ -131,8 +131,10 @@ function customize_buildroot() {
 
         # Build the proprietary NVIDIA drivers using akmods.
         opt nvidia || return 0
-        echo akmodsbuild --kernels "$(cd /lib/modules ; compgen -G '[0-9]*')" --verbose /usr/src/akmods/nvidia-kmod.latest |
-        su --login --session-command="exec $(</dev/stdin)" --shell=/bin/sh akmods
+        echo exec akmodsbuild \
+            --kernels "$(cd /lib/modules ; compgen -G '[0-9]*')" \
+            --verbose /usr/src/akmods/nvidia*-kmod.latest |
+        su --login --session-command="$(</dev/stdin)" --shell=/bin/sh akmods
         rpm2cpio /var/cache/akmods/kmod-nvidia-*.rpm | cpio -idD /
         packages+=(/var/cache/akmods/kmod-nvidia-*.rpm)
 }
@@ -158,7 +160,7 @@ function customize() {
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
         for module in \
-            ${options[nvidia]:+root/lib/modules/*/extra/nvidia/nvidia*.ko} \
+            ${options[nvidia]:+root/lib/modules/*/extra/nvidia*/*.ko} \
             root/lib/modules/*/kernel/drivers/net/wireless/88XXau.ko
         do
                 /lib/modules/*/build/scripts/sign-file \

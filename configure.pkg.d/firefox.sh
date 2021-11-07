@@ -20,8 +20,9 @@ pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
 pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
 // Disable spam-tier nonsense on new tabs.
 pref("browser.newtabpage.enabled", false);
-// Don't try to predict search terms.
+// Don't try to predict search terms, and don't prioritize them over history.
 pref("browser.search.suggest.enabled", false);
+pref("browser.urlbar.showSearchSuggestionsFirst", false);
 // Don't download autocomplete URLs.
 pref("browser.urlbar.speculativeConnect.enabled", false);
 // Don't send URL bar keystrokes to advertisers.
@@ -71,6 +72,8 @@ pref("browser.uidensity", 1);
 pref("browser.urlbar.openViewOnFocus", false);
 // Stop hiding protocols.
 pref("browser.urlbar.trimURLs", false);
+// Don't ask for confirmation to quit with the keyboard.
+pref("browser.warnOnQuitShortcut", false);
 // Enable some mildly useful developer tools.
 pref("devtools.command-button-rulers.enabled", true);
 pref("devtools.command-button-scratchpad.enabled", true);
