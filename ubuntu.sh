@@ -89,12 +89,15 @@ function distro_tweaks() {
         test -s root/usr/lib/systemd/system/root.mount &&
         sed -i -e s/admin_home/user_home_dir/g root/usr/lib/systemd/system/root.mount
 
-        # Default to the nftables firewall interface if it was built.
+        # Default to the nftables firewall interface if it was installed.
         local cmd ; for cmd in iptables ip6tables
         do
                 test -x "root/usr/sbin/$cmd-nft" &&
                 chroot root /usr/bin/update-alternatives --set "$cmd" "/usr/sbin/$cmd-nft"
         done
+
+        # Allow NetworkManager to manage devices and DNS.
+        rm -f root/usr/lib/NetworkManager/conf.d/10-{dns-resolved,globally-managed-devices}.conf
 
         test -s root/usr/lib/systemd/system/console-setup.service &&
         ln -fst root/usr/lib/systemd/system/multi-user.target.wants ../console-setup.service

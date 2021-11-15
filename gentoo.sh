@@ -210,8 +210,8 @@ EOF
 
         # Accept baselayout-2.7 to fix a couple target root issues (#795393).
         echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
-        # Accept libnotify-0.7.9 to fix host dependencies.
-        echo '<x11-libs/libnotify-0.8 ~*' >> "$portage/package.accept_keywords/libnotify.conf"
+        # Accept systemd-249.5 to fix Linux 5.15 build errors (#823593).
+        echo '<sys-apps/systemd-250 ~*' >> "$portage/package.accept_keywords/systemd.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -492,7 +492,7 @@ EOF
 
         # Build the cross-compiled toolchain packages first.
         COLLISION_IGNORE='*' USE=-selinux emerge --oneshot --verbose \
-            sys-devel/gcc virtual/libc virtual/os-headers
+            sys-devel/gcc virtual/libc virtual/libcrypt virtual/os-headers
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
         # Cheat bootstrapping packages with circular dependencies.
@@ -1148,7 +1148,7 @@ function write_overlay() {
         edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
 
         # Support cross-compiling musl (#732482).
-        edit sys-libs/musl '/ -e .*ld-musl/d'
+        edit sys-libs/musl '/ld-musl.*die/d'
 
         # Drop the buildroot multilib requirement for Rust (#753764).
         edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//'

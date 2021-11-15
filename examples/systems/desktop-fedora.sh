@@ -6,7 +6,8 @@
 # An out-of-tree driver for a USB wireless device is included to demonstrate
 # setting up a build environment for bare kernel modules.  This example also
 # optionally installs the proprietary NVIDIA drivers to demonstrate how to use
-# akmods for the resulting immutable image.
+# akmods for the resulting immutable image.  A numeric option value selects the
+# driver branch version, and a non-numeric value defaults to the latest.
 
 options+=(
         [gpt]=1         # Generate a VM disk image for fast testing.
@@ -111,10 +112,11 @@ packages+=(
 # Install the akmod package to build the proprietary NVIDIA drivers.
 function initialize_buildroot() if opt nvidia
 then
+        local -r suffix="-${options[nvidia]}xx"
         enable_repo_rpmfusion_nonfree
         $mkdir -p  "$buildroot/usr/lib/modprobe.d"
         echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
-        packages_buildroot+=(akmod-nvidia)
+        packages_buildroot+=("akmod-nvidia${suffix##-*[!0-9]*xx}")
         packages+=(rpmfusion-nonfree-release{,-rawhide,-tainted})
 else enable_repo_rpmfusion_free
 fi

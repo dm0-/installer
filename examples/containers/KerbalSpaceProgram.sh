@@ -8,7 +8,8 @@
 # directory as an overlay over the game's installation path.
 #
 # This script implements an option to demonstrate supporting the proprietary
-# NVIDIA drivers on the host system.
+# NVIDIA drivers on the host system.  A numeric value selects the driver branch
+# version, and a non-numeric value defaults to the latest.
 
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
 
@@ -27,8 +28,9 @@ function initialize_buildroot() {
         # Support an option for running on a host with proprietary drivers.
         if opt nvidia
         then
+                local -r suffix="-${options[nvidia]}xx"
                 enable_repo_rpmfusion_nonfree
-                packages+=(xorg-x11-drv-nvidia-libs)
+                packages+=("xorg-x11-drv-nvidia${suffix##-*[!0-9]*xx}-libs")
         else packages+=(mesa-dri-drivers mesa-libGL)
         fi
 }

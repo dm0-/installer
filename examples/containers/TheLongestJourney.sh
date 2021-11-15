@@ -9,7 +9,8 @@
 # game's save directory and configuration files.
 #
 # This script implements an option to demonstrate supporting the proprietary
-# NVIDIA drivers on the host system.
+# NVIDIA drivers on the host system.  A numeric value selects the driver branch
+# version, and a non-numeric value defaults to the latest.
 
 options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
 
@@ -28,7 +29,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-470)
+then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/495})
 fi
 
 function customize() {

@@ -40,12 +40,6 @@ function create_buildroot() {
         $cp -a "$buildroot"/etc/resolv.conf{,.orig}
         script "${packages_buildroot[@]}" << 'EOF'
 dnf --assumeyes --setopt=tsflags=nodocs upgrade
-if grep -Fqsx VERSION_ID=35 /etc/os-release
-then
-        dnf --assumeyes --setopt=tsflags=nodocs install dnf-plugins-core
-        dnf --disablerepo='*' --enablerepo=updates --releasever=34 download shadow-utils
-        set -- "$@" ./shadow-utils-*.rpm
-fi
 dnf --assumeyes --setopt=tsflags=nodocs install "$@"
 for fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done
 EOF
