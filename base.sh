@@ -532,6 +532,7 @@ EOF
                 break || continue
         done
 
+        mkdir -p root/usr/lib/tmpfiles.d
         cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
 C /root - - - - /etc/skel
 Z /root
@@ -662,6 +663,7 @@ EOF
 
         # WORKAROUNDS
 
+        mkdir -p root/usr/lib/tmpfiles.d
         cat << 'EOF' > root/usr/lib/tmpfiles.d/var-mail.conf
 # User modification commands expect a mail spool directory to exist.
 d /var/mail 0775 root mail

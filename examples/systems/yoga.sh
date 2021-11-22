@@ -98,6 +98,7 @@ EOF
         # Use the i915 video driver for the integrated GPU.
         echo 'VIDEO_CARDS="intel i915"' >> "$portage/make.conf"
         echo 'media-libs/mesa -classic -video_cards_intel' >> "$portage/package.use/mesa.conf"
+        packages+=(x11-libs/libva-intel-driver)
 
         # Use the proprietary Broadcom drivers.
         echo 'USE="$USE broadcom-sta kmod"' >> "$portage/make.conf"

@@ -39,8 +39,11 @@ pacman-key --populate archlinux
 pacman --noconfirm --sync --needed --refresh{,} --sysupgrade{,} "$@"
 
 # Work around Arch not providing Intel microcode so dracut can find it.
-test -e /boot/intel-ucode.img && mkdir -p /lib/firmware/intel-ucode &&
-cpio --to-stdout -i < /boot/intel-ucode.img > /lib/firmware/intel-ucode/all.img
+if test -e /boot/intel-ucode.img
+then
+        mkdir -p /lib/firmware/intel-ucode
+        cpio --to-stdout -i < /boot/intel-ucode.img > /lib/firmware/intel-ucode/all.img
+fi
 EOF
 }
 

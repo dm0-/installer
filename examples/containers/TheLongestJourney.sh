@@ -3,25 +3,18 @@
 # Two arguments are required, the paths to both Inno Setup installer fragments
 # from GOG (with the exe file first followed by the bin file).
 #
-# Since the game is only for Windows, this simply installs a 32-bit Wine
-# container and extracts files from the installer.  Persistent game data is
-# saved by binding paths from the calling user's XDG data directory over the
-# game's save directory and configuration files.
+# The container is just a wrapper for SCUMMVM to run the game.  Persistent game
+# data is saved in its own path under the calling user's XDG data directory to
+# keep it isolated from any native SCUMMVM saved games.
 #
 # This script implements an option to demonstrate supporting the proprietary
-# NVIDIA drivers on the host system.  A numeric value selects the driver branch
-# version, and a non-numeric value defaults to the latest.
+# NVIDIA drivers on the host system.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
+options+=([arch]=x86_64 [distro]=arch [gpt]=1 [squash]=1)
 
-packages+=(
-        dxvk
-        libgl1
-        libxcomposite1
-        wine-development
-)
+packages+=(scummvm)
 
-packages_buildroot+=(innoextract jq)
+packages_buildroot+=(innoextract)
 
 function initialize_buildroot() {
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
@@ -29,7 +22,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/495})
+then packages+=(nvidia-utils)
 fi
 
 function customize() {
@@ -43,33 +36,24 @@ function customize() {
         )
 
         innoextract -md root/TLJ install.exe
-        wine_gog_script /TLJ < root/TLJ/goggame-1207658794.script | sed 's/Z:/C:/g' > reg.sh
         rm -fr install{.exe,-1.bin} root/TLJ/{app,commonappdata,gog*,manual.pdf,__redist,tlj_faq*}
-        mkdir -p root/TLJ/Save
-        cp root/TLJ/preferences.ini root/TLJ/preferences.ini.orig
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init && chmod 0755 root/init
+        cat << 'EOF' > root/init && chmod 0755 root/init
 #!/bin/sh -eu
-test -s preferences.ini || cat preferences.ini.orig > preferences.ini
-(unset DISPLAY
-REG_SCRIPT
-)
-ln -fst "$HOME/.wine/dosdevices/c:" /TLJ
-exec wine explorer /desktop=virtual,640x480 /TLJ/game.exe "$@"
+mkdir -p "$HOME/.config" "$HOME/.local/share"
+ln -fns /tmp/save "$HOME/.local/share/scummvm"
+ln -fst "$HOME/.config" ../.local/share/scummvm
+exec scummvm --auto-detect
 EOF
 
         sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
 #!/bin/sh -eu
 
-[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheLongestJourney/Save" ] ||
-mkdir -p "$XDG_DATA_HOME/TheLongestJourney/Save"
-
-[ -e "$XDG_DATA_HOME/TheLongestJourney/preferences.ini" ] ||
-touch "$XDG_DATA_HOME/TheLongestJourney/preferences.ini"
+[ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheLongestJourney" ] ||
+mkdir -p "$XDG_DATA_HOME/TheLongestJourney"
 
 exec sudo systemd-nspawn \
-    --bind="$XDG_DATA_HOME/TheLongestJourney/Save:/TLJ/Save" \
-    --bind="$XDG_DATA_HOME/TheLongestJourney/preferences.ini:/TLJ/preferences.ini" \
+    --bind="$XDG_DATA_HOME/TheLongestJourney:/tmp/save" \
     $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
     --bind=/tmp/.X11-unix \
     --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
@@ -80,7 +64,7 @@ exec sudo systemd-nspawn \
     --image="${IMAGE:-TheLongestJourney.img}" \
     --link-journal=no \
     --machine="TheLongestJourney-$USER" \
-    --personality=x86 \
+    --personality=x86-64 \
     --private-network \
     --read-only \
     --setenv="DISPLAY=$DISPLAY" \

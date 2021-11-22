@@ -208,10 +208,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept baselayout-2.7 to fix a couple target root issues (#795393).
-        echo '<sys-apps/baselayout-2.8 ~*' >> "$portage/package.accept_keywords/baselayout.conf"
         # Accept systemd-249.5 to fix Linux 5.15 build errors (#823593).
-        echo '<sys-apps/systemd-250 ~*' >> "$portage/package.accept_keywords/systemd.conf"
+        echo 'sys-apps/systemd *' >> "$portage/package.accept_keywords/systemd.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -749,34 +747,6 @@ function write_unconditional_patches() {
              die("Don't know how to translate {} for rustc".format(
 EOF
 
-        $mkdir -p "$patches/cross-${options[host]}/gcc" "$patches/sys-devel/gcc"
-        $cat << 'EOF' > "$patches/sys-devel/gcc/cross.patch"
-https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100017
---- a/configure.ac
-+++ b/configure.ac
-@@ -3515,7 +3515,7 @@
- ACX_CHECK_INSTALLED_TARGET_TOOL(WINDRES_FOR_TARGET, windres)
- ACX_CHECK_INSTALLED_TARGET_TOOL(WINDMC_FOR_TARGET, windmc)
- 
--RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
-+RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET -nostdinc++"
- 
- GCC_TARGET_TOOL(ar, AR_FOR_TARGET, AR, [binutils/ar])
- GCC_TARGET_TOOL(as, AS_FOR_TARGET, AS, [gas/as-new])
---- a/configure
-+++ b/configure
-@@ -16653,7 +16653,7 @@
- fi
- 
- 
--RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
-+RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET -nostdinc++"
- 
- { $as_echo "$as_me:${as_lineno-$LINENO}: checking where to find the target ar" >&5
- $as_echo_n "checking where to find the target ar... " >&6; }
-EOF
-        $ln -fst "$patches/cross-${options[host]}/gcc" "../../sys-devel/gcc/cross.patch"
-
         $mkdir -p "$patches/www-client/firefox"
         $cat << 'EOF' > "$patches/www-client/firefox/rust.patch"
 --- a/build/moz.configure/rust.configure
@@ -1055,45 +1025,49 @@ function archmap() case ${*:-$DEFAULT_ARCH} in
     aarch64)  echo arm64 ;;
     arm*)     echo arm ;;
     i[3-6]86) echo x86 ;;
-    powerpc)  echo ppc ;;
+    powerpc*) echo ppc ;;
     riscv64)  echo riscv ;;
     x86_64)   echo amd64 ;;
     *) return 1 ;;
 esac
 
 function archmap_profile() {
+        local -r hardened=/hardened
         local -r nomulti=$(opt multilib || echo /no-multilib)
         case ${*:-$DEFAULT_ARCH} in
-            aarch64)  echo default/linux/arm64/17.0 ;;
-            armv4t*)  echo default/linux/arm/17.0/armv4t ;;
-            armv5te*) echo default/linux/arm/17.0/armv5te ;;
-            armv6*j*) echo default/linux/arm/17.0/armv6j ;;
-            armv7a)   echo default/linux/arm/17.0/armv7a ;;
-            i[3-6]86) echo default/linux/x86/17.0/hardened ;;
-            powerpc)  echo default/linux/ppc/17.0 ;;
-            riscv64)  echo default/linux/riscv/20.0/rv64gc/lp64d ;;
-            x86_64)   echo default/linux/amd64/17.1$nomulti/hardened ;;
+            aarch64)     echo default/linux/arm64/17.0$hardened ;;
+            armv4t*)     echo default/linux/arm/17.0/armv4t ;;
+            armv5te*)    echo default/linux/arm/17.0/armv5te ;;
+            armv6*j*)    echo default/linux/arm/17.0/armv6j$hardened ;;
+            armv7a)      echo default/linux/arm/17.0/armv7a$hardened ;;
+            i[3-6]86)    echo default/linux/x86/17.0$hardened ;;
+            powerpc)     echo default/linux/ppc/17.0 ;;
+            powerpc64le) echo default/linux/ppc64le/17.0 ;;
+            riscv64)     echo default/linux/riscv/20.0/rv64gc/lp64d ;;
+            x86_64)      echo default/linux/amd64/17.1$nomulti$hardened ;;
             *) return 1 ;;
         esac
 }
 
 function archmap_stage3() {
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
+        local -r hardened=-hardened
         local -r hardfp=${options[hardfp]:+_hardfp}
         local -r nomulti=$(opt multilib || echo -nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
 
         local stage3
         case ${*:-$DEFAULT_ARCH} in
-            aarch64)  stage3=stage3-arm64-systemd ;;
-            armv4tl)  stage3=stage3-armv4tl-systemd ;;
-            armv5tel) stage3=stage3-armv5tel-systemd ;;
-            armv6*j*) stage3=stage3-armv6j$hardfp-systemd ;;
-            armv7a)   stage3=stage3-armv7a$hardfp-systemd ;;
-            i[45]86)  stage3=stage3-i486-openrc ;;
-            i686)     stage3=stage3-i686-hardened-openrc ;;
-            powerpc)  stage3=stage3-ppc ;;
-            x86_64)   stage3=stage3-amd64-hardened$nomulti$selinux-openrc ;;
+            aarch64)     stage3=stage3-arm64-systemd ;;
+            armv4tl)     stage3=stage3-armv4tl-systemd ;;
+            armv5tel)    stage3=stage3-armv5tel-systemd ;;
+            armv6*j*)    stage3=stage3-armv6j$hardfp-systemd ;;
+            armv7a)      stage3=stage3-armv7a$hardfp-systemd ;;
+            i[45]86)     stage3=stage3-i486-openrc ;;
+            i686)        stage3=stage3-i686$hardened-openrc ;;
+            powerpc)     stage3=stage3-ppc-openrc ;;
+            powerpc64le) stage3=stage3-ppc64le-systemd ;;
+            x86_64)      stage3=stage3-amd64$hardened$nomulti$selinux-openrc ;;
             *) return 1 ;;
         esac
 
@@ -1147,8 +1121,8 @@ function write_overlay() {
         edit dev-qt/qtsvg '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
         edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
 
-        # Support cross-compiling musl (#732482).
-        edit sys-libs/musl '/ld-musl.*die/d'
+        # Fix cross-compiling GCC (#803371).
+        edit sys-devel/gcc 's/ is_crosscompile /&|| tc-is-cross-compiler /'
 
         # Drop the buildroot multilib requirement for Rust (#753764).
         edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//'
@@ -1185,7 +1159,7 @@ function write_overlay() {
 
         # Support erofs-utils (#701284).
         mkdir -p "$overlay/sys-fs/erofs-utils"
-        cat << 'EOF' > "$overlay/sys-fs/erofs-utils/erofs-utils-1.3.ebuild"
+        cat << 'EOF' > "$overlay/sys-fs/erofs-utils/erofs-utils-1.4.ebuild"
 EAPI=8
 inherit autotools
 DESCRIPTION="Userspace tools for EROFS images"
@@ -1199,14 +1173,13 @@ RDEPEND="fuse? ( sys-fs/fuse:0 ) lz4? ( >=app-arch/lz4-1.9 ) selinux? ( sys-libs
 DEPEND="${RDEPEND}"
 BDEPEND="virtual/pkgconfig"
 src_prepare() { default ; eautoreconf ; }
-src_configure() { econf $(use_enable fuse) $(use_enable lz4) $(use_with selinux) $(use_with uuid) ; }
-src_install() { default ; use fuse || rm "${ED}/usr/share/man/man1/erofsfuse.1" || die ; }
+src_configure() { econf $(use_enable fuse) $(use_enable lz4) $(use_with selinux) $(use_with uuid) --disable-lzma ; }
 EOF
-        echo DIST erofs-utils-1.3.tar.gz 66135 \
-            BLAKE2B 1051cf387d059d71b91e0a940c86b819593902606ae4665a7801e9597dd72987385bee997d2d63b186c493557ee22118aff23161e48e25ee8f4859f9f6e46f14 \
-            SHA512  6ddd8402dab80b0375b012ed51ff02b40cbeca9a4a1ba250b14ec6aeb97317ab575e315e9d4dc77ed1d7826c202396d9c0775917106ecbd7b4048168aca0fa6c \
+        echo DIST erofs-utils-1.4.tar.gz 93979 \
+            BLAKE2B aef1dca8cb95e6104d73a84590319d3c55aba1a4ef5dbdbf470662cb86ee1b66a5707dc1c453470115ec6f2bf1246ee4b6b28aa1cb83b4cb9c8eed45e88668d4 \
+            SHA512  ab95d6a7b2d278ee443d1e378c62354db66ce7ab5ce03b3a8d9004cf498c4e43e3e8ced6524444d2ea4871c4db0195489f033180c8a2082c2cba69c46c09692f \
             > "$overlay/sys-fs/erofs-utils/Manifest"
-        ebuild "$overlay/sys-fs/erofs-utils/erofs-utils-1.3.ebuild" manifest
+        ebuild "$overlay/sys-fs/erofs-utils/erofs-utils-1.4.ebuild" manifest
 }
 
 # OPTIONAL (BUILDROOT)
