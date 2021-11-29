@@ -128,6 +128,7 @@ function initialize_buildroot() {
         $sed -i -e '/^LLVM_TARGETS=/s/" *$/ AMDGPU&/' "$buildroot/etc/portage/make.conf" "$portage/make.conf"
         echo 'USE="$USE llvm"' >> "$portage/make.conf"
         echo "VIDEO_CARDS=\"amdgpu fbdev intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
+        packages+=(x11-libs/libva-{intel,vdpau}-driver)
 
         # Install VLC.
         fix_package vlc

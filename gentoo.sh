@@ -118,13 +118,6 @@ sys-auth/polkit
 virtual/rust
 x11-themes/adwaita-icon-theme
 EOF
-        $cat << 'EOF' >> "$portage/package.unmask/systemd.conf"
-# Unmask systemd when SELinux is enabled.
-gnome-base/*
-gnome-extra/*
-sys-apps/gentoo-systemd-integration
-sys-apps/systemd
-EOF
         $cat << 'EOF' >> "$portage/package.use/busybox.conf"
 # Make busybox static by default since nobody expects it to be otherwise.
 sys-apps/busybox static -pam
@@ -192,7 +185,7 @@ EOF
 
         # Permit selectively toggling important features.
         echo -e '-selinux\n-static\n-static-libs' >> "$portage/profile/use.force/unforce.conf"
-        echo -e '-cet\n-clang\n-systemd' >> "$portage/profile/use.mask/unmask.conf"
+        echo -e '-clang\n-systemd' >> "$portage/profile/use.mask/unmask.conf"
 
         # Write build environment modifiers for later use.
         echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
@@ -1120,9 +1113,6 @@ function write_overlay() {
         edit dev-qt/qtwidgets '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"'
         edit dev-qt/qtsvg '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
         edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
-
-        # Fix cross-compiling GCC (#803371).
-        edit sys-devel/gcc 's/ is_crosscompile /&|| tc-is-cross-compiler /'
 
         # Drop the buildroot multilib requirement for Rust (#753764).
         edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//'

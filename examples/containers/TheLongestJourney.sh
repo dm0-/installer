@@ -43,7 +43,7 @@ function customize() {
 mkdir -p "$HOME/.config" "$HOME/.local/share"
 ln -fns /tmp/save "$HOME/.local/share/scummvm"
 ln -fst "$HOME/.config" ../.local/share/scummvm
-exec scummvm --auto-detect
+exec scummvm --auto-detect --fullscreen "$@"
 EOF
 
         sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh

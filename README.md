@@ -6,7 +6,7 @@ This is a collection of shell functions to build secure Linux-based operating sy
 
 The primary goal here is interchangeable immutable disk images that are verified by verity, which is itself verified by the kernel's Secure Boot signature on UEFI platforms.  This script creates a container to run the build procedure which outputs components of an installed operating system (such as the root file system image, kernel, initrd, etc.) that can be assembled as desired, but my testing focuses on three main use cases:
 
- 1. A system's bootable hard drive is GPT-partitioned with an ESP, several (maybe three to five) partitions of five or ten gigabytes reserved to store root file system images, and the rest of the disk used as an encrypted `/var` partition for persistent storage.  A signed UEFI executable corresponding to each active root file system partition is written to the ESP so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
+ 1. A system's bootable hard drive is GPT-partitioned with an ESP, several partitions reserved to store root file system images, and the rest of the disk used as an encrypted partitions for persistent storage.  A signed UEFI executable corresponding to each active root file system partition is written to the ESP so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
 
     Example installation: `bash -x install.sh -E /boot/EFI/BOOT/BOOTX64.EFI -IP e08ede5f-56d4-4d6d-b8d9-abf7ef5be608 examples/systems/desktop-fedora.sh`
 
@@ -24,9 +24,10 @@ The installer can produce an executable disk image for testing each of these con
 
 The `install.sh` file is the entry point.  Run it with the `-h` option to see its full help text.  Since it performs operations such as starting containers and overwriting partitions, it must be run as root.
 
-The command should usually be given at least one argument: a shell file defining settings for the installation.  There are a few of these files under the `examples` directory for reference.  Their definitions override those from the distro or global level, but there are six optional definitions that are system-specific.
+The command should usually be given at least one argument: a shell file defining settings for the installation.  There are a few of these files under the `examples` directory for reference.  Their definitions override those from the distro or global level, but there are seven optional definitions that are system-specific.
 
   - `options`: an associative array of major settings (e.g. distro, architecture, image format)
+  - `slots`: an array of partition UUIDs on the target disk that are reserved for root file systems
   - `packages_buildroot`: an array of package names to install into the build container
   - `packages`: an array of package names to install into the final image
   - `initialize_buildroot`: a function that will run on the build system after the container is extracted to `$buildroot` but before any package management commands are run (which is useful to configure repositories or to copy files from the host into the container)

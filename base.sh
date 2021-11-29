@@ -3,6 +3,7 @@ DEFAULT_ARCH=$($uname -m)
 disk=
 exclude_paths=({boot,dev,media,proc,run,srv,sys,tmp}/'*')
 packages=()
+slots=()
 
 declare -A options
 options[distro]=fedora
@@ -12,11 +13,11 @@ options[gpt]=         # Create a partitioned GPT disk image
 options[hardfp]=      # Use the hard-float ABI for ARMv6 and ARMv7 targets
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
 options[nvme]=        # Support root on an NVMe disk
-options[partuuid]=    # The partition UUID for verity to map into the root FS
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
 options[secureboot]=  # Sign the UEFI executable for Secure Boot verification
 options[selinux]=     # Enforce SELinux policy
+options[slot]=        # The root partition slot for the build to target
 options[squash]=      # Produce a compressed squashfs image
 options[uefi]=        # Generate a single UEFI executable containing boot files
 options[verity]=      # Prevent file system modification with dm-verity
@@ -24,7 +25,7 @@ options[verity_sig]=  # Create and require a verity root hash signature
 
 function usage() {
         echo "Usage: $0 [-BKRSUVZhu] \
-[-E <uefi-binary-path>] [[-I] -P <partuuid>] \
+[-E <uefi-binary-path>] [[-I] -P <partuuid> ...] \
 [-c <pem-certificate> -k <pem-private-key>] \
 [-a <userspec>] [-d <distro>] [-o <option>[=<value>]] [-p <package-list>] \
 [<config.sh> [<parameter>]...]
@@ -52,11 +53,14 @@ Install options:
         Save the UEFI executable to the given path, which should be on the
         mounted target ESP file system (implying -U).
         Example: -E /boot/EFI/BOOT/BOOTX64.EFI
-  -I    Install the file system to disk on the partition specified with -P.
+  -I    Install the file system to disk in the selected root partition slot.
   -P <partuuid>
-        Configure the kernel arguments to use the given GPT partition UUID as
-        the root file system on boot.  If this option is not used, the kernel
-        will assume that the root file system is on /dev/sda.
+        Add a root partition slot.  This option can be used multiple times to
+        define more root slots.  A specific partition can be selected with the
+        slot option, or the first will be used by default.  It configures the
+        kernel arguments to select the desired GPT partition UUID as the root
+        file system on boot.  If this option is not used, the kernel assumes
+        that the root file system is on /dev/sda.
         Example: -P e08ede5f-56d4-4d6d-b8d9-abf7ef5be608
 
 Signing options:
@@ -105,8 +109,6 @@ function imply_options() {
         opt squash || opt verity && options[read_only]=1
         opt uefi || opt ramdisk && options[bootable]=1
         opt uefi && options[secureboot]=1  # Always sign the UEFI executable.
-        opt gpt && ! opt ramdisk && ! opt partuuid &&
-        options[partuuid]=$(</proc/sys/kernel/random/uuid)
         [[ ${options[arch]:-$DEFAULT_ARCH} == armv[67]* ]] && options[hardfp]=1
         opt distro || options[distro]=fedora  # This can't be unset.
 }
@@ -115,6 +117,7 @@ function validate_options() {
         local k ; for k in "${!cli_options[@]}"
         do options[$k]=${cli_options[$k]}
         done
+        slots+=("${cli_slots[@]}")
         # Require both a certificate and key for each signing option.
         for k in sb signing verity
         do
@@ -123,13 +126,12 @@ function validate_options() {
                 opt "${k}_cert" && test -s "${options[${k}_cert]}"
                 opt "${k}_key" && test -s "${options[${k}_key]}"
         done
-        # Validate form, but don't look for a device yet (because hot-plugging exists).
-        opt partuuid &&
-        [[ ${options[partuuid]} =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
+        # A partition must be defined for writing the file system to disk.
+        opt install_to_disk && (( ${#slots[@]} ))
+        # When a root partition slot is chosen, that slot must be defined.
+        opt slot && { (( ${#slots[@]} )) ; get_slot_uuid > /dev/null ; }
         # A partition UUID must be set to create a bootable UEFI disk image.
-        opt gpt && opt uefi && ! opt ramdisk && opt partuuid
-        # A partition is required when writing to disk.
-        opt install_to_disk && opt partuuid
+        opt gpt && opt uefi && ! opt ramdisk && get_slot_uuid > /dev/null
         # A UEFI executable is required in order to sign it or save it.
         opt secureboot || opt uefi_path && opt uefi
         # A verity signature can't exist without verity.
@@ -141,6 +143,31 @@ function validate_options() {
 }
 
 function opt() [[ -n ${options[${*?}]-} ]]
+
+function get_next_slot() if opt slot
+then echo -n "${options[slot]}"
+elif (( ! ${#slots[@]} ))
+then return 1
+else
+        local device=$($sed -n 's,^\([^ ]*\) / .*,\1,p' < /proc/mounts)
+        if [[ $device == /dev/mapper/root ]]  # Assume verity via dm-init.
+        then
+                local -r mm=$(</sys/block/dm-0/dev)
+                device=/dev/$(cd "/sys/dev/block/$mm/slaves" && compgen -G '*')
+        fi
+        local -r uuid=$($blkid --match-tag=PARTUUID --output=value "$device")
+        local -i i ; for (( i = 0 ; i < ${#slots[@]} ; ))
+        do [[ ${slots[i++],,} == ${uuid,,} ]] && break
+        done &&
+        echo -en "\x$(printf '%X' $(( i % ${#slots[@]} + 65 )))"
+fi
+
+function get_slot_uuid() {
+        local -r slot=${*:-${options[slot]:-A}}
+        (( ${#slots[@]} )) || slots+=("$(</proc/sys/kernel/random/uuid)")
+        [[ $slot == [A-$(echo -en "\x$(printf '%X' $((${#slots[@]}+64)))")] ]]
+        echo -n ${slots[$(printf '%u' "'$slot")-65]}
+}
 
 function enter() {
         local -r console=$($nspawn --help |& $sed -n /--console=/p)
@@ -373,7 +400,7 @@ then
         local root=/dev/sda
         (( !(size % 4096) ))
 
-        opt partuuid && root=PARTUUID=${options[partuuid]}
+        (( ${#slots[@]} )) && root=PARTUUID=$(get_slot_uuid)
         opt ramdisk && root=/dev/loop0
         opt verity_sig && opt_params+=(root_hash_sig_key_desc verity:root)
 
@@ -407,7 +434,7 @@ then
         opt ramdisk && dmsetup=DVR
         opt verity_sig && dmsetup=DVR  # Skip dm-init for userspace as a hack.
 
-        opt partuuid && root=PARTUUID=${options[partuuid]}
+        (( ${#slots[@]} )) && root=PARTUUID=$(get_slot_uuid)
         opt ramdisk && root=/dev/loop0
         opt verity && root=/dev/dm-0
 
@@ -798,8 +825,8 @@ then
                 opt ramdisk && opt uefi || echo \
                     size="$size", \
                     type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, \
-                    ${options[partuuid]:+uuid=${options[partuuid]},} \
-                    name=ROOT-A
+                    ${slots[*]:+uuid=$(get_slot_uuid),} \
+                    name="ROOT-${options[slot]:-A}"
         } | sfdisk --force gpt.img
 
         # Create the ESP without mounting it.

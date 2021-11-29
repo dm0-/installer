@@ -30,6 +30,7 @@ uname=${UNAME:-uname}
 
 # Parse command-line options.
 declare -A cli_options
+declare -a cli_slots
 while getopts :BE:IKP:RSUVZa:c:d:hk:o:p:u opt
 do
         case $opt in
@@ -37,7 +38,7 @@ do
             E) cli_options[uefi_path]=$OPTARG ;;
             I) cli_options[install_to_disk]=1 ;;
             K) cli_options[ramdisk]=1 ;;
-            P) cli_options[partuuid]=${OPTARG,,} ;;
+            P) cli_slots+=(${OPTARG,,}) ;;
             R) cli_options[read_only]=1 ;;
             S) cli_options[squash]=1 ;;
             U) cli_options[uefi]=1 ;;
@@ -59,6 +60,7 @@ shift $(( OPTIND - 1 ))
 # Load all library files now to combine CLI options with coded settings.
 ${*:+. "$1"}
 imply_options
+packages=() slots=()
 . "${options[distro]}".sh
 [[ -n $* ]] && { . "$1" ; shift ; }
 validate_options
@@ -70,7 +72,7 @@ buildroot="$output/buildroot"
 create_buildroot "$@"
 create_root_image
 script_with_keydb << EOF
-$(declare -p DEFAULT_ARCH disk exclude_paths options packages)
+$(declare -p DEFAULT_ARCH disk exclude_paths options packages slots)
 $(declare -f)
 mount_root
 customize_buildroot
@@ -96,7 +98,7 @@ EOF
 # Write the file system to disk at the given partition.
 if opt install_to_disk
 then
-        disk=$($blkid -lo device -t "PARTUUID=${options[partuuid]}")
+        disk=$($blkid -lo device -t "PARTUUID=$(get_slot_uuid)")
         $dd if="$output/final.img" of="$disk" status=progress
 fi
 
