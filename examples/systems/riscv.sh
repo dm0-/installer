@@ -93,9 +93,6 @@ EOF
         echo 'EXTRA_ECONF="--enable-linker=bfd"' >> "$portage/env/spidermonkey.conf"
         echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"
 
-        # Unmask systemd UEFI binaries.
-        echo 'sys-apps/systemd -gnuefi' >> "$portage/profile/package.use.mask/systemd.conf"
-
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
         $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
@@ -190,7 +187,7 @@ EOF
 }
 
 # Override the UEFI function as a hack to produce a UEFI GRUB image for the
-# bootloader until the systemd boot stub exists for RISC-V.
+# bootloader until the systemd boot stub is working for RISC-V.
 function produce_uefi_exe() if opt uefi
 then
         grub-mkimage \

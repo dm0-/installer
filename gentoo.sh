@@ -44,7 +44,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="targeted"
-USE="\$USE system-icu -fortran -introspection -vala"
+USE="\$USE system-icu system-png -fortran -gtk-doc -introspection -vala"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
@@ -69,7 +69,6 @@ gui-libs/libhandy *
 media-gfx/gnome-screenshot *
 media-libs/gsound *
 net-libs/libnma *
-net-libs/webkit-gtk *
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
 x11-libs/colord-gtk *
@@ -103,10 +102,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.mask/colord.conf"
 # Stay on the stable branch of colord until cross-compiling is supported.
 >=x11-misc/colord-1.4
-EOF
-        $cat << 'EOF' >> "$portage/package.mask/shadow.conf"
-# The useradd program aborts since 4.9 due to bad memory handling.
->=sys-apps/shadow-4.9
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
 # Unmask Rust users to bypass bad architecture profiles.
@@ -201,8 +196,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept systemd-249.5 to fix Linux 5.15 build errors (#823593).
-        echo 'sys-apps/systemd *' >> "$portage/package.accept_keywords/systemd.conf"
+        # Accept shadow-4.10 to fix useradd crashes.
+        echo -e '<sys-apps/shadow-4.11 ~*\n<sys-apps/util-linux-2.38 ~*' >> "$portage/package.accept_keywords/shadow.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -399,6 +394,7 @@ EOF
 
         $cat <(declare -f write_overlay) - << 'EOF' | script "$host" "${packages_buildroot[@]}"
 host=$1 ; shift
+mkdir -p /run/lock  # Ensure this exists for bad packages.
 
 # Fetch the latest package definitions, and fix them in an overlay.
 emerge-webrsync
@@ -482,6 +478,7 @@ EOF
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
+        mkdir -p /run/lock  # Ensure this exists for bad packages.
         COLLISION_IGNORE='*' USE=-selinux emerge --oneshot --verbose \
             sys-devel/gcc virtual/libc virtual/libcrypt virtual/os-headers
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
@@ -636,10 +633,11 @@ CONFIG_INITRAMFS_COMPRESSION_ZSTD=y
 CONFIG_INITRAMFS_FORCE=y
 $(test -s /root/initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/root/initramfs.cpio"
 EOF
+        create_ipe_policy
         test -s vmlinux -o -s vmlinuz || if opt raw_kernel
         then
                 local -r arch="$(archmap_kernel "${options[arch]}")"
-                if opt monolithic
+                if opt ipe || opt monolithic
                 then
                         make -C /usr/src/linux -j"$(nproc)" olddefconfig \
                             ARCH="$arch" CROSS_COMPILE="${options[host]}-" V=1
@@ -650,7 +648,7 @@ EOF
                     ARCH="$arch" CROSS_COMPILE="${options[host]}-" V=1
                 cp -p /boot/vmlinux-* vmlinux || cp -p /boot/vmlinuz-* vmlinuz
         else
-                if opt monolithic
+                if opt ipe || opt monolithic
                 then
                         chgrp portage /root ; chmod g+x /root
                         emerge --buildpkg=n --oneshot --verbose \
@@ -665,6 +663,46 @@ fi
 eval "$(declare -f produce_uefi_exe | $sed \
     -e 's/objcopy/"${options[host]}-&"/' \
     -e 's,/[^ ]*.efi.stub,/usr/${options[host]}&,')"
+
+function create_ipe_policy() if opt ipe
+then
+        if opt monolithic
+        then local -r initrd=/root/initramfs.cpio
+        else local -r initrd=initrd.img
+        fi
+
+        # Make the default policy a whitelist based on enabled options.
+        test -s ipe.policy || {
+                cat << EOF
+policy_name="default" policy_version=0.0.0
+DEFAULT action=DENY
+EOF
+                if test -s "$initrd"
+                then
+                        echo op=EXECUTE boot_verified=TRUE action=ALLOW
+                        echo op=KERNEL_READ boot_verified=TRUE action=ALLOW
+                fi
+                if opt verity_sig
+                then
+                        echo op=EXECUTE dmverity_signature=TRUE action=ALLOW
+                        echo op=KERNEL_READ dmverity_signature=TRUE action=ALLOW
+                elif opt verity
+                then
+                        local -r roothash=$(mapfile -d ' ' < dmsetup.txt && echo ${MAPFILE[11]})
+                        echo op=EXECUTE dmverity_roothash="$roothash" action=ALLOW
+                        echo op=KERNEL_READ dmverity_roothash="$roothash" action=ALLOW
+                fi
+        } > ipe.policy
+
+        # Update the kernel configuration to include the policy.
+        if opt raw_kernel
+        then cat >> /usr/src/linux/.config
+        else cat >> /etc/kernel/config.d/ipe.config
+        fi << EOF
+CONFIG_IPE_BOOT_POLICY="/wd/ipe.policy"
+$(test -s "$initrd" || echo '#')CONFIG_IPE_PROP_BOOT_VERIFIED=y
+EOF
+fi
 
 function build_busybox_initrd() if opt ramdisk || opt verity_sig
 then
@@ -740,6 +778,15 @@ function write_unconditional_patches() {
              die("Don't know how to translate {} for rustc".format(
 EOF
 
+        if opt ipe
+        then
+                $mkdir -p "$patches"/sys-kernel/gentoo-{kernel,sources}
+                $curl -L 'https://patchwork.kernel.org/series/562971/mbox' \
+                    > "$patches/sys-kernel/gentoo-sources/ipe.patch"
+                [[ $($sha256sum "$patches/sys-kernel/gentoo-sources/ipe.patch") == 81920cd54c22c19eed420b5ef349d68850562943d7b30a0aedc964346ad5261a\ * ]]
+                $ln -fst "$patches/sys-kernel/gentoo-kernel" ../gentoo-sources/ipe.patch
+        fi
+
         $mkdir -p "$patches/www-client/firefox"
         $cat << 'EOF' > "$patches/www-client/firefox/rust.patch"
 --- a/build/moz.configure/rust.configure
@@ -814,6 +861,14 @@ CONFIG_64BIT=y'
 CONFIG_X86_LOCAL_APIC=y' &&
                 [[ ${options[host]} == *x32 ]] && echo 'CONFIG_X86_X32=y
 CONFIG_IA32_EMULATION=y'
+                opt ipe && { echo -n '# IPE settings
+CONFIG_SECURITY=y
+CONFIG_SECURITYFS=y
+CONFIG_SECURITY_IPE=y
+CONFIG_IPE_AUDIT_HASH_SHA512=y' ; opt ramdisk || opt verity_sig && echo -n '
+CONFIG_IPE_PROP_BOOT_VERIFIED=y' ; opt verity && echo -n '
+CONFIG_IPE_PROP_DM_VERITY_ROOTHASH=y' ; opt verity_sig && echo -n '
+CONFIG_IPE_PROP_DM_VERITY_SIGNATURE=y' ; echo ; }
                 opt networkd && echo '# Network settings
 CONFIG_NET=y
 CONFIG_INET=y
@@ -1093,7 +1148,7 @@ function write_overlay() {
             "$gentoo/eclass/autotools.eclass" > "$overlay/eclass/autotools.eclass"
 
         # Support tmpfiles with EAPI 8.
-        sed -e 's/7)/7|8)/;s/R\(DEPEND=.*\)/[[ ${EAPI} -lt 8 ]] \&\& & || I\1/' \
+        sed -e 's/R\(DEPEND=.*\)/[[ ${EAPI} -lt 8 ]] \&\& & || I\1/' \
             "$gentoo/eclass/tmpfiles.eclass" > "$overlay/eclass/tmpfiles.eclass"
 
         # Support installing the distro kernel without /usr/src.

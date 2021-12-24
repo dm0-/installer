@@ -115,7 +115,6 @@ packages+=(
 function initialize_buildroot() if opt nvidia
 then
         enable_repo_nvidia
-        echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
         packages_buildroot+=(createrepo_c nvidia-gfxG05-kmp-default rpm-build)
 fi
 
@@ -130,14 +129,15 @@ Version: $(rpm -q --qf '%{VERSION}' "$name-default" | sed -n '1s/_.*//p')
 Release: 1
 Summary: Prebuilt NVIDIA modules
 License: SUSE-NonFree
+Conflicts: $name-default
 %description
 %{summary}.
 %install
-mkdir -p %{buildroot}$kernel %{buildroot}/etc/modprobe.d
+mkdir -p %{buildroot}%{_modprobedir} %{buildroot}$kernel
+cp -at %{buildroot}%{_modprobedir} %{_modprobedir}/*nvidia*.conf
 cp -at %{buildroot}$kernel $kernel/updates
-cp -at %{buildroot}/etc/modprobe.d /etc/modprobe.d/50-nvidia-default.conf
 %files
-%config(noreplace) /etc/modprobe.d/50-nvidia-default.conf
+%{_modprobedir}/*nvidia*.conf
 $kernel/updates
 EOF
         createrepo_c /usr/src/packages/RPMS
@@ -164,14 +164,6 @@ function customize() {
                 /lib/modules/*/build/scripts/sign-file \
                     sha256 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
-
-        # Make NVIDIA use kernel mode setting and the page attribute table.
-        opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
-blacklist nouveau
-options nvidia NVreg_UsePageAttributeTable=1
-options nvidia-drm modeset=1
-softdep nvidia post: nvidia-uvm
-EOF
 
         # Support an executable VM image for quick testing.
         cat << 'EOF' > launch.sh && chmod 0755 launch.sh

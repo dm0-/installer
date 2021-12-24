@@ -126,10 +126,8 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
-        git clone --branch=v5.7.0 https://github.com/aircrack-ng/rtl8812au.git
-        git -C rtl8812au reset --hard 1c9d034b20aa5c15dbf5bb5dfcb83346a692f827
-        sed -i -e '/<net.ipx.h>/d;/^\t\t.*  IPX  .*/,/^\t\t}/cif(0);' rtl8812au/core/rtw_br_ext.c
-        sed -i -e 's/if.*\(rtw_napi_gro_receive[^)]*)\).*/\1;/' rtl8812au/os_dep/linux/recv_linux.c
+        git clone --branch=v5.13.6 https://github.com/aircrack-ng/rtl8812au.git
+        git -C rtl8812au reset --hard bd471173650765969e0caa15581bb105962a7d5a
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.

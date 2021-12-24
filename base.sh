@@ -11,6 +11,7 @@ options[append]=      # The arguments to append to the kernel command-line
 options[bootable]=    # Include a kernel and init system to boot the image
 options[gpt]=         # Create a partitioned GPT disk image
 options[hardfp]=      # Use the hard-float ABI for ARMv6 and ARMv7 targets
+options[ipe]=         # Write and enforce an IPE policy focused on the root FS
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
 options[nvme]=        # Support root on an NVMe disk
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
@@ -132,6 +133,8 @@ function validate_options() {
         opt slot && { (( ${#slots[@]} )) ; get_slot_uuid > /dev/null ; }
         # A partition UUID must be set to create a bootable UEFI disk image.
         opt gpt && opt uefi && ! opt ramdisk && get_slot_uuid > /dev/null
+        # IPE can only trust a root file system on verity or in an initrd.
+        opt ipe && { opt ramdisk || opt verity ; }
         # A UEFI executable is required in order to sign it or save it.
         opt secureboot || opt uefi_path && opt uefi
         # A verity signature can't exist without verity.
@@ -286,6 +289,7 @@ mount /dev/sda /sysroot
 policy=$(sed -n 's/^SELINUXTYPE=//p' /etc/selinux/config)
 /bin/setfiles -vFr /sysroot \
     "/sysroot/etc/selinux/$policy/contexts/files/file_contexts" /sysroot
+rm -f /sysroot/.autorelabel
 test -x /bin/mksquashfs && /bin/mksquashfs /sysroot /sysroot/squash.img \
     -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
 test -x /bin/mkfs.erofs && IFS=$'\n' && /bin/mkfs.erofs \
@@ -320,7 +324,7 @@ EOF
                 do cp -t "$root/bin" "$cmd" && break || continue
                 done
         done
-        for cmd in ash echo mount poweroff sed sleep umount
+        for cmd in ash echo mount poweroff rm sed sleep umount
         do ln -fns busybox "$root/bin/$cmd"
         done
 
@@ -771,8 +775,12 @@ EOF
                 chmod 0755 "root$gendir/repart-disk-wait"
         fi
 
-        # Save /etc/os-release outside the image after all customizations.
-        test ! -s root/etc/os-release || cp -pt . root/etc/os-release
+        # Save os-release outside the image after all customizations.
+        if test -s root/etc/os-release
+        then cp -pt . root/etc/os-release
+        elif test -s root/usr/lib/os-release
+        then cp -pt . root/usr/lib/os-release
+        fi
 }
 
 function produce_uefi_exe() if opt uefi

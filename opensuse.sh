@@ -36,12 +36,13 @@ function create_buildroot() {
         $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
 
         configure_initrd_generation
-        enable_repo_selinux
         initialize_buildroot "$@"
 
-        enter /usr/bin/zypper --non-interactive update
-        enter /usr/bin/zypper --non-interactive \
-            install --allow-vendor-change "${packages_buildroot[@]}"
+        script "${packages_buildroot[@]}" << 'EOF'
+zypper --non-interactive dist-upgrade
+zypper --non-interactive update --allow-vendor-change
+zypper --non-interactive install --allow-vendor-change "$@"
+EOF
 
         # Don't block important file systems in the initrd.
         $rm -f "$buildroot/usr/lib/modprobe.d/60-blacklist_fs-erofs.conf"
@@ -107,7 +108,7 @@ eval "$(declare -f relabel | $sed \
     -e '/ldd/iopt squash && cp -t "$root/lib" /lib*/libgcc_s.so.1' \
     -e '/find/iln -fns busybox "$root/bin/insmod"\
 local mod ; for mod in drivers/ata/ata_piix fs/{jbd2/jbd2,mbcache,ext4/ext4}\
-do xz -cd /lib/modules/*/*/"$mod.ko.xz" > "$root/lib/${mod##*/}.ko"\
+do zstd -cd /lib/modules/*/*/"$mod.ko.zst" > "$root/lib/${mod##*/}.ko"\
 sed -i -e "/sda/iinsmod /lib/${mod##*/}.ko" "$root/init" ; done')"
 
 # Override kernel arguments to use SELinux instead of AppArmor.
@@ -184,24 +185,13 @@ function enable_repo_nvidia() {
             "[nvidia]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
 }
 
-function enable_repo_selinux() if opt selinux
-then
-        local -r repo='https://download.opensuse.org/repositories/security:/SELinux/openSUSE_Factory'
-        $curl -L "$repo/repodata/repomd.xml.key" > "$output/selinux.key"
-        [[ $($sha256sum "$output/selinux.key") == c8bfe12f4756a041e66e6a246455f4efe5710707591949f7377ec251aabbda91\ * ]]
-        enter /usr/bin/rpmkeys --import selinux.key
-        $rm -f "$output/selinux.key"
-        echo -e > "$buildroot/etc/zypp/repos.d/selinux.repo" \
-            "[selinux]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
-fi
-
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
         $gpg --verify "$2"
-        [[ $($sha256sum "$3") == $($sed -n 's/  .*//p' "$1")\ * ]]
+        [[ $($sha256sum "$3") == $($sed -n 's/ .*//p' "$1")\ * ]]
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 

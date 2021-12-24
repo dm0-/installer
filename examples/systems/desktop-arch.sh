@@ -116,20 +116,23 @@ function customize() {
         )
 
         # Install unpackaged NVIDIA drivers into the image.
-        opt nvidia && cp -pt root/lib/modules/*/kernel/drivers/video \
-            /var/lib/dkms/nvidia/kernel-*/module/nvidia*.ko.xz
+        opt nvidia && (
+                cd root/lib/modules/*/kernel/drivers &&
+                mkdir -p ../../updates/dkms &&
+                exec cp -pt ../../updates/dkms \
+                   /var/lib/dkms/nvidia/*/*/*/module/nvidia*.ko.zst
+        )
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
-        opt nvidia && for module in root/lib/modules/*/kernel/drivers/video/nvidia*.ko.xz
+        opt nvidia && for module in root/lib/modules/*/updates/dkms/nvidia*.ko.zst
         do
-                unxz "$module" ; module=${module%.xz}
+                unzstd --rm "$module" ; module=${module%.zst}
                 /lib/modules/*/build/scripts/sign-file \
                     sha512 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
 
         # Make NVIDIA use kernel mode setting and the page attribute table.
         opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia.conf
-blacklist nouveau
 options nvidia NVreg_UsePageAttributeTable=1
 options nvidia-drm modeset=1
 softdep nvidia post: nvidia-uvm

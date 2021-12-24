@@ -181,22 +181,6 @@ EOF
 EOF
         echo 'MYCMAKEARGS="-DAOM_TARGET_CPU=x86_64"' >> "$portage/env/libaom.conf"
         echo 'media-libs/libaom libaom.conf' >> "$portage/package.env/libaom.conf"
-
-        # Fix qemu.
-        $mkdir -p "$portage/patches/app-emulation/qemu"
-        $cat << 'EOF' >> "$portage/patches/app-emulation/qemu/x32.patch"
---- a/configure
-+++ b/configure
-@@ -6362,7 +6362,7 @@
-         i386)
-             echo "cpu_family = 'x86'" >> $cross
-             ;;
--        x86_64)
-+        x86_64|x32)
-             echo "cpu_family = 'x86_64'" >> $cross
-             ;;
-         ppc64le)
-EOF
 }
 
 function customize_buildroot() {

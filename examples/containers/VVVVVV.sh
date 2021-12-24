@@ -31,8 +31,8 @@ function customize_buildroot() {
         echo tsflags=nodocs >> /etc/dnf/dnf.conf
 
         # Build the game engine before installing packages into the image.
-        curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.4.tar.gz' > VVVVVV.tgz
-        [[ $(sha256sum VVVVVV.tgz) == 514b85ee21a3a8d9bfb9af00bc0cd56766d69f84c817799781da93506f30dd9c\ * ]]
+        curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.6.tar.gz' > VVVVVV.tgz
+        [[ $(sha256sum VVVVVV.tgz) == a3366aab9e8462d330044ab1ec63927e9f5c3801c0ed96b24f08c553dcb911e9\ * ]]
         tar --transform='s,^/*[^/]*,VVVVVV,' -xf VVVVVV.tgz
         rm -f VVVVVV.tgz
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \

@@ -6,7 +6,7 @@ This is a collection of shell functions to build secure Linux-based operating sy
 
 The primary goal here is interchangeable immutable disk images that are verified by verity, which is itself verified by the kernel's Secure Boot signature on UEFI platforms.  This script creates a container to run the build procedure which outputs components of an installed operating system (such as the root file system image, kernel, initrd, etc.) that can be assembled as desired, but my testing focuses on three main use cases:
 
- 1. A system's bootable hard drive is GPT-partitioned with an ESP, several partitions reserved to store root file system images, and the rest of the disk used as an encrypted partitions for persistent storage.  A signed UEFI executable corresponding to each active root file system partition is written to the ESP so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
+ 1. A system's bootable hard drive is GPT-partitioned with an ESP, several partitions reserved to store root file system images, and the rest of the disk used as encrypted partitions for persistent storage.  A signed UEFI executable corresponding to each active root file system partition is written to the ESP so that each image can be booted interchangeably with zero configuration.  This allows easily installing updated images or migrating to different software.
 
     Example installation: `bash -x install.sh -E /boot/EFI/BOOT/BOOTX64.EFI -IP e08ede5f-56d4-4d6d-b8d9-abf7ef5be608 examples/systems/desktop-fedora.sh`
 
@@ -112,13 +112,19 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (34 
   * :warning: *Arch* and *openSUSE* have a userspace hack until they enable `CONFIG_DM_INIT`.
   * :warning: *CentOS* is stuck with the userspace hack since it is too old to support dm-init.
 
-**Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits over verity with Secure Boot, but it can be used on platforms that do not support UEFI, making the kernel the root of trust instead of the firmware in those cases.  In addition, the proposed IPE LSM policy can filter based on signed verity devices, so verity signatures can still have a use on UEFI.
+**Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits over verity with Secure Boot, but it can be used to trust additional file systems built at a later date.  It also works on platforms that do not support UEFI, making the kernel the root of trust for the file system instead of the firmware in those cases.  This option enables a setting that requires all verity devices to include a valid signature.
 
   * :star: *Gentoo* supports verity signatures by creating an initrd to handle the userspace component.
   * :construction: *Fedora* and *Ubuntu* support verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
   * :fire: *Arch* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
   * :fire: *openSUSE* cannot use verity signatures until they enable `CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG`.
   * :skull: *CentOS* is too old to support verity signatures.
+
+**IPE**:  Integrity Policy Enforcement is an experimental (still not upstream) Linux security module that restricts file usage based on integrity properties.  It is currently used to limit sources of kernel resources like firmware and modules, and it can block programs from executing.  The initial policy is built into the kernel, so it gets the same level of verification (e.g. from Secure Boot).  IPE currently requires pairing with the RAM disk or verity option to be usable.  When using an initrd/initramfs, the default policy trusts the initial root file system, so the initrd must also be verified.  Without verity signatures, the default policy trusts only the specific hash of the root file system.  With verity signatures, it trusts any verity device with a valid signature, so the system is extensible.
+
+  * :construction: *Gentoo* supports IPE, but the patch seems to cause problems with booting stable kernels.  It is only for experimentation at this point.
+  * :fire: *Arch*, *Fedora*, *openSUSE*, and *Ubuntu* do not rebuild kernels to patch in IPE support.
+  * :skull: *CentOS* is too old to support IPE.
 
 ## To Do
 
