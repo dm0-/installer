@@ -47,13 +47,15 @@ POLICY_TYPES="targeted"
 USE="\$USE system-icu system-png -fortran -gtk-doc -introspection -vala"
 VIDEO_CARDS=""
 EOF
-        $cat << 'EOF' >> "$portage/package.accept_keywords/boot.conf"
-# Accept boot-related utilities with no stable versions.
+        $cat << 'EOF' >> "$portage/package.accept_keywords/core.conf"
+# Accept core utilities with no stable versions.
 app-crypt/pesign ~*
 sys-boot/vboot-utils ~*
+sys-fs/erofs-utils ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
+<dev-libs/icu-71 ~*
 dev-libs/nspr ~*
 dev-libs/nss ~*
 www-client/firefox ~*
@@ -98,10 +100,6 @@ EOF
 # Accept CPU microcode licenses.
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
-EOF
-        $cat << 'EOF' >> "$portage/package.mask/colord.conf"
-# Stay on the stable branch of colord until cross-compiling is supported.
->=x11-misc/colord-1.4
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
 # Unmask Rust users to bypass bad architecture profiles.
@@ -195,9 +193,6 @@ EOF
 I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
-
-        # Accept shadow-4.10 to fix useradd crashes.
-        echo -e '<sys-apps/shadow-4.11 ~*\n<sys-apps/util-linux-2.38 ~*' >> "$portage/package.accept_keywords/shadow.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -297,6 +292,7 @@ sys-libs/libsemanage no-lto.conf
 sys-libs/libsepol no-lto.conf
 x11-drivers/xf86-video-intel no-lto.conf
 EOF
+        echo '>=dev-lang/spidermonkey-91 -lto' >> "$portage/package.use/spidermonkey.conf"
         echo -e '-audit\n-caps' >> "$portage/profile/use.force/selinux.conf"
         echo split-usr >> "$portage/profile/use.mask/usrmerge.conf"
 
@@ -315,6 +311,8 @@ EOF
         echo 'dev-libs/nss::fixes' >> "$portage/package.mask/nss.conf"
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
+        # Install colord utilities without the daemon due to huge dependencies.
+        echo 'x11-misc/colord -daemon' >> "$portage/package.use/colord.conf"
         # Make a static libcrypt in the buildroot for busybox.
         echo -e 'sys-libs/libxcrypt static-libs\nvirtual/libcrypt static-libs' >> "$portage/package.use/libcrypt.conf"
         # Preserve JIT support in libpcre2 to avoid a needless rebuild.
@@ -378,7 +376,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/12/bin/${name##*-}"
+prog="/usr/lib/llvm/13/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/$host-clang"
@@ -763,8 +761,8 @@ fi
 function write_unconditional_patches() {
         local -r patches="$1"
 
-        $mkdir -p "$patches/dev-lang/spidermonkey"
-        $cat << 'EOF' > "$patches/dev-lang/spidermonkey/rust.patch"
+        $mkdir -p "$patches/dev-lang/spidermonkey:78"
+        $cat << 'EOF' > "$patches/dev-lang/spidermonkey:78/rust.patch"
 --- a/build/moz.configure/rust.configure
 +++ b/build/moz.configure/rust.configure
 @@ -353,7 +353,7 @@
@@ -787,7 +785,8 @@ EOF
                 $ln -fst "$patches/sys-kernel/gentoo-kernel" ../gentoo-sources/ipe.patch
         fi
 
-        $mkdir -p "$patches/www-client/firefox"
+        $mkdir -p "$patches"/{dev-lang/spidermonkey,www-client/firefox}
+        $ln -fst "$patches/dev-lang/spidermonkey" ../../www-client/firefox/rust.patch
         $cat << 'EOF' > "$patches/www-client/firefox/rust.patch"
 --- a/build/moz.configure/rust.configure
 +++ b/build/moz.configure/rust.configure
@@ -1191,6 +1190,11 @@ function write_overlay() {
         # Fix NetworkManager configuration.
         edit net-misc/networkmanager '/docs/s/true/use_bool introspection/'
 
+        # Fix colord self-dependency.
+        edit x11-misc/colord 's/^IUSE="/&+daemon /;s/.*polkit.*/daemon? ( & )/;s,^BDEPEND=",&daemon? ( ${CATEGORY}/${PN} ) ,;s/true daemon/use_bool daemon/;/^src_prepare/r/dev/stdin' << 'EOF'
+use daemon && sed -i -e "s,cd_idt8,'/usr/bin/cd-it8',;s,cd_create_profile,'/usr/bin/cd-create-profile'," data/*/meson.build
+EOF
+
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
         edit app-editors/emacs 's/.{IDEPEND}//'
@@ -1199,32 +1203,8 @@ function write_overlay() {
         edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
 
         # Support building riscv64 UEFI applications.
-        [[ $host == riscv64* ]] && ! grep -Fqs riscv64 "$gentoo"/sys-boot/gnu-efi/gnu-efi-*.ebuild &&
+        [[ $host != riscv64* ]] || grep -Fqs riscv64 "$gentoo"/sys-boot/gnu-efi/gnu-efi-*.ebuild ||
         edit sys-boot/gnu-efi '/^KEYWORDS=/s/ ~\?x86/ ~riscv&/;/i.86.*ia32/{p;s/i.86\|ia32/riscv64/g;}'
-
-        # Support erofs-utils (#701284).
-        mkdir -p "$overlay/sys-fs/erofs-utils"
-        cat << 'EOF' > "$overlay/sys-fs/erofs-utils/erofs-utils-1.4.ebuild"
-EAPI=8
-inherit autotools
-DESCRIPTION="Userspace tools for EROFS images"
-HOMEPAGE="https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git"
-SRC_URI="${HOMEPAGE}/snapshot/${P}.tar.gz"
-LICENSE="GPL-2+"
-SLOT="0"
-KEYWORDS="amd64 arm arm64 ppc ppc64 ~riscv x86"
-IUSE="fuse lz4 selinux +uuid"
-RDEPEND="fuse? ( sys-fs/fuse:0 ) lz4? ( >=app-arch/lz4-1.9 ) selinux? ( sys-libs/libselinux ) uuid? ( sys-apps/util-linux )"
-DEPEND="${RDEPEND}"
-BDEPEND="virtual/pkgconfig"
-src_prepare() { default ; eautoreconf ; }
-src_configure() { econf $(use_enable fuse) $(use_enable lz4) $(use_with selinux) $(use_with uuid) --disable-lzma ; }
-EOF
-        echo DIST erofs-utils-1.4.tar.gz 93979 \
-            BLAKE2B aef1dca8cb95e6104d73a84590319d3c55aba1a4ef5dbdbf470662cb86ee1b66a5707dc1c453470115ec6f2bf1246ee4b6b28aa1cb83b4cb9c8eed45e88668d4 \
-            SHA512  ab95d6a7b2d278ee443d1e378c62354db66ce7ab5ce03b3a8d9004cf498c4e43e3e8ced6524444d2ea4871c4db0195489f033180c8a2082c2cba69c46c09692f \
-            > "$overlay/sys-fs/erofs-utils/Manifest"
-        ebuild "$overlay/sys-fs/erofs-utils/erofs-utils-1.4.ebuild" manifest
 }
 
 # OPTIONAL (BUILDROOT)

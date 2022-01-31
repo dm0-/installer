@@ -8,9 +8,10 @@
 # keep it isolated from any native SCUMMVM saved games.
 #
 # This script implements an option to demonstrate supporting the proprietary
-# NVIDIA drivers on the host system.
+# NVIDIA drivers on the host system.  A numeric value selects the driver branch
+# version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=arch [gpt]=1 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
 
 packages+=(scummvm)
 
@@ -19,11 +20,20 @@ packages_buildroot+=(innoextract)
 function initialize_buildroot() {
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
+
+        # Support an option for running on a host with proprietary drivers.
+        if opt nvidia
+        then
+                local -r suffix="-${options[nvidia]}xx"
+                enable_repo_rpmfusion_nonfree
+                packages+=("xorg-x11-drv-nvidia${suffix##-*[!0-9]*xx}-libs")
+        else packages+=(mesa-dri-drivers)
+        fi
 }
 
-function customize_buildroot() if opt nvidia
-then packages+=(nvidia-utils)
-fi
+function customize_buildroot() {
+        echo tsflags=nodocs >> /etc/dnf/dnf.conf
+}
 
 function customize() {
         exclude_paths+=(

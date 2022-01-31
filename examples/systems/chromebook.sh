@@ -123,7 +123,12 @@ EOF
             -gui -networkmanager -wifi'"'
 
         # Disable LTO for packages broken with this architecture/ABI.
+        echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
+        echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
         echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
+
+        # Avoid the broken panel in 5.16.
+        echo '>=sys-kernel/gentoo-sources-5.16' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {
@@ -376,6 +381,7 @@ CONFIG_DRM_PANFROST=y
 CONFIG_SOUND=y
 CONFIG_SND=y
 CONFIG_SND_SOC=y
+CONFIG_SND_SOC_RK3288_HDMI_ANALOG=y
 CONFIG_SND_SOC_ROCKCHIP=y
 CONFIG_SND_SOC_ROCKCHIP_MAX98090=y
 CONFIG_ROCKCHIP_DW_HDMI=y

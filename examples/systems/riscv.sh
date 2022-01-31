@@ -106,10 +106,10 @@ EOF
         echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv/opensbi/archive/v0.9.tar.gz > "$buildroot/root/opensbi.tgz"
-        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 60f995cb3cd03e3cf5e649194d3395d0fe67499fd960a36cf7058a4efde686f0\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2021.10.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == b105ea21bb5694f779feb38bd4ba444d02c06fc10ae9ee46e031f8c88861c250\ * ]]
+        $curl -L https://github.com/riscv/opensbi/archive/v1.0.tar.gz > "$buildroot/root/opensbi.tgz"
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == a5efaeb24f5ee88d13d5788e4e00623ff312ee12c0bf736aa75a6ad9a850fb76\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2022.01.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == e42bf0cd4e082313308f5310e618b583c8ff306c1f3327c967d31575dd1b5c79\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"

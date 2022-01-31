@@ -131,8 +131,8 @@ function validate_options() {
         opt install_to_disk && (( ${#slots[@]} ))
         # When a root partition slot is chosen, that slot must be defined.
         opt slot && { (( ${#slots[@]} )) ; get_slot_uuid > /dev/null ; }
-        # A partition UUID must be set to create a bootable UEFI disk image.
-        opt gpt && opt uefi && ! opt ramdisk && get_slot_uuid > /dev/null
+        # A partition UUID must be set or generated to create a GPT disk image.
+        opt gpt && ! opt ramdisk && get_slot_uuid > /dev/null
         # IPE can only trust a root file system on verity or in an initrd.
         opt ipe && { opt ramdisk || opt verity ; }
         # A UEFI executable is required in order to sign it or save it.
