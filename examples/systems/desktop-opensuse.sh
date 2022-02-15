@@ -77,6 +77,7 @@ packages+=(
         eog
         evince{,-plugin-{djvu,pdf,tiff,xps}document}
         gdm-systemd
+        gjs
         gnome-backgrounds
         gnome-calculator
         gnome-control-center

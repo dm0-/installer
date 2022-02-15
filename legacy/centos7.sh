@@ -3,6 +3,7 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=centos [release]=7).
 
 packages=()
 
+options[gpt]=
 options[secureboot]=
 options[uefi]=
 

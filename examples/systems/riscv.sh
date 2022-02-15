@@ -65,7 +65,7 @@ function initialize_buildroot() {
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
-            curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
+            curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
@@ -218,9 +218,9 @@ fi
 # Override image partitioning to additionally stuff GRUB into the ESP.
 declare -f verify_distro &>/dev/null &&
 eval "$(declare -f partition | $sed '/^ *mcopy/a\
-mcopy -i esp.img vmlinuz ::/linux_a\
-test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a\
-mcopy -i esp.img grub.cfg ::/grub.cfg')"
+test -s initrd.img && mcopy -i $esp_image initrd.img ::/initrd_a\
+mcopy -i $esp_image vmlinuz ::/linux_a\
+mcopy -i $esp_image grub.cfg ::/grub.cfg')"
 
 function write_system_kernel_config() if opt bootable
 then cat >> /etc/kernel/config.d/system.config

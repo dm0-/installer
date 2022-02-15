@@ -20,11 +20,11 @@ function create_buildroot() {
         packages_buildroot+=(dev-util/debugedit)
 
         $mkdir -p "$buildroot"
-        $curl -L "$stage3.DIGESTS.asc" > "$output/digests"
+        $curl -L "$stage3.asc" > "$output/stage3.txz.sig"
         $curl -L "$stage3" > "$output/stage3.txz"
-        verify_distro "$output/digests" "$output/stage3.txz"
+        verify_distro "$output"/stage3.txz{.sig,}
         $tar -C "$buildroot" -xJf "$output/stage3.txz"
-        $rm -f "$output/digests" "$output/stage3.txz"
+        $rm -f "$output"/stage3.txz{.sig,}
 
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
@@ -55,7 +55,6 @@ sys-fs/erofs-utils ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
-<dev-libs/icu-71 ~*
 dev-libs/nspr ~*
 dev-libs/nss ~*
 www-client/firefox ~*
@@ -95,6 +94,11 @@ gnome-base/librsvg *
 sys-auth/polkit *
 virtual/rust *
 x11-themes/adwaita-icon-theme *
+EOF
+        [[ $arch == aarch64 ]] && opt uefi && $cat << EOF >> "$portage/package.accept_keywords/arm64.conf"
+# Accept binutils-2.38 to support AArch64 UEFI targets.
+<sys-devel/binutils-2.39 **
+<cross-$host/binutils-2.39 **
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -632,9 +636,9 @@ CONFIG_INITRAMFS_FORCE=y
 $(test -s /root/initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/root/initramfs.cpio"
 EOF
         create_ipe_policy
+        local -r arch="$(archmap_kernel "${options[arch]}")"
         test -s vmlinux -o -s vmlinuz || if opt raw_kernel
         then
-                local -r arch="$(archmap_kernel "${options[arch]}")"
                 if opt ipe || opt monolithic
                 then
                         make -C /usr/src/linux -j"$(nproc)" olddefconfig \
@@ -653,7 +657,9 @@ EOF
                             sys-kernel/gentoo-kernel
                         chgrp root /root ; chmod g-x /root
                 fi
-                cp -p "$ROOT"/usr/src/linux/arch/*/boot/*Image* vmlinuz
+                local -r bd="$ROOT/usr/src/linux/arch/$arch/boot"
+                test -s "$bd/Image.gz" && gzip -cd "$bd/Image.gz" > vmlinux ||
+                cp -p "$bd"/*Image* vmlinuz
         fi < /dev/null
 fi
 
@@ -1006,7 +1012,9 @@ function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import << 'EOF'
+        $gpg --import
+        $gpg --verify "$1" "$2"
+} << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBEqUWzgBEACXftaG+HVuSQBEqdpBIg2SOVgWW/KbCihO5wPOsdbM93e+psmb
@@ -1064,9 +1072,6 @@ yqu4wb67pwMX312ABdpW
 =kSzn
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-        $gpg --verify "$1"
-        test x$($sed -n '/^# SHA512/,+1{/^[^#]/{s/ .*//p;q;};}' "$1") = x$($sha512sum "$2" | $sed -n '1s/ .*//p')
-}
 
 function archmap() case ${*:-$DEFAULT_ARCH} in
     aarch64)  echo arm64 ;;

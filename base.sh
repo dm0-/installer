@@ -787,6 +787,7 @@ function produce_uefi_exe() if opt uefi
 then
         local -r arch=$(archmap_uefi ${options[arch]-})
         local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
+        local -r linux=$(test -s vmlinux && echo vmlinux || echo vmlinuz)
         local -r logo=$(test -s logo.bmp && echo logo.bmp)
         local -r osrelease=$(test -s os-release && echo os-release)
         local -r initrd=$(test -s initrd.img && echo initrd.img)
@@ -795,7 +796,7 @@ then
             ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=0x20000} \
             ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=0x30000} \
             ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
-            --add-section .linux=vmlinuz --change-section-vma .linux=0x2000000 \
+            ${linux:+--add-section .linux="$linux" --change-section-vma .linux=0x2000000} \
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x4000000} \
             "/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub" unsigned.efi
 
@@ -841,11 +842,11 @@ then
         if opt uefi
         then
                 local -rx MTOOLS_SKIP_CHECK=1
-                truncate --size=$(( esp * bs )) esp.img
-                mkfs.vfat -F 32 -n EFI-SYSTEM esp.img
-                mmd -i esp.img ::/EFI ::/EFI/BOOT
-                mcopy -i esp.img "$efi" "::/EFI/BOOT/$efi"
-                dd bs=$bs conv=notrunc if=esp.img of=gpt.img seek=$start
+                local -r esp_image="gpt.img@@$(( start * bs ))"
+                mkfs.vfat --offset=$start -F 32 -n EFI-SYSTEM -S $bs \
+                    gpt.img $(( esp * bs >> 10 ))
+                mmd -i $esp_image ::/EFI ::/EFI/BOOT
+                mcopy -i $esp_image "$efi" "::/EFI/BOOT/$efi"
         fi
 
         # Write the root file system if not using a UEFI ramdisk.

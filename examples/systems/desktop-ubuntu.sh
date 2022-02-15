@@ -2,6 +2,10 @@
 # This is a standalone Ubuntu workstation image that aims to demonstrate an
 # alternative to the Fedora workstation example.  It should be approximately
 # equivalent so that they are interchangeable.
+#
+# The proprietary NVIDIA drivers are optionally installed here.  A numeric
+# option value selects the driver branch version, and a non-numeric value
+# defaults to the latest.
 
 options+=(
         [distro]=ubuntu

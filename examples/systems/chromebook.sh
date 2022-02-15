@@ -113,7 +113,7 @@ EOF
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
-            curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
+            curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
@@ -270,12 +270,12 @@ fi
 
 # Override image partitioning to replace the ESP with a ChromeOS kernel.
 declare -f verify_distro &>/dev/null &&
-eval "$(declare -f partition | $sed '
-s/BOOT.*.EFI\|esp.img/kernel.img/g;/272629760/d;s/4194304 *+ *//
-s/uefi/bootable/g;/^ *if opt bootab/,/^ *fi/{/dd/!d;s/dd/opt bootable \&\& &/;}
+eval "$(declare -f partition | $sed 's/BOOT.*.EFI/kernel.img/g
+s/uefi/bootable/g
+/272629760/d;s/4194304 *+ *//;/^ *if opt bootable/,/^ *fi/c\
+opt bootable && dd bs=$bs conv=notrunc if=kernel.img of=gpt.img seek=$start
 s/C12A7328-F81F-11D2-BA4B-00A0C93EC93B/FE3A2A5D-4F32-41A7-B725-ACCC3285A309/g
-s/size=[^ ,]*esp[^ ,]*,/'\''attrs="50 51 52 54 56"'\'', &/g
-s/"EFI System Partition"/KERN-A/g')"
+s/name="EFI System Partition"/name=KERN-A, attrs="50 51 52 54 56"/')"
 
 function write_system_kernel_config() if opt bootable
 then cat >> /etc/kernel/config.d/system.config

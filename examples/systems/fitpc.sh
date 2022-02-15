@@ -109,7 +109,7 @@ EOF
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
-            curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
+            curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
@@ -215,8 +215,8 @@ declare -f verify_distro &>/dev/null &&
 eval "$(declare -f partition | $sed 's/BOOT.*.EFI/grub.cfg/g
 s/uefi/bootable/g
 /mmd/d;s,/EFI/BOOT,,g;/^ *mcopy/a\
-mcopy -i esp.img vmlinuz ::/linux_a\
-test -s initrd.img && mcopy -i esp.img initrd.img ::/initrd_a
+test -s initrd.img && mcopy -i $esp_image initrd.img ::/initrd_a\
+mcopy -i $esp_image vmlinuz ::/linux_a
 /^ *if test -s launch.sh/{s/if/elif/;i\
 if opt bootable ; then\
 dd bs=$bs conv=notrunc if=core.img of=gpt.img seek=34\

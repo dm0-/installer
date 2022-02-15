@@ -10,7 +10,9 @@
 # and build a generic image, delete the two sections of code containing the
 # words "native" and "cpuid2cpuflags".
 #
-# The proprietary NVIDIA drivers are optionally installed here.
+# The proprietary NVIDIA drivers are optionally installed here.  A numeric
+# option value selects the driver branch version, and a non-numeric value
+# defaults to the latest.
 
 options+=(
         [distro]=gentoo  # Use Gentoo to build this image from source.
@@ -105,6 +107,8 @@ function initialize_buildroot() {
         echo -e 'media-libs/nv-codec-headers\nx11-drivers/nvidia-drivers' >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
+        [[ -z ${options[nvidia]-} || ${options[nvidia]} == *[!0-9]* ]] ||
+        echo ">=x11-drivers/nvidia-drivers-$((options[nvidia]+1))" >> "$portage/package.mask/nvidia.conf"
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
@@ -115,7 +119,7 @@ function initialize_buildroot() {
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
-            curl http2 ipv6 libproxy modemmanager networkmanager wifi wps \
+            curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
