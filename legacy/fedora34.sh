@@ -44,4 +44,4 @@ n5Si4l7NpIJubWPqjPoCoP5lsS8=
 EOF
 
 [[ options[release] -ge DEFAULT_RELEASE ]] ||
-. "legacy/fedora$(( --DEFAULT_RELEASE )).sh"
+. "legacy/${options[distro]}$(( --DEFAULT_RELEASE )).sh"

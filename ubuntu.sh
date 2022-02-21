@@ -319,6 +319,12 @@ function archmap() case ${*:-$DEFAULT_ARCH} in
     *) return 1 ;;
 esac
 
+# Point EOL releases at the archive repository server.
+[[ ${options[release]:-$DEFAULT_RELEASE} != 20.10 ]] ||
+eval "$(declare -f create_buildroot | $sed '/fix-apt/i\
+$sed -i -e "/ubuntu.com/s,://[a-z]*,://old-releases," "$buildroot/etc/apt/sources.list"'
+declare -f install_packages | $sed -e 's,://archive,://old-releases,')"
+
 # Override 2020 ramdisk creation since the kernel is too old to support zstd.
 [[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] || eval "$(
 declare -f create_buildroot | $sed 's/ zstd//'
@@ -326,3 +332,11 @@ declare -f configure_initrd_generation | $sed /compress=/d
 declare -f relabel squash build_systemd_ramdisk | $sed \
     -e 's/zstd --[^|>]*/xz --check=crc32 -9e /'
 )"
+
+# Override 2020 ESP creation to support old dosfstools that can't use offsets.
+[[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] ||
+eval "$(declare -f partition | $sed '/^ *if opt uefi/,/^ *fi/{
+/esp_image=/s/=.*/=esp.img ; truncate --size=$(( esp * bs )) $esp_image/
+s/ --offset=[^ ]* / /;s/ gpt.img / $esp_image /
+/^ *fi/idd bs=$bs conv=notrunc if=$esp_image of=gpt.img seek=$start
+}')"

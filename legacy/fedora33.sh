@@ -7,6 +7,13 @@ packages=(glibc-minimal-langpack)
 eval "$(declare -f save_boot_files | $sed "s|\(convert.* \)\([^ ]*svg\)|sed \
 '/id=.g524[17]/,/[/]/{/</,/>/d;}' \2 > /root/logo.svg \&\& \1/root/logo.svg|")"
 
+# Override ESP creation to support old dosfstools that can't use offsets.
+eval "$(declare -f partition | $sed '/^ *if opt uefi/,/^ *fi/{
+/esp_image=/s/=.*/=esp.img ; truncate --size=$(( esp * bs )) $esp_image/
+s/ --offset=[^ ]* / /;s/ gpt.img / $esp_image /
+/^ *fi/idd bs=$bs conv=notrunc if=$esp_image of=gpt.img seek=$start
+}')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
@@ -46,4 +53,4 @@ Aso1t2pypm/1zZexJdOV8yGME3g5l2W6PLgpz58DBECgqc/kda+VWgEAp7rO2A==
 EOF
 
 [[ options[release] -ge DEFAULT_RELEASE ]] ||
-. "legacy/fedora$(( --DEFAULT_RELEASE )).sh"
+. "legacy/${options[distro]}$(( --DEFAULT_RELEASE )).sh"

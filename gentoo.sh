@@ -1206,10 +1206,6 @@ EOF
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
         edit media-libs/fontconfig '/^PDEPEND=.*eselect/s/".*/"/'
         edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
-
-        # Support building riscv64 UEFI applications.
-        [[ $host != riscv64* ]] || grep -Fqs riscv64 "$gentoo"/sys-boot/gnu-efi/gnu-efi-*.ebuild ||
-        edit sys-boot/gnu-efi '/^KEYWORDS=/s/ ~\?x86/ ~riscv&/;/i.86.*ia32/{p;s/i.86\|ia32/riscv64/g;}'
 }
 
 # OPTIONAL (BUILDROOT)

@@ -55,40 +55,34 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Feature Support
 
-Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (34 and the default 35), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (21.04 and the default 21.10).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
+Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (34 and the default 35), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (21.04 and the default 21.10).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
 
-| Status         | Definition                                     |
-| :---:          | :---                                           |
-| :star:         | fully supported                                |
-| :warning:      | fully supported with hacks                     |
-| :construction: | partially supported                            |
-| :fire:         | unsupported but feasible to implement upstream |
-| :skull:        | hopelessly unsupported                         |
+| Status         | Definition                            |
+| :---:          | :---                                  |
+| :star:         | fully supported                       |
+| :warning:      | fully supported with hacks            |
+| :construction: | partially supported                   |
+| :fire:         | unsupported but feasible to implement |
+| :skull:        | hopelessly unsupported                |
 
 **Cross-building**:  A target architecture can be specified to build an image for a processor different than the build system.
 
   * :star: *Gentoo* supports cross-compiling to any architecture for any image type.
-  * :construction: *CentOS 7*, *openSUSE*, and *Ubuntu* support building i686 containers on x86_64 systems.
-  * :skull: *Arch*, *CentOS 8*, and *Fedora* can only create images for the same architecture as the build system.
+  * :construction: *openSUSE*, and *Ubuntu* support building i686 containers on x86_64 systems.
+  * :skull: *Arch*, *CentOS*, and *Fedora* can only create images for the same architecture as the build system.
 
 **Bootable**:  The bootable option produces a kernel and other boot-related files in addition to the root file system.  This option should always be used unless a container is being built.
 
   * :star: *Arch*, *CentOS*, *Fedora*, *openSUSE*, and *Ubuntu* support the bootable option by using the distro kernel (preferring a security-hardened variant where available) and including early microcode updates for all supported CPU types.  This should make the images portable across all hardware supported by the distro and architecture.
   * :warning: *Gentoo* can use a default distro kernel on a handful of common architectures, but it is configured so that it doesn't build or require an initrd.  Early microcode updates need to be handled separately.  Alternatively, configuration files can be provided to build a custom kernel instead, which can support any architecture and bundle microcode/firmware files for the target system.
 
-**RAM Disk**:  The root file system image can be included in an initrd for a bootable system so that it does not need to be written to a partition.  This option runs the system entirely in RAM.  When not using SquashFS, verity, or SELinux, no file system image is produced; the entire root directory is packed into the initrd directly.
+**RAM Disk**:  The root file system image can be included in an initrd for a bootable system so that it does not need to be written to a partition.  This option runs the system entirely in RAM.  When not using SquashFS, verity, or SELinux, no file system image is produced; the entire root directory is packed directly into the initrd.
 
   * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support running in RAM.
 
-**UEFI**:  UEFI support entails building a monolithic executable that contains the kernel, its command-line, and optional components like an initrd and boot logo.  This is intended to include everything needed to boot into the root file system on a UEFI machine.  In practice, it uses the systemd boot stub to assemble the final binary.
+**UEFI / Secure Boot**:  UEFI support entails building a unified executable that contains the kernel, its command-line, and optional components like an initrd and boot logo.  This is intended to include everything needed to boot into the root file system in a single file.  These UEFI binaries are signed for Secure Boot by default.  The certificate and private key can be provided, or temporary keys will be generated for each build instead.
 
-  * :star: *Arch*, *CentOS 8*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support building UEFI binaries.
-  * :skull: *CentOS 7* is too old to support the systemd boot stub, so it cannot use this option.  It does build the Linux UEFI stub into the kernel, so it can run on a UEFI system, but it requires a separate boot loader to handle its command-line and initrd.
-
-**Secure Boot**:  UEFI executables are signed for Secure Boot by default.  The certificate and private key can be provided, or temporary keys will be generated for each build instead.
-
-  * :star: *Arch*, *CentOS 8*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support Secure Boot signing.
-  * :skull: *CentOS 7* does not use Secure Boot since it cannot produce the monolithic UEFI binary.
+  * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support building UEFI binaries with Secure Boot signatures.
 
 **SELinux**:  The SELinux option will install the distro's targeted policy, label the file system accordingly, and enable SELinux enforcement on boot.
 
@@ -96,41 +90,35 @@ Six distros are supported: *Arch*, *CentOS* (7 and the default 8), *Fedora* (34 
   * :construction: *Gentoo*, *openSUSE*, and *Ubuntu* support SELinux, but their policies are experimental and have issues, so they only run in permissive mode by default.
   * :fire: *Arch* does not support SELinux without major customization via AUR, which is not integrated into the build.
 
-**Read-only Root**:  When building an immutable image in general, a basic read-only file system is used for the installation.
+**Read-only Root**:  When building an immutable image in general, a read-only file system is used for the installation.
 
   * :star: *Arch*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* create a packed uncompressed EROFS image for the root file system.
-  * :construction: *CentOS* is too old to support EROFS, so it uses ext4.  *CentOS 8* sets the read-only file system flag, but *CentOS 7* is so old that it can only mount it read-only.
+  * :construction: *CentOS* disables EROFS support, so it uses ext4 with the read-only flag set.
 
-**SquashFS**:  Immutable systems can opt to use SquashFS for a compressed root file system to save space at the cost of runtime decompression.  All compression in the installer (kernels, initrds, root images, binary packages, etc.) aims to standardize on zstd for the best size-to-resource-utilization ratio, but it falls back to xz when unsupported by the distros for slightly smaller sizes and much higher resource utilization.
+**SquashFS**:  Immutable systems can opt to use SquashFS for a compressed root file system to save space at the cost of runtime decompression.  All compression in the installer (kernels, initrds, root images, binary packages, etc.) aims to standardize on zstd for the best size-to-resource-utilization ratio.
 
-  * :star: *Arch*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support SquashFS with zstd compression.
-  * :construction: *CentOS* supports SquashFS, but it falls back to xz compression.
+  * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support SquashFS with zstd compression.
 
 **Verity**:  Verity is cryptographic integrity verification that guarantees a file system has not been modified.  It creates a read-only device mapper node that returns I/O errors if anything has changed.  The verity hash block created for the root file system is directly appended to the image so there is only one file to manage for updates.  The root hash is stored in the kernel command-line, so a UEFI Secure Boot signature authenticates the entire file system.
 
   * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support verity.
-  * :warning: *Arch* and *openSUSE* have a userspace hack until they enable `CONFIG_DM_INIT`.
-  * :warning: *CentOS* is stuck with the userspace hack since it is too old to support dm-init.
+  * :warning: *Arch*, *CentOS*, and *openSUSE* have a userspace hack until they enable `CONFIG_DM_INIT`.
 
-**Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits over verity with Secure Boot, but it can be used to trust additional file systems built at a later date.  It also works on platforms that do not support UEFI, making the kernel the root of trust for the file system instead of the firmware in those cases.  This option enables a setting that requires all verity devices to include a valid signature.
+**Verity Signatures**:  The verity root hash can be signed and loaded into a kernel keyring.  This has no security benefits for the root file system over verity with Secure Boot, but it can be used to trust additional file systems built at a later date.  It also works on platforms that do not support UEFI, making the kernel the root of trust for the file system instead of the firmware in those cases.  This option enables a setting that requires all verity devices to include a valid signature.
 
   * :star: *Gentoo* supports verity signatures by creating an initrd to handle the userspace component.
   * :construction: *Fedora* and *Ubuntu* support verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
-  * :fire: *Arch* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
+  * :fire: *Arch* and *CentOS* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
   * :fire: *openSUSE* cannot use verity signatures until they enable `CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG`.
-  * :skull: *CentOS* is too old to support verity signatures.
 
-**IPE**:  Integrity Policy Enforcement is an experimental (still not upstream) Linux security module that restricts file usage based on integrity properties.  It is currently used to limit sources of kernel resources like firmware and modules, and it can block programs from executing.  The initial policy is built into the kernel, so it gets the same level of verification (e.g. from Secure Boot).  IPE currently requires pairing with the RAM disk or verity option to be usable.  When using an initrd/initramfs, the default policy trusts the initial root file system, so the initrd must also be verified.  Without verity signatures, the default policy trusts only the specific hash of the root file system.  With verity signatures, it trusts any verity device with a valid signature, so the system is extensible.
+**IPE**:  Integrity Policy Enforcement is an experimental (still not upstream) Linux security module that restricts file usage based on integrity properties.  It is currently used to limit sources of kernel resources like firmware and modules, and it can also block programs from executing.  IPE currently requires pairing with the RAM disk or verity option to be usable.  When using an initrd/initramfs, the default policy trusts the initial root file system, so the initrd should be verified (e.g. with Secure Boot).  Without verity signatures, the default policy trusts only the specific hash of the root file system.  With verity signatures, it trusts any verity device with a valid signature, so the system is extensible.
 
   * :construction: *Gentoo* supports IPE, but the patch seems to cause problems with booting stable kernels.  It is only for experimentation at this point.
-  * :fire: *Arch*, *Fedora*, *openSUSE*, and *Ubuntu* do not rebuild kernels to patch in IPE support.
-  * :skull: *CentOS* is too old to support IPE.
+  * :fire: *Arch*, *CentOS*, *Fedora*, *openSUSE*, and *Ubuntu* do not rebuild kernels to patch in IPE support.
 
 ## To Do
 
 **Support configuring systemd with the etc Git overlay.**  The `/etc` directory contains the read-only default configuration files with a writable overlay, and if Git is installed, the modified files in the overlay are tracked in a repository.  The repository database is saved in `/var` so the changes can be stored persistently.  At the moment, the Git overlay is mounted by a systemd unit in the root file system, which happens too late to configure systemd behavior.  It needs to be set up by an initrd before pivoting to the real root file system.
-
-**Extend the package finalization function to cover all of the awful desktop caches.**  Right now, it's only handling glib schemas to make GNOME tolerable, but every other GTK library and XDG specification has its own cache database that technically needs to be regenerated to cover any last system modifications.  To make this thoroughly unbearable, none of these caching applications supports a target root directory, so they all will need to be installed in the final image to update the databases.  I will most likely end up having a dropin directory for package finalization files when this gets even uglier.
 
 **Prepopulate a Wine prefix for the game containers.**  I need to figure out what Wine needs so it can initialize itself in a chroot instead of a full container.  The games currently generate the Wine prefix (and its `C:` drive) every run as a workaround.  By installing a prebuilt `C:` drive and Wine prefix with the GOG registry changes applied, runtime memory will be reduced by potentially hundreds of megabytes and startup times will improve by several seconds.
 

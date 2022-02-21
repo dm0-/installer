@@ -625,6 +625,7 @@ echo -e '[user]\n\tname = root\n\temail = root@localhost' >> config ; \
 cp -pt hooks /usr/share/etcgo/post-checkout ; \
 exec git --work-tree=/ commit --allow-empty --message='Repository created' ; \
 fi"
+ExecStartPre=-/bin/rm -fr worktrees
 ExecStart=/usr/bin/git worktree add --force -B master ../../../run/etcgo/overlay master
 RemainAfterExit=yes
 RuntimeDirectory=etcgo etcgo/overlay etcgo/wd
@@ -786,11 +787,11 @@ EOF
 function produce_uefi_exe() if opt uefi
 then
         local -r arch=$(archmap_uefi ${options[arch]-})
+        local -r initrd=$(test -s initrd.img && echo initrd.img)
         local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
         local -r linux=$(test -s vmlinux && echo vmlinux || echo vmlinuz)
         local -r logo=$(test -s logo.bmp && echo logo.bmp)
         local -r osrelease=$(test -s os-release && echo os-release)
-        local -r initrd=$(test -s initrd.img && echo initrd.img)
 
         objcopy \
             ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=0x20000} \
