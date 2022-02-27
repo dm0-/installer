@@ -123,13 +123,11 @@ EOF
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -colord -gui -networkmanager -policykit -realtime -repart -udisks -wifi'"'
+            -gui -networkmanager -repart -wifi'"'
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
         echo 'sys-apps/systemd gnuefi' >> "$buildroot/etc/portage/package.use/systemd.conf"
-
-        # Block PolicyKit since Mozilla stuff won't build for x32.
-        echo xfce-extra/thunar-volman-9999 >> "$portage/profile/package.provided"
+        echo gnuefi >> "$portage/profile/use.mask/uefi.conf"
 
         # Enable extra bootstrapping objects for x32.
         echo 'sys-libs/glibc multilib-bootstrap' >> "$portage/package.use/glibc.conf"
@@ -230,10 +228,10 @@ exec qemu-kvm -nodefaults \
 EOF
 }
 
-# Override using a cross-compiled UEFI stub in Gentoo.  There is no x32 ABI for
-# the UEFI stuff, so fall back to using the native (assumed amd64) version.
+# Override kernel builds to use the native (assumed amd64) compiler, not x32.
 eval "$(declare -f install_packages save_boot_files | $sed 's/ CROSS_COMPILE=[^ ]* / /')"
-eval "$(declare -f save_boot_files | $sed /systemd/d)"
+
+# Override the UEFI function to skip Gentoo and use the generic native version.
 declare -f produce_uefi_exe.orig &>/dev/null &&
 eval "$(declare -f produce_uefi_exe.orig | $sed 's/\(produce_uefi_exe\).orig/\1/')" &&
 unset produce_uefi_exe.orig ||

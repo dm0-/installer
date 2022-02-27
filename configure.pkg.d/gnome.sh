@@ -60,6 +60,7 @@ visual-bell=true
 statusbar=true
 [org.gnome.Evince.Default]
 continuous=false
+dual-page=true
 sizing-mode='fit-page'
 [org.gnome.settings-daemon.plugins.media-keys]
 max-screencast-length=0

@@ -94,14 +94,14 @@ Ia81vrdksRmtLwAhgJfh6YoSdxKWdtB+/hz2QwK+lHV368XzdeAuWQQGpX3T
 EOG
 curl -L "$1" > rpmfusion-free.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
-rpm --checksig rpmfusion-free{,-tainted}.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
 
 function enable_repo_rpmfusion_nonfree() {
         local key="RPM-GPG-KEY-rpmfusion-nonfree-fedora-${options[release]}"
-        local url="https://download1.rpmfusion.org/nonfree/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-nonfree-release-${options[release]}-1.noarch.rpm"
+        local url="https://download1.rpmfusion.org/nonfree/fedora/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-nonfree-release-${options[release]}-2.noarch.rpm"
         enable_repo_rpmfusion_free
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
 } << 'EOF'
@@ -138,7 +138,7 @@ f9jO+f+R9C+FDT1fcPPIolYTBRCvYQ9B6c+olHVTNNYUmW36TThsbXiYeqQw4JPA
 EOG
 curl -L "$1" > rpmfusion-nonfree.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
-rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF

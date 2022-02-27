@@ -168,7 +168,7 @@ zKK4OjJ644NDcWCHa36znwVmkz3ixL8Q0auR15Oqq2BjR/fyog==
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$1" > epel.rpm
-rpm --checksig epel.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} epel.rpm
 rpm --install epel.rpm
 exec rm -f epel.rpm
 EOF
@@ -212,7 +212,7 @@ RmIw/1lMM/XnE/x+XQzvkcOQPHSxQ+iJjD5arhoROh2wCvfb3IPnYw==
 EOG
 curl -L "$1" > rpmfusion-free.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
-rpm --checksig rpmfusion-free{,-tainted}.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
@@ -256,7 +256,7 @@ dHObVLLxbTYoPqQl+lCZtfyyELWx13EYkn4VkG+y0D79aC7sxwEeZX1n5w==
 EOG
 curl -L "$1" > rpmfusion-nonfree.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
-rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF

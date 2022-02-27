@@ -84,7 +84,7 @@ fs3khghy5i2AU/bOChxRngX2QWR1A117IeADWtuspMFEOyeU5BlMcqjkFdOZI3jX
 EOG
 curl -L "$1" > rpmfusion-free.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
-rpm --checksig rpmfusion-free{,-tainted}.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-free{,-tainted}.rpm
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
@@ -128,7 +128,7 @@ shobGp/ukk6OFzG9MOnPFn19tnO1ZMB+ewATd968K+3yEwJ2woX02iguq77LGPj4
 EOG
 curl -L "$1" > rpmfusion-nonfree.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
-rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-nonfree{,-tainted}.rpm
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF

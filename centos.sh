@@ -6,7 +6,7 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20220217.0
+        local -r cver=20220224.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl zstd)
@@ -16,7 +16,7 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt uefi && packages_buildroot+=(binutils centos-logos systemd-boot)
+        opt uefi && packages_buildroot+=(binutils centos-logos ImageMagick systemd-boot)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
         packages_buildroot+=(e2fsprogs openssl util-linux-core)
@@ -65,7 +65,6 @@ function distro_tweaks() {
 # Override the UEFI logo source to use the dark background variant for CentOS.
 eval "$(declare -f save_boot_files | $sed \
     -e 's,fedora\(-logos/fedora_logo\),centos\1_darkbackground,')"
-[[ ${options[release]:-$DEFAULT_RELEASE} -eq DEFAULT_RELEASE ]] && function convert() { : ; }  #2031268
 
 # Override image generation to drop EROFS support since it's not enabled.
 eval "$(
@@ -153,10 +152,10 @@ declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/'
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo 22e514a0fa44822d51391fcf0a44108b14ae8a15c3b91686ef292de3566a9970 ;;
-            ppc64le) echo a2f9a029bca2cf495d9556d02a56f77ef387d7620d360612df45c84835f079b8 ;;
-            s390x)   echo 304400d4fca755bb576a33f8cf32117cf265ae524d32cdfe566f3b02186ee5a9 ;;
-            x86_64)  echo d2faf63f42a48f4ba9913fe718d26156cb2fda9064ce800020636291959a8c4b ;;
+            aarch64) echo d9434b92cc8653fb0e1f8b773a745f31102747130159d99a4e178f319b522d9f ;;
+            ppc64le) echo bf6671a39665d2f0cc0776d29646dc242fcca1cb4acfa11ee8f22e73cb92601b ;;
+            s390x)   echo f805cdaca815cbab5c4dde4e9d01186a6a598f70fa8b9e5058425a568d546a21 ;;
+            x86_64)  echo 1fbe98ff49411e34fbee7961f1a0256fdc5cbb766ab0352ac43928405d6ab994 ;;
         esac)\ *
 ]]
 
@@ -199,7 +198,7 @@ VL469Kj5m13T6w==
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$1" > epel.rpm
-rpm --checksig epel.rpm
+rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} epel.rpm
 rpm --install epel.rpm
 exec rm -f epel.rpm
 EOF

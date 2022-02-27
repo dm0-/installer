@@ -142,7 +142,7 @@ RjsC7FDbL017qxS+ZVA/HGkyfiu4cpgV8VUnbql5eAZ+1Ll6Dw==
 -----END PGP PUBLIC KEY BLOCK-----
 EOG
 curl -L "$1" > epel.rpm
-rpm --checksig epel.rpm
+rpm --checksig epel.rpm |& sed '/:[a-z0-9 ()]* pgp [a-z0-9 ()]*OK$/!q1'
 rpm --install epel.rpm
 exec rm -f epel.rpm
 EOF
@@ -186,7 +186,7 @@ OEGWGYNPKeu56Dbc18pxBHez9m42
 EOG
 curl -L "$1" > rpmfusion-free.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-free-tainted.rpm
-rpm --checksig rpmfusion-free{,-tainted}.rpm
+rpm --checksig rpmfusion-free{,-tainted}.rpm |& sed '/:[a-z0-9 ()]* pgp [a-z0-9 ()]*OK$/!q1'
 rpm --install rpmfusion-free{,-tainted}.rpm
 exec rm -f rpmfusion-free{,-tainted}.rpm
 EOF
@@ -230,7 +230,7 @@ LMOlOqkf/TTZWb3HXsWQgLt6zIWSi6pS
 EOG
 curl -L "$1" > rpmfusion-nonfree.rpm
 curl -L "${1/-release-/-release-tainted-}" > rpmfusion-nonfree-tainted.rpm
-rpm --checksig rpmfusion-nonfree{,-tainted}.rpm
+rpm --checksig rpmfusion-nonfree{,-tainted}.rpm |& sed '/:[a-z0-9 ()]* pgp [a-z0-9 ()]*OK$/!q1'
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF

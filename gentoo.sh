@@ -198,6 +198,9 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept polkit-0.120 to not require SpiderMonkey.
+        echo '<sys-auth/polkit-0.121 ~*' >> "$portage/package.accept_keywords/polkit.conf"
+
         write_unconditional_patches "$portage/patches"
 
         # Create the target portage profile based on the native root's.
