@@ -103,7 +103,7 @@ function initialize_buildroot() {
         $sed -n '/^vendor_id.*AuthenticAMD$/q0;$q1' /proc/cpuinfo && echo CONFIG_MNATIVE_AMD=y >> "$buildroot/etc/kernel/config.d/native.config"
 
         # Use the latest NVIDIA drivers when requested.
-        echo 'USE="$USE dist-kernel kmod"' >> "$portage/make.conf"
+        echo "USE=\"\$USE dist-kernel kmod${options[nvidia]:+ cuda nvenc}\"" >> "$portage/make.conf"
         echo -e 'media-libs/nv-codec-headers\nx11-drivers/nvidia-drivers' >> "$portage/package.accept_keywords/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers NVIDIA-r2' >> "$portage/package.license/nvidia.conf"
         echo 'x11-drivers/nvidia-drivers -tools' >> "$portage/package.use/nvidia.conf"
@@ -131,7 +131,7 @@ function initialize_buildroot() {
         # Support a bunch of common video drivers.
         $sed -i -e '/^LLVM_TARGETS=/s/" *$/ AMDGPU&/' "$buildroot/etc/portage/make.conf" "$portage/make.conf"
         echo 'USE="$USE llvm"' >> "$portage/make.conf"
-        echo "VIDEO_CARDS=\"amdgpu fbdev intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
+        echo "VIDEO_CARDS=\"amdgpu fbdev i915 intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
         packages+=(x11-libs/libva-{intel,vdpau}-driver)
 
         # Install VLC.
@@ -187,7 +187,7 @@ EOF
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
     -cpu host -m 8G -vga std -nic user \
-    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
+    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"
 EOF

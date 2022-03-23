@@ -89,10 +89,6 @@ sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
 
-        # Fix the spidermonkey linker since gold does not exist for riscv.
-        echo 'EXTRA_ECONF="--enable-linker=bfd"' >> "$portage/env/spidermonkey.conf"
-        echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"
-
         # Build RISC-V UEFI GRUB for bootloader testing.
         packages_buildroot+=(sys-boot/grub)
         $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
@@ -110,6 +106,9 @@ EOF
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == a5efaeb24f5ee88d13d5788e4e00623ff312ee12c0bf736aa75a6ad9a850fb76\ * ]]
         $curl -L https://github.com/u-boot/u-boot/archive/v2022.01.tar.gz > "$buildroot/root/u-boot.tgz"
         [[ $($sha256sum "$buildroot/root/u-boot.tgz") == e42bf0cd4e082313308f5310e618b583c8ff306c1f3327c967d31575dd1b5c79\ * ]]
+
+        # Work around binutils-2.38 failing to build GRUB.
+        echo ">=cross-${options[host]}/binutils-2.38" >> "$buildroot/etc/portage/package.mask/binutils.conf"
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
@@ -176,7 +175,7 @@ EOF
 exec qemu-system-riscv64 -nographic \
     -L "$PWD" -bios opensbi-uboot.bin \
     -machine virt -cpu rv64 -m 4G \
-    -drive file="${IMAGE:-gpt.img}",format=raw,id=hd0,media=disk \
+    -drive file="${IMAGE:-gpt.img}",format=raw,id=hd0,media=disk,snapshot=on \
     -netdev user,id=net0 \
     -object rng-random,id=rng0 \
     -device virtio-blk-device,drive=hd0 \
@@ -259,7 +258,6 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
 CONFIG_NFT_CT=y
 ## Support translating iptables to nftables.
 CONFIG_NFT_COMPAT=y

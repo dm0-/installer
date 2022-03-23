@@ -132,10 +132,6 @@ EOF
         echo 'GRUB_PLATFORMS="uboot"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
 
-        # Disable SIMD in SpiderMonkey Rust crates.
-        echo 'EXTRA_ECONF="--disable-rust-simd"' >> "$portage/env/spidermonkey.conf"
-        echo 'dev-lang/spidermonkey spidermonkey.conf' >> "$portage/package.env/spidermonkey.conf"
-
         # Improve Linux's support for this system.
         write_kernel_patch
 }
@@ -345,7 +341,6 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
 CONFIG_NFT_CT=y
 ## Support translating iptables to nftables.
 CONFIG_NFT_COMPAT=y

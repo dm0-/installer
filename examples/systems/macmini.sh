@@ -133,9 +133,6 @@ EOF
         # Build GRUB to boot from Open Firmware.
         echo 'GRUB_PLATFORMS="ieee1275"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
-
-        # Disable LTO for packages broken with this architecture/ABI.
-        echo 'dev-lang/spidermonkey -lto' >> "$portage/package.use/spidermonkey.conf"
 }
 
 function customize_buildroot() {
@@ -181,7 +178,7 @@ exec qemu-system-ppc -nodefaults \
     -machine mac99,via=pmu -cpu g4 -m 1G -vga std -nic user,model=sungem \
     -device pci-ohci -device usb-kbd -device usb-mouse \
     -prom-env 'boot-device=hd:2,grub.elf' \
-    -drive file="${IMAGE:-apm.img}",format=raw,media=disk \
+    -drive file="${IMAGE:-apm.img}",format=raw,media=disk,snapshot=on \
     "$@"
 EOF
 }
@@ -328,7 +325,6 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
 CONFIG_NFT_CT=y
 ## Support translating iptables to nftables.
 CONFIG_NFT_COMPAT=y

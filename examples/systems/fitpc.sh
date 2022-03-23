@@ -159,7 +159,7 @@ exec qemu-system-i386 -nodefaults \
     -cpu qemu32,+3dnow,+3dnowext,+clflush,+mmx,+mmxext,-apic,-sse,-sse2 \
     -m 512M -vga std -nic user,model=e1000 \
     -device usb-ehci -device usb-kbd -device usb-mouse \
-    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
+    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     "$@"
 EOF
 }
@@ -291,7 +291,6 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
 CONFIG_NFT_CT=y
 ## Support translating iptables to nftables.
 CONFIG_NFT_COMPAT=y

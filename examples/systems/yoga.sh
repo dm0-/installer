@@ -132,20 +132,6 @@ EOF
         # Enable extra bootstrapping objects for x32.
         echo 'sys-libs/glibc multilib-bootstrap' >> "$portage/package.use/glibc.conf"
 
-        # Fix librsvg.
-        $mkdir -p "$portage/patches/gnome-base/librsvg"
-        $curl -L https://github.com/heycam/thin-slice/pull/1/commits/5db6f6cc8322e7b0211c51d61ace9552d8d820ee.patch > "$portage/patches/gnome-base/librsvg/x32.patch"
-        [[ $($sha256sum "$portage/patches/gnome-base/librsvg/x32.patch") == 7f02638d7b895b7ef653f2eb2c8c7e174ff75fca4e26389c7b629855493da0ea\ * ]]
-        $sed -i -e 's,^[+-][+-][+-] [ab]/,&vendor/thin-slice/,' "$portage/patches/gnome-base/librsvg/x32.patch"
-        $cat << 'EOF' >> "$portage/patches/gnome-base/librsvg/x32.patch"
---- a/vendor/thin-slice/.cargo-checksum.json
-+++ b/vendor/thin-slice/.cargo-checksum.json
-@@ -1 +1 @@
--{"files":{"Cargo.toml":"bc648e7794ea9bf0b7b520a0ba079ef65226158dc6ece1e617beadc52456e1b7","README.md":"4a83c0adbfdd3ae8047fe4fd26536d27b4e8db813f9926ee8ab09b784294e50f","src/lib.rs":"5b1f2bfc9edfc6036a8880cde88f862931eec5036e6cf63690f82921053b29fe"},"package":"8eaa81235c7058867fa8c0e7314f33dcce9c215f535d1913822a2b3f5e289f3c"}
-\ No newline at end of file
-+{"files":{},"package":"8eaa81235c7058867fa8c0e7314f33dcce9c215f535d1913822a2b3f5e289f3c"}
-EOF
-
         # Fix libvpx.
         $mkdir -p "$portage/patches/media-libs/libvpx"
         $cat << 'EOF' > "$portage/patches/media-libs/libvpx/x32.patch"
@@ -179,6 +165,9 @@ EOF
 EOF
         echo 'MYCMAKEARGS="-DAOM_TARGET_CPU=x86_64"' >> "$portage/env/libaom.conf"
         echo 'media-libs/libaom libaom.conf' >> "$portage/package.env/libaom.conf"
+
+        # Avoid wireless drivers being incompatible with 5.17.
+        echo '>=sys-kernel/gentoo-sources-5.17' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {
@@ -222,7 +211,7 @@ function customize() {
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
     -cpu host -smp 4,cores=4 -m 4G -vga std -nic user \
-    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk \
+    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"
 EOF

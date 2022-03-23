@@ -64,7 +64,6 @@ EOF
 gnome-base/* *
 gnome-extra/* *
 app-arch/gnome-autoar *
-<app-i18n/ibus-1.5.24 ~*
 dev-libs/libgweather *
 gui-libs/libhandy *
 media-gfx/gnome-screenshot *
@@ -198,6 +197,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept eselect-iptables-20220320 to fix ip6tables.
+        echo '<app-eselect/eselect-iptables-20220321 ~*' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept polkit-0.120 to not require SpiderMonkey.
         echo '<sys-auth/polkit-0.121 ~*' >> "$portage/package.accept_keywords/polkit.conf"
 
@@ -247,10 +248,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/nftables.conf"
 # Use the newer backend in iptables.
 net-firewall/iptables nftables
-EOF
-        $cat << 'EOF' >> "$portage/package.use/portage.conf"
-# Cross-compiling portage native extensions is unsupported.
-sys-apps/portage -native-extensions
 EOF
         $cat << 'EOF' >> "$portage/package.use/sqlite.conf"
 # Always enable secure delete for SQLite.
@@ -1177,7 +1174,8 @@ function write_overlay() {
         edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
 
         # Drop the buildroot multilib requirement for Rust (#753764).
-        edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//'
+        edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//;/^src_prepare/a\
+export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET]\nlinker = \\"$CHOST-gcc\\"" > "$CARGO_HOME/config.toml"'
 
         # Fix sestatus installation with UsrMerge (or unified bindir, really).
         edit sys-apps/policycoreutils '/setfiles/ause split-usr || rm -f "${ED}/usr/sbin/sestatus"'
@@ -1199,9 +1197,8 @@ function write_overlay() {
         edit net-misc/networkmanager '/docs/s/true/use_bool introspection/'
 
         # Fix colord self-dependency.
-        edit x11-misc/colord 's/^IUSE="/&+daemon /;s/.*polkit.*/daemon? ( & )/;s,^BDEPEND=",&daemon? ( ${CATEGORY}/${PN} ) ,;s/true daemon/use_bool daemon/;/^src_prepare/r/dev/stdin' << 'EOF'
-use daemon && sed -i -e "s,cd_idt8,'/usr/bin/cd-it8',;s,cd_create_profile,'/usr/bin/cd-create-profile'," data/*/meson.build
-EOF
+        edit x11-misc/colord 's/^IUSE="/&+daemon /;s/.*polkit.*/daemon? ( & )/;s,^BDEPEND=",&daemon? ( ${CATEGORY}/${PN} ) ,;s/true daemon/use_bool daemon/;/^src_prepare/a\
+use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,'\''/usr/bin/cd-create-profile'\''," data/*/meson.build'
 
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
