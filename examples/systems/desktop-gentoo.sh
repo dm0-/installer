@@ -15,13 +15,13 @@
 # defaults to the latest.
 
 options+=(
-        [distro]=gentoo  # Use Gentoo to build this image from source.
-        [gpt]=1          # Generate a VM disk image for fast testing.
-        [nvme]=1         # Support root on an NVMe disk.
-        [selinux]=1      # Load a targeted SELinux policy in permissive mode.
-        [squash]=1       # Use a highly compressed file system to save space.
-        [uefi]=1         # Create a UEFI executable that boots into this image.
-        [verity_sig]=1   # Require all verity root hashes to be verified.
+        [distro]=gentoo         # Use Gentoo to build this image from source.
+        [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [nvme]=1                # Support root on an NVMe disk.
+        [selinux]=targeted      # Load this SELinux policy in permissive mode.
+        [squash]=1              # Use a compressed file system to save space.
+        [uefi]=1                # Create a UEFI executable to boot this image.
+        [verity_sig]=1          # Require verifying all verity root hashes.
 )
 
 packages+=(
@@ -137,6 +137,9 @@ function initialize_buildroot() {
         # Install VLC.
         fix_package vlc
         packages+=(media-video/vlc)
+
+        # Avoid audit build failures with Linux 5.17 headers.
+        echo '>=sys-kernel/linux-headers-5.17' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {

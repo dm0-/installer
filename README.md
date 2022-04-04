@@ -41,7 +41,7 @@ For a quick demonstration, it can technically be run with no options.  In this c
     bash -x install.sh
     systemd-nspawn -i output.*/final.img
 
-For a bootable system example with no configuration file, use `-S` to compress the root file system, `-K` to bundle it in the initrd, `-Z` to protect it with SELinux, and `-E` to save it to your EFI system partition.  If optional PEM certificate and key files were given, the executable will be signed with them.  It can then be booted with the UEFI shell or by running `chainloader` in GRUB.
+For a bootable system example with no configuration file, use `-S` to compress the root file system, `-K` to bundle it in the initrd, `-Z` to protect it with the targeted SELinux policy, and `-E` to save it to your EFI system partition.  If optional PEM certificate and key files were given, the executable will be signed with them.  It can then be booted with the UEFI shell or by running `chainloader` in GRUB.
 
     bash -x install.sh -KSZE /boot/efi/EFI/BOOT/DEMO.EFI -c cert.pem -k key.pem
 
@@ -84,9 +84,9 @@ Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (34 and the default 35
 
   * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support building UEFI binaries with Secure Boot signatures.
 
-**SELinux**:  The SELinux option will install the distro's targeted policy, label the file system accordingly, and enable SELinux enforcement on boot.
+**SELinux**:  The SELinux option will install the selected policy (targeted by default), label the file system accordingly, and enable SELinux enforcement on boot.
 
-  * :star: *CentOS* and *Fedora* support SELinux in enforcing mode.
+  * :star: *CentOS* and *Fedora* support the SELinux targeted policy in enforcing mode.
   * :construction: *Gentoo*, *openSUSE*, and *Ubuntu* support SELinux, but their policies are experimental and have issues, so they only run in permissive mode by default.
   * :fire: *Arch* does not support SELinux without major customization via AUR, which is not integrated into the build.
 

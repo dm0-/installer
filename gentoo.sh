@@ -2,6 +2,8 @@
 packages=(app-shells/bash sys-apps/coreutils)
 packages_buildroot=()
 
+options[enforcing]=
+
 function create_buildroot() {
         local -r arch=${options[arch]:=$DEFAULT_ARCH}
         local -r host=${options[host]:=$arch-${options[distro]}-linux-gnu$([[ $arch == arm* ]] && echo eabi${options[hardfp]:+hf})}
@@ -43,7 +45,7 @@ FEATURES="multilib-strict parallel-fetch parallel-install xattr -merge-sync -net
 GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}"
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
-POLICY_TYPES="targeted"
+POLICY_TYPES="${options[selinux]:-targeted}"
 USE="\$USE system-icu system-png -fortran -gtk-doc -introspection -vala"
 VIDEO_CARDS=""
 EOF
@@ -57,6 +59,7 @@ EOF
 # Accept the latest (non-ESR) Firefox release.
 dev-libs/nspr ~*
 dev-libs/nss ~*
+media-libs/dav1d ~*
 www-client/firefox ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
@@ -197,8 +200,12 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept eselect-fontconfig-20220403 to fix symlinks.
+        echo '<app-eselect/eselect-fontconfig-20220404 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
         # Accept eselect-iptables-20220320 to fix ip6tables.
-        echo '<app-eselect/eselect-iptables-20220321 ~*' >> "$portage/package.accept_keywords/iptables.conf"
+        echo 'app-eselect/eselect-iptables *' >> "$portage/package.accept_keywords/iptables.conf"
+        # Accept fontconfig-2.14 to fix the eselect module.
+        echo '<media-libs/fontconfig-2.15 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
         # Accept polkit-0.120 to not require SpiderMonkey.
         echo '<sys-auth/polkit-0.121 ~*' >> "$portage/package.accept_keywords/polkit.conf"
 
@@ -487,8 +494,9 @@ EOF
 
         # Cheat bootstrapping packages with circular dependencies.
         deepdeps "${packages[@]}" "${packages_sysroot[@]}" "$@" | sed 's/-[0-9].*//' > /root/xdeps
-        USE='-* drm kill nettle truetype' emerge --changed-use --oneshot --verbose \
+        USE='-* drm kill minimal nettle truetype' emerge --changed-use --oneshot --verbose \
             $(using media-libs/freetype harfbuzz && grep -Foxm1 media-libs/harfbuzz /root/xdeps) \
+            $(using media-libs/libsndfile minimal || grep -Foxm1 media-libs/libsndfile /root/xdeps) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
             $(using media-libs/mesa gallium vaapi && using x11-libs/libva opengl && grep -Foxm1 x11-libs/libva /root/xdeps) \
@@ -551,11 +559,8 @@ function distro_tweaks() {
             -e '/^\[Unit]/aConditionFileNotEmpty=/etc/wpa_supplicant/wpa_supplicant-nl80211-%I.conf' \
             root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service
 
-        # The targeted policy seems more realistic to get working first.
-        test -s root/etc/selinux/config &&
-        sed -i -e '/^SELINUXTYPE=/s/=.*/=targeted/' root/etc/selinux/config
-
         # The targeted policy does not support a sensitivity level.
+        [[ ${options[selinux]:-targeted} == targeted ]] &&
         sed -i -e 's/t:s0/t/g' root/usr/lib/systemd/system/*.mount
 
         # Perform case-insensitive searches in less by default.
@@ -1204,7 +1209,6 @@ use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
         edit app-editors/emacs 's/.{IDEPEND}//'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
-        edit media-libs/fontconfig '/^PDEPEND=.*eselect/s/".*/"/'
         edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
 }
 

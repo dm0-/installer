@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 packages_buildroot=()
 
+options[enforcing]=
+
 DEFAULT_RELEASE=21.10
 
 function create_buildroot() {
@@ -50,7 +52,7 @@ EOF
 
 function install_packages() {
         opt bootable || opt networkd && packages+=(libpam-systemd)
-        opt selinux && packages+=(selinux-policy-default)
+        opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
         mount -o bind,X-mount.mkdir {,root}/var/cache/apt
         trap -- 'umount root/var/cache/apt ; trap - RETURN' RETURN
@@ -240,16 +242,13 @@ Type=oneshot'
         fi
 fi
 
+# Override the default SELinux policy mapping to use this distro's default.
+eval "$(declare -f validate_options | $sed s/=targeted/=default/)"
+
 # Override relabeling to fix pthread_cancel and broken QEMU display behavior.
 eval "$(declare -f relabel | $sed \
     -e '/ldd/iopt squash && cp -t "$root/lib" /usr/lib/*/libgcc_s.so.1' \
     -e 's/qemu-system-[^ ]* /&-display none /g')"
-
-# Override kernel arguments to use SELinux instead of AppArmor.
-eval "$(
-declare -f relabel | $sed 's/ -append /&security=selinux" "/'
-declare -f kernel_cmdline | $sed 's/^ *echo /&${options[selinux]:+security=selinux} /'
-)"
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"

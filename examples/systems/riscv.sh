@@ -4,14 +4,14 @@
 # around UEFI support.  Secure Boot cannot be enforced with the current setup.
 
 options+=(
-        [arch]=riscv64   # Target RISC-V emulators.
-        [distro]=gentoo  # Use Gentoo to build this image from source.
-        [gpt]=1          # Generate a VM disk image for fast testing.
-        [monolithic]=1   # Build all boot-related files into the kernel image.
-        [networkd]=1     # Let systemd manage the network configuration.
-        [secureboot]=    # This is unused until systemd-boot supports RISC-V.
-        [uefi]=1         # This is for hacking purposes only.
-        [verity_sig]=1   # Require all verity root hashes to be verified.
+        [distro]=gentoo         # Use Gentoo to build this image from source.
+        [arch]=riscv64          # Target generic emulated RISC-V CPUs.
+        [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [monolithic]=1          # Build all boot-related files into the kernel.
+        [networkd]=1            # Let systemd manage the network configuration.
+        [secureboot]=           # Wait until systemd-boot supports RISC-V.
+        [uefi]=1                # Create a UEFI executable to boot this image.
+        [verity_sig]=1          # Require verifying all verity root hashes.
 )
 
 packages+=(

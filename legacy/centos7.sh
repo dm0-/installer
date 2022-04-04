@@ -41,7 +41,7 @@ function create_buildroot() {
 function install_packages() {
         opt bootable && packages+=(systemd)
         opt networkd && packages+=(systemd-networkd systemd-resolved)
-        opt selinux && packages+=(selinux-policy-targeted)
+        opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
         mount -o bind,x-mount.mkdir {,root}/var/cache/yum
         trap -- 'umount root/var/cache/yum ; trap - RETURN' RETURN

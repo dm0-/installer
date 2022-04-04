@@ -10,11 +10,12 @@
 # driver branch version, and a non-numeric value defaults to the latest.
 
 options+=(
-        [gpt]=1         # Generate a VM disk image for fast testing.
-        [selinux]=1     # Enforce a targeted SELinux policy.
-        [squash]=1      # Use a highly compressed file system to save space.
-        [uefi]=1        # Create a UEFI executable that boots into this image.
-        [verity]=1      # Prevent the file system from being modified.
+        [distro]=fedora
+        [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [selinux]=targeted      # Enforce this SELinux policy.
+        [squash]=1              # Use a compressed file system to save space.
+        [uefi]=1                # Create a UEFI executable to boot this image.
+        [verity]=1              # Prevent the file system from being modified.
 )
 
 packages+=(

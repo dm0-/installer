@@ -8,10 +8,10 @@
 
 options+=(
         [distro]=arch
-        [gpt]=1         # Generate a VM disk image for fast testing.
-        [squash]=1      # Use a highly compressed file system to save space.
-        [uefi]=1        # Create a UEFI executable that boots into this image.
-        [verity]=1      # Prevent the file system from being modified.
+        [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [squash]=1              # Use a compressed file system to save space.
+        [uefi]=1                # Create a UEFI executable to boot this image.
+        [verity]=1              # Prevent the file system from being modified.
 )
 
 packages+=(

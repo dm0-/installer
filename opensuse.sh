@@ -2,6 +2,7 @@
 packages=(aaa_base branding-openSUSE openSUSE-release)
 packages_buildroot=()
 
+options[enforcing]=
 options[verity_sig]=
 
 function create_buildroot() {
@@ -51,7 +52,7 @@ EOF
 function install_packages() {
         opt bootable && packages+=(systemd)
         opt networkd && packages+=(systemd-network)
-        opt selinux && packages+=(selinux-policy-targeted)
+        opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
         opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
         zypper --non-interactive --installroot="$PWD/root" \
@@ -84,12 +85,6 @@ function distro_tweaks() {
         test -s root/etc/pam.d/common-auth &&
         sed -i -e 's/try_first_pass/& nullok/' root/etc/pam.d/common-auth
 
-        test -s root/etc/sysconfig/selinux-policy &&
-        sed -i \
-            -e '/^SELINUX=/s/=.*/=permissive/' \
-            -e '/^SELINUXTYPE=/s/=.*/=targeted/' \
-            root/etc/selinux/config
-
         sed -i -e '1,/ PS1=/s/ PS1="/&$? /' root/etc/bash.bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.alias
 }
@@ -110,12 +105,6 @@ eval "$(declare -f relabel | $sed \
 local mod ; for mod in drivers/ata/ata_piix fs/{jbd2/jbd2,mbcache,ext4/ext4}\
 do zstd -cd /lib/modules/*/*/"$mod.ko.zst" > "$root/lib/${mod##*/}.ko"\
 sed -i -e "/sda/iinsmod /lib/${mod##*/}.ko" "$root/init" ; done')"
-
-# Override kernel arguments to use SELinux instead of AppArmor.
-eval "$(
-declare -f relabel | $sed 's/ -append /&security=selinux" "/'
-declare -f kernel_cmdline | $sed 's/^ *echo /&${options[selinux]:+security=selinux} /'
-)"
 
 # Override dm-init with userspace since the openSUSE kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"

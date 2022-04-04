@@ -14,14 +14,13 @@
 # on the startup screen while the system is in developer mode.
 
 options+=(
-        [arch]=armv7a    # Target ARM Cortex-A17 CPUs.
-        [distro]=gentoo  # Use Gentoo to build this image from source.
-        [bootable]=1     # Build a kernel for this system.
-        [gpt]=1          # Generate a ready-to-boot GPT disk image.
-        [monolithic]=1   # Build all boot-related files into the kernel image.
-        [networkd]=1     # Let systemd manage the network configuration.
-        [uefi]=          # This platform does not support UEFI.
-        [verity_sig]=1   # Require all verity root hashes to be verified.
+        [distro]=gentoo         # Use Gentoo to build this image from source.
+        [arch]=armv7a           # Target ARM Cortex-A17 CPUs.
+        [bootable]=1            # Build a kernel for this system.
+        [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [monolithic]=1          # Build all boot-related files into the kernel.
+        [networkd]=1            # Let systemd manage the network configuration.
+        [verity_sig]=1          # Require verifying all verity root hashes.
 )
 
 packages+=(

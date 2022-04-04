@@ -9,6 +9,7 @@ declare -A options
 options[distro]=fedora
 options[append]=      # The arguments to append to the kernel command-line
 options[bootable]=    # Include a kernel and init system to boot the image
+options[enforcing]=   # Enforce the SELinux policy instead of being permissive
 options[gpt]=         # Create a partitioned GPT disk image
 options[hardfp]=      # Use the hard-float ABI for ARMv6 and ARMv7 targets
 options[ipe]=         # Write and enforce an IPE policy focused on the root FS
@@ -17,7 +18,7 @@ options[nvme]=        # Support root on an NVMe disk
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
 options[secureboot]=  # Sign the UEFI executable for Secure Boot verification
-options[selinux]=     # Enforce SELinux policy
+options[selinux]=     # Enable SELinux and relabel with the given policy
 options[slot]=        # The root partition slot for the build to target
 options[squash]=      # Produce a compressed squashfs image
 options[uefi]=        # Generate a single UEFI executable containing boot files
@@ -106,6 +107,7 @@ function imply_options() {
         opt sb_cert && opt sb_key && options[secureboot]=1
         opt verity_cert && opt verity_key && options[verity_sig]=1
         opt secureboot || opt uefi_path && options[uefi]=1
+        opt selinux && options[enforcing]=1
         opt verity_sig && options[verity]=1
         opt squash || opt verity && options[read_only]=1
         opt uefi || opt ramdisk && options[bootable]=1
@@ -137,6 +139,10 @@ function validate_options() {
         opt ipe && { opt ramdisk || opt verity ; }
         # A UEFI executable is required in order to sign it or save it.
         opt secureboot || opt uefi_path && opt uefi
+        # SELinux must be enabled to enforce it.
+        opt enforcing && opt selinux
+        # Map the boolean SELinux option to a default policy name.
+        [[ ${options[selinux]-} =~ ^(1|selinux)$ ]] && options[selinux]=targeted
         # A verity signature can't exist without verity.
         opt verity_sig && opt verity
         # Enforce the read-only setting when writing is unsupported.
@@ -344,8 +350,9 @@ EOF
         local -r cores=$(test -e /dev/kvm && nproc)
         qemu-system-x86_64 -nodefaults -no-reboot -serial stdio < /dev/null \
             ${cores:+-enable-kvm -cpu host -smp cores="$cores"} -m 1G \
-            -kernel vmlinuz.relabel -append console=ttyS0 \
-            -initrd relabel.img /dev/loop-root
+            -kernel vmlinuz.relabel -initrd relabel.img \
+            -append 'console=ttyS0 enforcing=0 lsm=selinux' \
+            -drive file=/dev/loop-root,format=raw,media=disk
         mount /dev/loop-root root
         opt read_only && mv -t . "root/$disk"
         test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS
@@ -448,8 +455,9 @@ then
         echo > kernel_args.txt \
             $(opt read_only && echo ro || echo rw) \
             $(test -s final.img && echo "root=$root" "rootfstype=$type") \
-            $(opt verity && echo "$dmsetup=\"$(<dmsetup.txt)\"") \
-            $(opt verity_sig && echo dm-verity.require_signatures=1) \
+            ${options[selinux]:+security=selinux} \
+            ${options[verity]:+"$dmsetup=\"$(<dmsetup.txt)\""} \
+            ${options[verity_sig]:+dm-verity.require_signatures=1} \
             ${options[append]-}
 fi
 
@@ -678,6 +686,13 @@ function configure_system() {
 
         test -s root/etc/profile &&
         sed -i -e 's/ umask 0[0-7]*/ umask 022/' root/etc/profile
+
+        local -ar modes=(disabled permissive enforcing)
+        test -s root/etc/selinux/config &&
+        sed -i \
+            -e "/^SELINUX=/s/=.*/=${modes[0${options[selinux]:+1+0${options[enforcing]:+1}}]}/" \
+            -e "/^SELINUXTYPE=/s/=.*/=${options[selinux]:-targeted}/" \
+            root/etc/selinux/config
 
         mkdir -p root/etc/skel
         cat << 'EOF' >> root/etc/skel/.bashrc

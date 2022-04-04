@@ -8,13 +8,13 @@
 # UEFI boot device by starting the system using the Novo button.
 
 options+=(
-        [arch]=x86_64    # Target Intel Pentium N3530 CPUs.
-        [distro]=gentoo  # Use Gentoo to build this image from source.
-        [gpt]=1          # Generate a VM disk image for fast testing.
-        [networkd]=1     # Let systemd manage the network configuration.
-        [squash]=1       # Use a highly compressed file system to save space.
-        [uefi]=1         # Create a UEFI executable that boots into this image.
-        [verity_sig]=1   # Require all verity root hashes to be verified.
+        [distro]=gentoo         # Use Gentoo to build this image from source.
+        [arch]=x86_64           # Target Intel Pentium N3530 CPUs.
+        [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [networkd]=1            # Let systemd manage the network configuration.
+        [squash]=1              # Use a compressed file system to save space.
+        [uefi]=1                # Create a UEFI executable to boot this image.
+        [verity_sig]=1          # Require verifying all verity root hashes.
 
         # Customize the target triplet and profile for the x32 ABI.
         [host]=x86_64-gentoo-linux-gnux32

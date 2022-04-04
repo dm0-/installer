@@ -95,7 +95,9 @@ do insmod "/lib/$mod.ko"
 done
 mount /dev/sda /sysroot
 load_policy -i
-setfiles -vFr /sysroot{,/etc/selinux/targeted/contexts/files/file_contexts,}
+policy=$(sed -n 's/^SELINUXTYPE=//p' /etc/selinux/config)
+/bin/setfiles -vFr /sysroot \
+    "/sysroot/etc/selinux/$policy/contexts/files/file_contexts" /sysroot
 mksquashfs /sysroot /sysroot/squash.img -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
 echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
@@ -111,7 +113,7 @@ EOF
         fi
 
         cp -t "$root/bin" \
-            /usr/*bin/{bash,load_policy,mount,setfiles,umount}
+            /usr/*bin/{bash,load_policy,mount,sed,setfiles,umount}
         cp /usr/bin/kmod "$root/bin/insmod"
         find /usr/lib/modules/*/kernel '(' \
             -name t10-pi.ko.xz -o -name sd_mod.ko.xz -o \
@@ -132,8 +134,9 @@ EOF
         local -r cores=$(test -e /dev/kvm && nproc)
         /usr/libexec/qemu-kvm -nodefaults -no-reboot -serial stdio < /dev/null \
             ${cores:+-cpu host -smp cores="$cores"} -m 1G \
-            -kernel /lib/modules/*/vmlinuz -append console=ttyS0 \
-            -initrd relabel.img /dev/loop-root
+            -kernel /lib/modules/*/vmlinuz -initrd relabel.img \
+            -append 'console=ttyS0 enforcing=0 lsm=selinux' \
+            -drive file=/dev/loop-root,format=raw,media=disk
         mount /dev/loop-root root
         opt squash && mv -t . "root/$disk"
         test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS

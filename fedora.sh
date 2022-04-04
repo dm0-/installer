@@ -50,7 +50,7 @@ EOF
 function install_packages() {
         opt bootable && packages+=(systemd)
         opt networkd && packages+=(systemd-networkd systemd-resolved)
-        opt selinux && packages+=(selinux-policy-targeted)
+        opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
         mount -o bind,X-mount.mkdir {,root}/var/cache/dnf
         trap -- 'umount root/var/cache/dnf ; trap - RETURN' RETURN
@@ -320,7 +320,10 @@ EOF
 # OPTIONAL (IMAGE)
 
 function save_rpm_db() {
-        opt selinux && echo /usr/lib/rpm-db /var/lib/rpm >> root/etc/selinux/targeted/contexts/files/file_contexts.subs_dist
+        opt selinux && local policy &&
+        for policy in root/etc/selinux/*/contexts/files
+        do echo /usr/lib/rpm-db /var/lib/rpm >> "$policy/file_contexts.subs_dist"
+        done
         mv root/var/lib/rpm root/usr/lib/rpm-db
         ln -fns ../../usr/lib/rpm-db root/var/lib/rpm
         echo > root/usr/lib/tmpfiles.d/rpm-db.conf \
