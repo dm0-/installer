@@ -10,11 +10,11 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=22.04 [squash]=1)
 
 packages+=(
         libasound2-plugins
-        libglu1-mesa
+        libgl{1,u1}
         libx{cursor1,i6,inerama1,randr2,ss1,xf86vm1}
 )
 
@@ -25,7 +25,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/495})
+then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/510})
 fi
 
 function customize() {
@@ -45,7 +45,7 @@ function customize() {
 
         ln -fns grim/GrimFandango root/init
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/GrimFandango" ] ||

@@ -91,7 +91,7 @@ function initialize_buildroot() {
         $cat << 'EOF' >> "$portage/make.conf"
 CPU_FLAGS_PPC="altivec"
 RUSTFLAGS="-C target-cpu=7450"
-USE="$USE altivec ppcsha1"
+USE="$USE ppcsha1"
 EOF
 
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
@@ -111,9 +111,9 @@ EOF
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -ffmpeg -networkmanager -repart'"'
+            -ffmpeg -networkmanager'"'
 
         # Install QEMU to run graphical virtual machines and Intel programs.
         packages+=(app-emulation/qemu)
@@ -171,7 +171,7 @@ function customize() {
             /var ext4 defaults,nodev,nosuid,x-systemd.growfs,x-systemd.rw-only 1 2 >> root/etc/fstab
 
         # Write a script with an example boot command to test with QEMU.
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-system-ppc -nodefaults \
     -machine mac99,via=pmu -cpu g4 -m 1G -vga std -nic user,model=sungem \

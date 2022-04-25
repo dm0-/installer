@@ -74,6 +74,7 @@ packages+=(
         eog
         evince
         gdm3
+        gjs
         gnome-backgrounds
         gnome-calculator
         gnome-clocks
@@ -83,7 +84,8 @@ packages+=(
         gnome-terminal
         gucharmap
         network-manager-gnome
-        pipewire-{media-session,pulse}
+        pipewire-pulse
+        wireplumber
 
         # Graphics
         mesa-{va,vdpau,vulkan}-drivers
@@ -106,13 +108,37 @@ packages+=(
 # Install proprietary NVIDIA drivers.  Also update the buildroot for dracut.
 function initialize_buildroot() if opt nvidia
 then
-        local -r driver_version=${options[nvidia]/#*[!0-9]*/495}
+        local -r driver_version=${options[nvidia]/#*[!0-9]*/510}
         packages+=(
                 "linux-modules-nvidia-$driver_version-generic"
                 "xserver-xorg-video-nvidia-$driver_version"
         )
         packages_buildroot+=("linux-modules-nvidia-$driver_version-generic")
 fi
+
+# Enable a repository to install a real Firefox package.
+function customize_buildroot() {
+        enable_repo_ppa mozillateam << 'EOF'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mI0ESXMwOwEEAL7UP143coSax/7/8UdgD+WjIoIxzqhkTeoGOyw/r2DlRCBPFAOH
+lsUIG3AZrHcPVzA3bRTGoEYlrQ9d0+FsUI57ozHdmlsaekEJpQ2x7wZL7c1GiRqC
+A4ERrC6kNJ5ruSUHhB+8qiksLWsTyjM7OjIdkmDbH/dYKdFUEKTdljKHABEBAAG0
+HkxhdW5jaHBhZCBQUEEgZm9yIE1vemlsbGEgVGVhbYi2BBMBAgAgBQJJczA7AhsD
+BgsJCAcDAgQVAggDBBYCAwECHgECF4AACgkQm9s9ic5J7CGfEgP/fcx3/CSAyyWL
+lnL0qjjHmfpPd8MUOKB6u4HBcBNZI2q2CnuZCBNUrMUj67IzPg2llmfXC9WxuS2c
+MkGu5+AXV+Xoe6pWQd5kP1UZ44boBZH9FvOLArA4nnF2hsx4GYcxVXBvCCgUqv26
+qrGpaSu9kRpuTY5r6CFdjTNWtwGsPaM=
+=uNvM
+-----END PGP PUBLIC KEY BLOCK-----
+EOF
+        mkdir -p root/etc/apt/preferences.d
+        cat << 'EOF' >> root/etc/apt/preferences.d/99firefox
+Package: firefox*
+Pin: release o=LP-PPA-mozillateam
+Pin-Priority: 501
+EOF
+}
 
 function customize() {
         store_home_on_var +root
@@ -127,7 +153,7 @@ function customize() {
         )
 
         # Support an executable VM image for quick testing.
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \

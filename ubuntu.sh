@@ -3,12 +3,11 @@ packages_buildroot=()
 
 options[enforcing]=
 
-DEFAULT_RELEASE=21.10
+DEFAULT_RELEASE=22.04
 
 function create_buildroot() {
-        local -Ar releasemap=([20.04]=focal [20.10]=groovy [21.04]=hirsute [21.10]=impish)
         local -r release=${options[release]:=$DEFAULT_RELEASE}
-        local -r name=${releasemap[$release]?Unsupported release version}
+        local -r name=$(releasemap "$release")
         local -r image="https://cloud-images.ubuntu.com/minimal/releases/$name/release/ubuntu-$release-minimal-cloudimg-$(archmap)-root.tar.xz"
 
         opt bootable && packages_buildroot+=(dracut linux-image-generic zstd)
@@ -60,10 +59,10 @@ function install_packages() {
         debootstrap \
             ${options[arch]:+--arch="$(archmap "${options[arch]}")"} \
             --force-check-gpg \
+            --include=ca-certificates \
             --merged-usr \
             --variant=minbase \
-            "$(sed -n s/^UBUNTU_CODENAME=//p /etc/os-release)" \
-            root http://archive.ubuntu.com/ubuntu
+            "$(releasemap)" root http://archive.ubuntu.com/ubuntu
 
         # Configure the package manager to behave sensibly.
         cat << 'EOF' >> root/etc/apt/apt.conf.d/50fix-apt
@@ -137,8 +136,8 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        sed '/<svg/{s/"22"/"480"/g;s/>/ viewBox="0 0 22 22">/;}' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg > /root/logo.svg &&
-        convert -background none /root/logo.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        sed '/<svg/s/"22"/"480"/g' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg > /root/logo.svg &&
+        convert -background none /root/logo.svg logo.bmp
         test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /boot/vmlinuz
         if opt verity_sig
@@ -318,11 +317,39 @@ function archmap() case ${*:-$DEFAULT_ARCH} in
     *) return 1 ;;
 esac
 
+function releasemap() case ${*:-${options[release]:-$DEFAULT_RELEASE}} in
+    22.04) echo jammy ;;
+    21.10) echo impish ;;
+    21.04) echo hirsute ;;
+    20.10) echo groovy ;;
+    20.04) echo focal ;;
+    *) return 1 ;;
+esac
+
+# OPTIONAL (IMAGE)
+
+function enable_repo_ppa() {
+        local -r repo=${1?Missing PPA name}
+        local -r url=https://ppa.launchpadcontent.net/$repo/ppa/ubuntu/
+        mkdir -p root/etc/apt/{sources.list,trusted.gpg}.d
+        sed 'p;s/^deb/# &-src/' <<< "deb $url $(releasemap) main" \
+            > "root/etc/apt/sources.list.d/$repo.list"
+        gpg --dearmor > "root/etc/apt/trusted.gpg.d/$repo.gpg"
+}
+
+# WORKAROUNDS
+
 # Point EOL releases at the archive repository server.
 [[ ${options[release]:-$DEFAULT_RELEASE} != 20.10 ]] ||
 eval "$(declare -f create_buildroot | $sed '/fix-apt/i\
 $sed -i -e "/ubuntu.com/s,://[a-z]*,://old-releases," "$buildroot/etc/apt/sources.list"'
 declare -f install_packages | $sed -e 's,://archive,://old-releases,')"
+
+# Override 2020/2021 UEFI logo edits.
+[[ ${options[release]:-$DEFAULT_RELEASE} != 2[01].* ]] ||
+eval "$(declare -f save_boot_files | $sed \
+    -e 's,/g,&;/<svg/s/>/ viewBox="0 0 22 22">/,' \
+    -e "s/convert.*svg/& -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0'/")"
 
 # Override 2020 ramdisk creation since the kernel is too old to support zstd.
 [[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] || eval "$(

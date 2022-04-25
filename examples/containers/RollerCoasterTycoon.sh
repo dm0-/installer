@@ -40,7 +40,7 @@ function customize() {
         wine_gog_script /RCT < root/root/app/goggame-1207658945.script > reg.sh
         mv root/root/app root/RCT
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init && chmod 0755 root/init
+        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 (unset DISPLAY
 REG_SCRIPT
@@ -48,7 +48,7 @@ REG_SCRIPT
 exec wine explorer /desktop=virtual,1024x768 /RCT/RCT.EXE "$@"
 EOF
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 for dir in Data 'Saved Games' Scenarios Tracks

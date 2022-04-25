@@ -113,9 +113,9 @@ EOF
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -gui -networkmanager -repart'"'
+            -gui -networkmanager'"'
 
         # Build GRUB to boot from legacy BIOS.
         echo 'GRUB_PLATFORMS="pc"' >> "$buildroot/etc/portage/make.conf"
@@ -152,7 +152,7 @@ function customize() {
         mkdir root/boot
 
         # Write a script with an example boot command to test with QEMU.
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-system-i386 -nodefaults \
     -cpu qemu32,+3dnow,+3dnowext,+clflush,+mmx,+mmxext,-apic,-sse,-sse2 \

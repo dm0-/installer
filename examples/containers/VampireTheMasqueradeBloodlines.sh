@@ -13,11 +13,11 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=22.04 [squash]=1)
 
 packages+=(
         dxvk
-        libglu1
+        libgl{1,u1}
         libxcomposite1
         wine-development
 )
@@ -30,7 +30,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/495})
+then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/510})
 fi
 
 function customize() {
@@ -53,7 +53,7 @@ function customize() {
         rm -fr install{.exe,-1.bin} root/VTMB/{app,commonappdata,Docs,gog*,manual.pdf,__redist,Unofficial_Patch}
         mkdir -p root/VTMB/Vampire/{cfg,SAVE}
 
-        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init && chmod 0755 root/init
+        sed $'/^REG_SCRIPT/{rreg.sh\nd;}' << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 (unset DISPLAY
 REG_SCRIPT
@@ -67,13 +67,14 @@ for r in *.cfg
 do [ -e "../cfg/$r" ] || cp -at ../cfg "$r"
 done
 exec sleep 1)
-wine /VTMB/vampire.exe "$@"
+wine /VTMB/vampire.exe "$@" && rc=0 || rc=$?
 for r in ScreenBPP ScreenHeight ScreenWidth
 do wine reg query 'HKEY_CURRENT_USER\Software\Troika\Vampire\ResPatch' /v "$r" | grep -o '0x[0-9A-Fa-f]*' > "/VTMB/Vampire/cfg/$r"
 done
+exit "$rc"
 EOF
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_CONFIG_HOME:=$HOME/.config}/VampireTheMasqueradeBloodlines" ] ||

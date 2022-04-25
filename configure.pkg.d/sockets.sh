@@ -3,6 +3,7 @@ local socket unitdir=root/usr/lib/systemd/system
 local sockets=(
         docker
         libvirtd{,-admin,-ro}
+        pcscd
         virtnetworkd{,-admin,-ro}
 )
 mkdir -p "$unitdir/sockets.target.wants"

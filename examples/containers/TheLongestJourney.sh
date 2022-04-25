@@ -48,7 +48,7 @@ function customize() {
         innoextract -md root/TLJ install.exe
         rm -fr install{.exe,-1.bin} root/TLJ/{app,commonappdata,gog*,manual.pdf,__redist,tlj_faq*}
 
-        cat << 'EOF' > root/init && chmod 0755 root/init
+        cat << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 mkdir -p "$HOME/.config" "$HOME/.local/share"
 ln -fns /tmp/save "$HOME/.local/share/scummvm"
@@ -56,7 +56,7 @@ ln -fst "$HOME/.config" ../.local/share/scummvm
 exec scummvm --auto-detect --fullscreen "$@"
 EOF
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheLongestJourney" ] ||

@@ -59,7 +59,7 @@ function customize() {
 
         ln -fns VVVVVV root/init
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/VVVVVV" ] ||

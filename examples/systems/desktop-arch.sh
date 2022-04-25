@@ -77,6 +77,8 @@ packages+=(
         gnome-terminal
         gucharmap
         networkmanager
+        pipewire-{jack,pulse}
+        wireplumber
 
         # Graphics
         mesa{,-vdpau} vulkan-{intel,radeon}
@@ -88,7 +90,7 @@ packages+=(
 
         # Browser
         firefox
-        firefox-{extension-https-everywhere,noscript,ublock-origin}
+        firefox-{noscript,ublock-origin}
 
         # VLC
         lib{aacs,bluray}
@@ -139,7 +141,7 @@ softdep nvidia post: nvidia-uvm
 EOF
 
         # Support an executable VM image for quick testing.
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \

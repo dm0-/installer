@@ -70,9 +70,9 @@ function initialize_buildroot() {
             acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc repart startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -gtk -gui -opengl -repart -X'"'
+            -gtk -gui -opengl -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
@@ -104,8 +104,12 @@ EOF
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv/opensbi/archive/v1.0.tar.gz > "$buildroot/root/opensbi.tgz"
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == a5efaeb24f5ee88d13d5788e4e00623ff312ee12c0bf736aa75a6ad9a850fb76\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2022.01.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == e42bf0cd4e082313308f5310e618b583c8ff306c1f3327c967d31575dd1b5c79\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2022.04.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 28dbc092221235c679e9b93f2bfa7b943344193f9d922fb86c1d555ca4d997ba\ * ]]
+
+        # Work around emacs-28 not supporting RISC-V seccomp.
+        echo 'EXTRA_EMAKE="SECCOMP_FILTER="' >> "$portage/env/emacs.conf"
+        echo 'app-editors/emacs emacs.conf' >> "$portage/package.env/emacs.conf"
 
         # Work around binutils-2.38 failing to build GRUB.
         echo ">=cross-${options[host]}/binutils-2.38" >> "$buildroot/etc/portage/package.mask/binutils.conf"
@@ -170,7 +174,7 @@ EOF
 
         # Support an executable VM image for quick testing.
         cp -pt . /usr/bin/qemu-system-riscv64
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/bash -eu
 exec qemu-system-riscv64 -nographic \
     -L "$PWD" -bios opensbi-uboot.bin \

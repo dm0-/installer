@@ -10,7 +10,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=21.10 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=22.04 [squash]=1)
 
 packages+=(
         libasound2-plugins
@@ -25,7 +25,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/495})
+then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/510})
 fi
 
 function customize() {
@@ -42,7 +42,7 @@ function customize() {
         mv root/root/data/noarch/game root/psychonauts
         rm -f psychonauts.zip
 
-        cat << 'EOF' > root/init && chmod 0755 root/init
+        cat << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 mkdir -p "$HOME/.local/share"
 ln -fns /tmp/save "$HOME/.local/share/Psychonauts"
@@ -51,7 +51,7 @@ cp -t /tmp/save /psychonauts/DisplaySettings.ini
 exec /psychonauts/Psychonauts "$@"
 EOF
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/Psychonauts" ] ||

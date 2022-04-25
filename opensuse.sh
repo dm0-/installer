@@ -179,7 +179,7 @@ function verify_distro() {
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
-        $gpg --verify "$2"
+        $gpg --verify "$2" "$1"
         [[ $($sha256sum "$3") == $($sed -n 's/ .*//p' "$1")\ * ]]
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

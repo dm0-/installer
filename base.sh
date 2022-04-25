@@ -283,7 +283,7 @@ then
         ln -fns lib "$root/lib64"
         ln -fst "$root/etc" ../sysroot/etc/selinux
 
-        cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
+        cat << 'EOF' > "$root/init" ; chmod 0755 "$root/init"
 #!/bin/ash -eux
 trap -- 'poweroff -f ; exec sleep 60' EXIT
 export PATH=/bin

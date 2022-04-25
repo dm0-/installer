@@ -37,14 +37,11 @@ function create_buildroot() {
         configure_initrd_generation
         initialize_buildroot "$@"
 
-        $cp -a "$buildroot"/etc/resolv.conf{,.orig}
         script "${packages_buildroot[@]}" << 'EOF'
 dnf --assumeyes --setopt=tsflags=nodocs upgrade
 dnf --assumeyes --setopt=tsflags=nodocs install "$@"
 for fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done
 EOF
-        $rm -f "$buildroot"/etc/resolv.conf
-        $cp -a "$buildroot"/etc/resolv.conf{.orig,}
 }
 
 function install_packages() {

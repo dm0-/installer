@@ -52,8 +52,10 @@ EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/core.conf"
 # Accept core utilities with no stable versions.
 app-crypt/pesign ~*
+app-text/mandoc ~*
 sys-boot/vboot-utils ~*
 sys-fs/erofs-utils ~*
+sys-libs/efivar ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
@@ -99,8 +101,8 @@ x11-themes/adwaita-icon-theme *
 EOF
         [[ $arch == aarch64 ]] && opt uefi && $cat << EOF >> "$portage/package.accept_keywords/arm64.conf"
 # Accept binutils-2.38 to support AArch64 UEFI targets.
-<sys-devel/binutils-2.39 **
-<cross-$host/binutils-2.39 **
+<sys-devel/binutils-2.39 ~*
+<cross-$host/binutils-2.39 ~*
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -131,14 +133,17 @@ sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 # Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
 sys-fs/lvm2 device-mapper-only -thin
 EOF
+        $cat << 'EOF' >> "$portage/package.use/emacs.conf"
+# Disable native Emacs Lisp compilation until cross-compiling works.
+app-editors/emacs -jit
+EOF
         $cat << 'EOF' >> "$portage/package.use/firefox.conf"
 # Fix Firefox builds by preferring GCC over Clang.
 www-client/firefox -clang
 EOF
         $cat << 'EOF' >> "$portage/package.use/gtk.conf"
-# Disable EOL GTK+ 2 by default.  It uses different flag names sometimes.
+# Disable EOL GTK+ 2 by default.
 */* -gtk2
-media-libs/libcanberra -gtk
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
 # Disable trying to build an initrd, and use hardened options.
@@ -176,6 +181,10 @@ EOF
 # Allow sharing LLVM and the native Rust for cross-bootstrapping.
 dev-lang/rust -system-bootstrap -system-llvm
 EOF
+        $cat << 'EOF' >> "$portage/profile/use.mask/rust.conf"
+# Unmask Rust users to bypass bad architecture profiles.
+-svg
+EOF
         $cat << 'EOF' >> "$portage/profile/use.mask/ssl.conf"
 # Mask support for insecure protocols.
 sslv2
@@ -202,12 +211,14 @@ EOF
 
         # Accept eselect-fontconfig-20220403 to fix symlinks.
         echo '<app-eselect/eselect-fontconfig-20220404 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
-        # Accept eselect-iptables-20220320 to fix ip6tables.
-        echo 'app-eselect/eselect-iptables *' >> "$portage/package.accept_keywords/iptables.conf"
         # Accept fontconfig-2.14 to fix the eselect module.
         echo '<media-libs/fontconfig-2.15 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
+        # Accept app-i18n/ibus-1.5.26 to fix cross-compiling.
+        echo '<app-i18n/ibus-1.5.27 ~*' >> "$portage/package.accept_keywords/ibus.conf"
         # Accept polkit-0.120 to not require SpiderMonkey.
         echo '<sys-auth/polkit-0.121 ~*' >> "$portage/package.accept_keywords/polkit.conf"
+        # Accept vlc-3.0.17.3 to support newer dav1d versions.
+        echo '<media-video/vlc-3.0.18 ~*' >> "$portage/package.accept_keywords/vlc.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -269,6 +280,7 @@ EOF
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'EXTRA_EMAKE="PYTHON_INCLUDES=/usr/\$(host)/usr/include/\$\${PYTHON##*/}"' >> "$portage/env/cross-libxml2-python.conf"
+        echo 'EXTRA_EMAKE="LIBTOOL=\$\${PWD%/src}/libtool"' >> "$portage/env/cross-lua.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
@@ -277,6 +289,7 @@ EOF
 app-crypt/gnupg cross-libusb.conf
 app-crypt/gpgme cross-libassuan.conf
 app-i18n/ibus cross-glib-genmarshal.conf
+dev-lang/lua cross-lua.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
 dev-libs/libxml2 cross-libxml2-python.conf
 gnome-base/gnome-settings-daemon meson-pkgconfig.conf
@@ -586,9 +599,9 @@ EOF
         compgen -G 'root/usr/lib*/firefox/browser/defaults/preferences/gentoo-prefs.js' &&
         sed -i -e /typeaheadfind/d root/usr/lib*/firefox/browser/defaults/preferences/gentoo-prefs.js
 
-        # Prioritize available daemons for the user audio service socket.
-        local dir=root/usr/lib/systemd/user
-        local daemon ; for daemon in pipewire-pulse pulseaudio
+        # Prioritize available daemons for the user audio service.
+        local daemon dir=root/usr/lib/systemd/user
+        for daemon in pipewire-pulse pulseaudio
         do
                 if test -s "$dir/$daemon.socket"
                 then
@@ -597,11 +610,17 @@ EOF
                         break
                 fi
         done
+        for daemon in wireplumber pipewire-media-session
+        do
+                if test -s "$dir/$daemon.service"
+                then
+                        mkdir -p "$dir/pipewire.service.wants"
+                        ln -fst "$dir/pipewire.service.wants" "../$daemon.service"
+                        break
+                fi
+        done
         test -s "$dir/pipewire.socket" &&
         ln -fst "$dir/sockets.target.wants" ../pipewire.socket
-        test -s "$dir/pipewire-media-session.service" &&
-        mkdir -p "$dir/pipewire.service.wants" &&
-        ln -fst "$dir/pipewire.service.wants" ../pipewire-media-session.service
 
         # Select a default desktop environment for startx, or default to twm.
         local wm ; for wm in Xfce4 wmaker
@@ -738,7 +757,7 @@ then
         opt verity_sig && cp -pt "$root/bin" "$ROOT/bin/keyctl"
 
         # Write an init script and include required build artifacts.
-        cat << EOF > "$root/init" && chmod 0755 "$root/init"
+        cat << EOF > "$root/init" ; chmod 0755 "$root/init"
 #!/bin/ash -eux
 export PATH=/bin
 mountpoint -q /dev || mount -nt devtmpfs devtmpfs /dev
@@ -771,21 +790,6 @@ fi
 
 function write_unconditional_patches() {
         local -r patches="$1"
-
-        $mkdir -p "$patches/dev-lang/spidermonkey:78"
-        $cat << 'EOF' > "$patches/dev-lang/spidermonkey:78/rust.patch"
---- a/build/moz.configure/rust.configure
-+++ b/build/moz.configure/rust.configure
-@@ -353,7 +353,7 @@
- 
-             return None
- 
--        rustc_target = find_candidate(candidates)
-+        rustc_target = os.getenv('RUST_TARGET') if host_or_target_str == 'target' and os.getenv('RUST_TARGET') is not None else find_candidate(candidates)
- 
-         if rustc_target is None:
-             die("Don't know how to translate {} for rustc".format(
-EOF
 
         if opt ipe
         then
@@ -1198,6 +1202,9 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
         # Fix udev dependency ordering.
         edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
 
+        # Fix liblockfile group dependency.
+        edit net-libs/liblockfile '$aBDEPEND="acct-group/mail"'
+
         # Fix NetworkManager configuration.
         edit net-misc/networkmanager '/docs/s/true/use_bool introspection/'
 
@@ -1208,6 +1215,7 @@ use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,
         # Remove eselect from the sysroot.
         edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
         edit app-editors/emacs 's/.{IDEPEND}//'
+        edit dev-lang/lua '/eselect-lua/d;$aBDEPEND+=" app-eselect/eselect-lua"'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
         edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
 }
@@ -1225,6 +1233,7 @@ function fix_package() {
                 $cat << 'EOF' >> "$portage/package.use/vlc.conf"
 dev-qt/qtgui -dbus
 dev-qt/qtwidgets -dbus -gtk
+media-video/vlc gui -vdpau
 sys-libs/zlib minizip
 EOF
                 ;;

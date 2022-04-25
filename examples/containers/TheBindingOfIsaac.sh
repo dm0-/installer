@@ -61,14 +61,14 @@ EOF
         )
         minimize "${files[@]}"
 
-        cat << 'EOF' > root/init && chmod 0755 root/init
+        cat << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 mkdir -p "$HOME/.macromedia"
 ln -fns /tmp/save "$HOME/.macromedia/Flash_Player"
 exec flashplayer /boiwotl.swf "$@"
 EOF
 
-        cat << 'EOF' > launch.sh && chmod 0755 launch.sh
+        cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/TheBindingOfIsaac" ] ||

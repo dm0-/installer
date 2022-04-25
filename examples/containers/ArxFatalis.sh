@@ -38,12 +38,12 @@ function initialize_buildroot() {
         $cp "${1:-setup_arx_fatalis_1.21_(21994).exe}" "$output/install.exe"
 
         # Download, verify, and extract the Arx Libertatis source release.
-        local -r source_url='https://github.com/arx/ArxLibertatis/releases/download/1.2/arx-libertatis-1.2.tar.xz'
+        local -r source_url='https://github.com/arx/ArxLibertatis/releases/download/1.2.1/arx-libertatis-1.2.1.tar.xz'
         $curl -L "$source_url.sig" > "$output/arx.txz.sig"
         $curl -L "$source_url" > "$output/arx.txz"
-        verify "$output/arx.txz.sig"
+        verify "$output"/arx.txz{.sig,}
         $tar --transform='s,^/*[^/]*,arx,' -C "$output" -xf "$output/arx.txz"
-        $rm -f "$output/arx.txz" "$output/arx.txz.sig"
+        $rm -f "$output"/arx.txz{.sig,}
 
         # Support an option for running on a host with proprietary drivers.
         if opt nvidia
@@ -81,7 +81,7 @@ function customize() {
 
         ln -fns usr/bin/arx root/init
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_CONFIG_HOME:=$HOME/.config}/arx" ] ||
@@ -122,7 +122,7 @@ function verify() {
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
-        $gpg --verify "$1"
+        $gpg --verify "$1" "$2"
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 

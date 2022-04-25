@@ -53,14 +53,14 @@ function customize() {
         mv root/FTL.* root/FTL
         rm -f ftl.zip
 
-        cat << 'EOF' > root/init && chmod 0755 root/init
+        cat << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 mkdir -p "$HOME/.local/share"
 ln -fns /tmp/save "$HOME/.local/share/FasterThanLight"
 exec /FTL "$@"
 EOF
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,;}${drop:+s/-64//}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,;}${drop:+s/-64//}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_DATA_HOME:=$HOME/.local/share}/FasterThanLight" ] ||

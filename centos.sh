@@ -6,7 +6,7 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20220224.0
+        local -r cver=20220419.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core microcode_ctl zstd)
@@ -83,7 +83,7 @@ then
         ln -fns lib "$root/lib64"
         ln -fst "$root/etc" ../sysroot/etc/selinux
 
-        cat << 'EOF' > "$root/init" && chmod 0755 "$root/init"
+        cat << 'EOF' > "$root/init" ; chmod 0755 "$root/init"
 #!/bin/bash -eux
 trap -- 'echo o > /proc/sysrq-trigger ; read -rst 60' EXIT
 export PATH=/bin
@@ -155,10 +155,10 @@ declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/'
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo d9434b92cc8653fb0e1f8b773a745f31102747130159d99a4e178f319b522d9f ;;
-            ppc64le) echo bf6671a39665d2f0cc0776d29646dc242fcca1cb4acfa11ee8f22e73cb92601b ;;
-            s390x)   echo f805cdaca815cbab5c4dde4e9d01186a6a598f70fa8b9e5058425a568d546a21 ;;
-            x86_64)  echo 1fbe98ff49411e34fbee7961f1a0256fdc5cbb766ab0352ac43928405d6ab994 ;;
+            aarch64) echo 8df8b8830bc0dd166dcaa9eb882c000feb1f6c1201b60c88619f0dbf574c092c ;;
+            ppc64le) echo 1c8618d48bd98b57fe3ec93b8617756ea6be83230791289bfdeb53b737458b2e ;;
+            s390x)   echo 3428f7ae8e7d8e722cade2549a5547d2030c01046efe51dcf90c63354b978753 ;;
+            x86_64)  echo 2e46ded9169e612b250489c4c46f883bfe0736edbbc51d550d1800acbe9bc9ac ;;
         esac)\ *
 ]]
 

@@ -53,14 +53,14 @@ function customize() {
         unzip -d root KSP.zip
         rm -f KSP.zip
 
-        cat << 'EOF' > root/init && chmod 0755 root/init
+        cat << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eu
 mkdir -p "$HOME/.config/unity3d/Squad"
 ln -fns /tmp/save "$HOME/.config/unity3d/Squad/Kerbal Space Program"
 exec ./KSP.x86_64 "$@"
 EOF
 
-        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh && chmod 0755 launch.sh
+        sed "${options[nvidia]:+s, /dev/,&nvidia*&,}" << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 
 [ -e "${XDG_CONFIG_HOME:=$HOME/.config}/unity3d/Squad/Kerbal Space Program" ] ||
