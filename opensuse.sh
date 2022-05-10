@@ -8,7 +8,8 @@ options[verity_sig]=
 function create_buildroot() {
         local -r image="https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.$DEFAULT_ARCH-lxc.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel-default ucode-{amd,intel} zstd)
+        opt bootable && packages_buildroot+=(kernel-default zstd)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(ucode-{amd,intel})
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(mozilla-nss-tools pesign)

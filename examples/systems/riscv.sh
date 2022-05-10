@@ -100,19 +100,50 @@ EOF
         $rm -f "$output/grub.mbox"
         echo -e 'GRUB_AUTOGEN="1"\nGRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
         echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
+        $cat << 'EOF' > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-march.patch"
+--- a/configure.ac
++++ b/configure.ac
+@@ -868,9 +868,9 @@
+ 		         [grub_cv_target_cc_soft_float="-march=rv32imac -mabi=ilp32"], [])
+     fi
+     if test "x$target_cpu" = xriscv64; then
+-       CFLAGS="$TARGET_CFLAGS -march=rv64imac -mabi=lp64 -Werror"
++       CFLAGS="$TARGET_CFLAGS -march=rv64imac_zicsr_zifencei -mabi=lp64 -Werror"
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+-		         [grub_cv_target_cc_soft_float="-march=rv64imac -mabi=lp64"], [])
++		         [grub_cv_target_cc_soft_float="-march=rv64imac_zicsr_zifencei -mabi=lp64"], [])
+     fi
+     if test "x$target_cpu" = xia64; then
+        CFLAGS="$TARGET_CFLAGS -mno-inline-float-divide -mno-inline-sqrt -Werror"
+EOF
 
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv/opensbi/archive/v1.0.tar.gz > "$buildroot/root/opensbi.tgz"
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == a5efaeb24f5ee88d13d5788e4e00623ff312ee12c0bf736aa75a6ad9a850fb76\ * ]]
         $curl -L https://github.com/u-boot/u-boot/archive/v2022.04.tar.gz > "$buildroot/root/u-boot.tgz"
         [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 28dbc092221235c679e9b93f2bfa7b943344193f9d922fb86c1d555ca4d997ba\ * ]]
+        $curl -L https://github.com/riscv-software-src/opensbi/commit/5d53b55aa77ffeefd4012445dfa6ad3535e1ff2c.patch > "$buildroot/root/opensbi.patch"
+        [[ $($sha256sum "$buildroot/root/opensbi.patch") == 5264a1a69395b5428f7eec1eb6778854d7017435598273c04795b4066ee76d0b\ * ]]
+        $cat << 'EOF' > "$buildroot/root/u-boot.patch"
+--- a/arch/riscv/Makefile
++++ b/arch/riscv/Makefile
+@@ -24,7 +24,7 @@
+ 	CMODEL = medany
+ endif
+ 
+-ARCH_FLAGS = -march=$(ARCH_BASE)$(ARCH_A)$(ARCH_C) -mabi=$(ABI) \
++ARCH_FLAGS = -march=$(ARCH_BASE)$(ARCH_A)$(ARCH_C)_zicsr_zifencei -mabi=$(ABI) \
+ 	     -mcmodel=$(CMODEL)
+ 
+ PLATFORM_CPPFLAGS	+= $(ARCH_FLAGS)
+EOF
+
+        # Accept GCC 12 to fix compilation.
+        echo '<sys-devel/gcc-13 ~*' >> "$portage/package.accept_keywords/gcc.conf"
 
         # Work around emacs-28 not supporting RISC-V seccomp.
         echo 'EXTRA_EMAKE="SECCOMP_FILTER="' >> "$portage/env/emacs.conf"
         echo 'app-editors/emacs emacs.conf' >> "$portage/package.env/emacs.conf"
-
-        # Work around binutils-2.38 failing to build GRUB.
-        echo ">=cross-${options[host]}/binutils-2.38" >> "$buildroot/etc/portage/package.mask/binutils.conf"
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
@@ -158,6 +189,7 @@ function customize() {
 
         # Build U-Boot to provide UEFI.
         tar --transform='s,^/*u[^/]*,u-boot,' -C /root -xf /root/u-boot.tgz
+        patch -d /root/u-boot -p1 < /root/u-boot.patch
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
@@ -167,6 +199,7 @@ EOF
 
         # Build OpenSBI with a U-Boot payload for the firmware image.
         tar --transform='s,^/*o[^/]*,opensbi,' -C /root -xf /root/opensbi.tgz
+        patch -d /root/opensbi -p1 < /root/opensbi.patch
         make -C /root/opensbi -j"$(nproc)" all \
             CROSS_COMPILE="$host-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
         cp -p /root/opensbi/build/platform/generic/firmware/fw_payload.bin opensbi-uboot.bin

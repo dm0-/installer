@@ -9,7 +9,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=36 [squash]=1)
 
 packages+=(
         libXi
@@ -19,17 +19,21 @@ packages+=(
 
 packages_buildroot+=(cmake gcc-c++ ninja-build SDL2_mixer-devel)
 
-function initialize_buildroot() if opt nvidia
-then
-        local -r suffix="-${options[nvidia]}xx"
-        enable_repo_rpmfusion_nonfree
-        packages+=("xorg-x11-drv-nvidia${suffix##-*[!0-9]*xx}-libs")
-else packages+=(mesa-dri-drivers mesa-libGL)
-fi
+function initialize_buildroot() {
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
+
+        # Support an option for running on a host with proprietary drivers.
+        if opt nvidia
+        then
+                local -r suffix="-${options[nvidia]}xx"
+                enable_repo_rpmfusion_nonfree
+                packages+=("xorg-x11-drv-nvidia${suffix##-*[!0-9]*xx}-libs")
+        else packages+=(mesa-dri-drivers mesa-libGL)
+        fi
+}
 
 function customize_buildroot() {
-        echo tsflags=nodocs >> /etc/dnf/dnf.conf
-
         # Build the game engine before installing packages into the image.
         curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.6.tar.gz' > VVVVVV.tgz
         [[ $(sha256sum VVVVVV.tgz) == a3366aab9e8462d330044ab1ec63927e9f5c3801c0ed96b24f08c553dcb911e9\ * ]]
@@ -49,7 +53,7 @@ function customize() {
                 root
                 usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/{systemd,tmpfiles.d}
+                usr/lib/{sysimage,systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )

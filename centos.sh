@@ -9,7 +9,8 @@ function create_buildroot() {
         local -r cver=20220419.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel-core microcode_ctl zstd)
+        opt bootable && packages_buildroot+=(kernel-core zstd)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && packages_buildroot+=(util-linux)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools glibc-gconv-extra mtools)
@@ -51,7 +52,7 @@ function distro_tweaks() {
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
         test -x root/usr/bin/update-crypto-policies &&
-        chroot root /usr/bin/update-crypto-policies --set FUTURE
+        chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
 
         test -s root/etc/dnf/dnf.conf &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
@@ -208,8 +209,16 @@ EOF
 
 # OPTIONAL (IMAGE)
 
-# Override RPMDB saving to drop update reports.  CentOS doesn't give the info.
-eval "$(declare -f save_rpm_db | $sed 's/^ *test -x[^|]*/false/')"
+function save_rpm_db() {
+        opt selinux && local policy &&
+        for policy in root/etc/selinux/*/contexts/files
+        do echo /usr/lib/rpm-db /var/lib/rpm >> "$policy/file_contexts.subs_dist"
+        done
+        mv root/var/lib/rpm root/usr/lib/rpm-db
+        ln -fns ../../usr/lib/rpm-db root/var/lib/rpm
+        echo > root/usr/lib/tmpfiles.d/rpm-db.conf \
+            'L /var/lib/rpm - - - - ../../usr/lib/rpm-db'
+}
 
 # WORKAROUNDS
 

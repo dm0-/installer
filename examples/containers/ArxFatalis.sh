@@ -12,7 +12,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=36 [squash]=1)
 
 packages+=(
         freetype
@@ -37,6 +37,9 @@ packages_buildroot+=(
 function initialize_buildroot() {
         $cp "${1:-setup_arx_fatalis_1.21_(21994).exe}" "$output/install.exe"
 
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
+
         # Download, verify, and extract the Arx Libertatis source release.
         local -r source_url='https://github.com/arx/ArxLibertatis/releases/download/1.2.1/arx-libertatis-1.2.1.tar.xz'
         $curl -L "$source_url.sig" > "$output/arx.txz.sig"
@@ -56,8 +59,6 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() {
-        echo tsflags=nodocs >> /etc/dnf/dnf.conf
-
         # Build the game engine before installing packages into the image.
         cmake -GNinja -S arx -B arx/build \
             -DBUILD_CRASHREPORTER:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr
@@ -70,7 +71,7 @@ function customize() {
                 usr/bin/arx-install-data
                 usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/{systemd,tmpfiles.d}
+                usr/lib/{sysimage,systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )

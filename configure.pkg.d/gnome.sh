@@ -18,6 +18,7 @@ clock-format='24h'
 clock-show-date=true
 clock-show-seconds=true
 clock-show-weekday=true
+color-scheme='prefer-dark'
 font-antialiasing='rgba'
 font-hinting='full'
 [org.gnome.desktop.media-handling]
@@ -63,7 +64,6 @@ continuous=false
 dual-page=true
 sizing-mode='fit-page'
 [org.gnome.settings-daemon.plugins.media-keys]
-max-screencast-length=0
 on-screen-keyboard=['<Super>k']
 [org.gnome.settings-daemon.plugins.power]
 ambient-enabled=false
@@ -108,15 +108,19 @@ EOF
 # Rewind changes for older versions.
 local -i major=$(sed -n 's,.*<platform>\([0-9]*\)</platform>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
 local -i minor=$(sed -n 's,.*<minor>\([0-9]*\)</minor>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
-if [[ $major -eq 3 && $minor -gt 0 && -s root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override ]]
-then
-        sed -i \
-            -e 's/^font-//;/antialiasing/i[org.gnome.settings-daemon.plugins.xsettings]' \
-            root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
-        test "$minor" -le 32 && sed -i \
-            -e 's/desktop.peripherals.keyboard/settings-daemon.peripherals.keyboard/' \
-            -e "/^numlock-state=/s/=true/='on'/" \
-            -e '/^on-screen-keyboard=/{s/=[[]/=/;s/[],].*//;}' \
-            root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
-        :  # Older versions included in supported distros need to be added.
-fi
+local -a edits=()
+[[ major -le 41 ]] && edits+=(
+        '/^color-scheme/d'
+        '/^[[]org.gnome.settings-daemon.plugins.media-keys]/amax-screencast-length=0'
+)
+[[ major -eq 3 ]] && edits+=(
+        's/^font-//'
+        '/antialiasing/i[org.gnome.settings-daemon.plugins.xsettings]'
+)
+[[ major -eq 3 && minor -le 32 ]] && edits+=(
+        's/desktop.peripherals.keyboard/settings-daemon.peripherals.keyboard/'
+        "/^numlock-state=/s/=true/='on'/"
+        '/^on-screen-keyboard=/{s/=[[]/=/;s/[],].*//;}'
+)
+[[ -s root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override && ${#edits[@]} -gt 0 ]] &&
+sed -i "${edits[@]/#/-e}" root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override

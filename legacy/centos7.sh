@@ -11,7 +11,8 @@ function create_buildroot() {
 #       local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH-docker.tar.xz"
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/$(archmap_container)/docker/centos-${options[release]:=$DEFAULT_RELEASE}-${DEFAULT_ARCH/#i[4-6]86/i386}-docker.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel microcode_ctl)
+        opt bootable && packages_buildroot+=(kernel)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(microcode_ctl)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel policycoreutils qemu-kvm)

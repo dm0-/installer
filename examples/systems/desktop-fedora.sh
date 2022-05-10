@@ -19,7 +19,7 @@ options+=(
 )
 
 packages+=(
-        glibc-langpack-en kernel-modules-extra
+        glibc-langpack-en kernel-modules-extra linux-firmware
 
         # Utilities
         binutils
@@ -129,6 +129,8 @@ function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         git clone --branch=v5.13.6 https://github.com/aircrack-ng/rtl8812au.git
         git -C rtl8812au reset --hard bd471173650765969e0caa15581bb105962a7d5a
+        sed -i -e 's/\(thread\|complete_and\)_exit/kthread_&/' rtl8812au/{core/rtw_mp.c,include/osdep_service.h,os_dep/{linux/ioctl_linux,osdep_service}.c}
+        sed -i -e 's/PDE_DATA(\([^)]*)\?\))/\1->i_private/' rtl8812au/os_dep/linux/rtw_proc.c
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.
@@ -142,7 +144,7 @@ function customize_buildroot() {
 }
 
 function customize() {
-        save_rpm_db +updates
+        check_for_updates
         store_home_on_var +root
 
         echo "desktop-${options[distro]}" > root/etc/hostname
@@ -154,7 +156,7 @@ function customize() {
         )
 
         # Downgrade from super-strict crypto policies for regular Internet use.
-        chroot root /usr/bin/update-crypto-policies --set NEXT
+        chroot root /usr/bin/update-crypto-policies --no-reload --set NEXT
 
         # Install the out-of-tree USB WiFi driver.
         install -pm 0644 -t root/lib/modules/*/kernel/drivers/net/wireless \
@@ -162,9 +164,10 @@ function customize() {
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
         for module in \
-            ${options[nvidia]:+root/lib/modules/*/extra/nvidia*/*.ko} \
+            ${options[nvidia]:+root/lib/modules/*/extra/nvidia*/*.ko.xz} \
             root/lib/modules/*/kernel/drivers/net/wireless/88XXau.ko
         do
+                [[ $module == *.xz ]] && unxz "$module" ; module=${module%.xz}
                 /lib/modules/*/build/scripts/sign-file \
                     sha256 "$keydir/sb.key" "$keydir/sb.crt" "$module"
         done
@@ -181,7 +184,7 @@ EOF
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user \
+    -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"

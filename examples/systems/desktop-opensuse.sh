@@ -17,7 +17,7 @@ options+=(
 )
 
 packages+=(
-        distribution-logos-openSUSE-Tumbleweed kernel-default
+        distribution-logos-openSUSE-Tumbleweed kernel-default kernel-firmware
 
         # Utilities
         binutils
@@ -157,6 +157,7 @@ function customize() {
         exclude_paths+=(
                 usr/include
                 usr/{'lib*',share}/pkgconfig
+                usr/lib/firmware/{'*-ucode',liquidio,mellanox,mrvl,netronome,qcom,qed}
         )
 
         # Sign the out-of-tree kernel modules to be usable with Secure Boot.
@@ -171,7 +172,7 @@ function customize() {
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user \
+    -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"

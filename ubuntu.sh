@@ -159,12 +159,12 @@ hostonly="no"
 reproducible="yes"
 EOF
 
-        # Load NVMe support before verity so dm-init can find the partition.
-        if opt nvme
+        # Load disk support before verity so dm-init can find the partition.
+        if opt rootmod
         then
                 $mkdir -p "$buildroot/usr/lib/modprobe.d"
-                echo > "$buildroot/usr/lib/modprobe.d/nvme-verity.conf" \
-                    'softdep dm-verity pre: nvme'
+                echo > "$buildroot/usr/lib/modprobe.d/verity-root.conf" \
+                    "softdep dm-verity pre: ${options[rootmod]}"
         fi
 
         # Since systemd can't skip canonicalization, wait for a udev hack.

@@ -17,7 +17,7 @@
 options+=(
         [distro]=gentoo         # Use Gentoo to build this image from source.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
-        [nvme]=1                # Support root on an NVMe disk.
+        [rootmod]=nvme          # Support root on an NVMe disk.
         [selinux]=targeted      # Load this SELinux policy in permissive mode.
         [squash]=1              # Use a compressed file system to save space.
         [uefi]=1                # Create a UEFI executable to boot this image.
@@ -167,7 +167,7 @@ function customize() {
 
         # Drop extra unused paths.
         exclude_paths+=(
-                usr/lib/firmware/{'*'-ucode,liquidio,mellanox,mrvl,netronome,qcom,qed}
+                usr/lib/firmware/{'*-ucode',liquidio,mellanox,mrvl,netronome,qcom,qed}
                 usr/local
                 usr/share/qemu/'*'{aarch,arm,hppa,ppc,riscv,s390,sparc}'*'
         )
@@ -189,7 +189,7 @@ EOF
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user \
+    -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"

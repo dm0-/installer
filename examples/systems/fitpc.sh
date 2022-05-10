@@ -326,6 +326,7 @@ CONFIG_PATA_CS5536=y
 CONFIG_FB_GEODE=y
 CONFIG_FB_GEODE_LX=y
 CONFIG_DEVMEM=y           # Required by the X video driver
+CONFIG_DEVTMPFS_SAFE=     # Required by the X video driver
 CONFIG_X86_IOPL_IOPERM=y  # Required by the X video driver
 CONFIG_X86_MSR=y          # Required by the X video driver
 ## Audio

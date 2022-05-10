@@ -14,9 +14,9 @@ options[gpt]=         # Create a partitioned GPT disk image
 options[hardfp]=      # Use the hard-float ABI for ARMv6 and ARMv7 targets
 options[ipe]=         # Write and enforce an IPE policy focused on the root FS
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
-options[nvme]=        # Support root on an NVMe disk
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
+options[rootmod]=     # Extra module(s) required by the root disk (e.g. nvme)
 options[secureboot]=  # Sign the UEFI executable for Secure Boot verification
 options[selinux]=     # Enable SELinux and relabel with the given policy
 options[slot]=        # The root partition slot for the build to target
@@ -461,7 +461,7 @@ then
             ${options[append]-}
 fi
 
-function build_microcode_ramdisk() if [[ ${options[arch]:-$DEFAULT_ARCH} == *86* ]]
+function build_microcode_ramdisk() if [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]]
 then
         local -r dir=/root/earlycpio/kernel/x86/microcode
         mkdir -p "$dir"

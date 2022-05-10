@@ -14,7 +14,7 @@
 # This script implements an experimental function to minimize the container by
 # removing every file that is not explicitly required.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=36 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
@@ -30,10 +30,9 @@ function initialize_buildroot() {
         $cp "${1:-the_binding_of_isaac_wrath_of_the_lamb-linux-1.48-1355426233.swf.zip}" "$output/BOI.zip"
         [[ -n ${2-} ]] && $cp "$2" "$output/flashplayer.tgz" ||
         $curl -L https://fpdownload.macromedia.com/pub/flashplayer/updaters/32/flash_player_sa_linux.x86_64.tar.gz > "$output/flashplayer.tgz"
-}
 
-function customize_buildroot() {
-        echo tsflags=nodocs >> /etc/dnf/dnf.conf
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
 }
 
 function customize() {

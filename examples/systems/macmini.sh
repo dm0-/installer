@@ -115,18 +115,23 @@ EOF
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -ffmpeg -networkmanager'"'
 
-        # Install QEMU to run graphical virtual machines and Intel programs.
+        # Install QEMU to run virtual machines.
         packages+=(app-emulation/qemu)
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu *
 net-libs/libslirp *
 EOF
-        $cat << 'EOF' >> "$portage/package.use/qemu.conf"
-app-emulation/qemu qemu_softmmu_targets_ppc qemu_user_targets_i386 static-user
-dev-libs/glib static-libs
-dev-libs/libpcre static-libs
-sys-apps/attr static-libs
-sys-libs/zlib static-libs
+        $mkdir -p "$portage/patches/app-emulation/qemu"
+        $cat << 'EOF' >> "$portage/patches/app-emulation/qemu/ppc.patch"
+--- a/common-user/meson.build
++++ b/common-user/meson.build
+@@ -1,4 +1,6 @@
++if host_arch != 'ppc'
+ common_user_inc += include_directories('host/' / host_arch)
++endif
+ 
+ user_ss.add(files(
+   'safe-syscall.S',
 EOF
 
         # Build GRUB to boot from Open Firmware.
@@ -155,12 +160,6 @@ function customize() {
                 usr/local
                 usr/share/qemu/'*'{aarch,arm,efi,hppa,riscv,s390,sparc,x86_64}'*'
         )
-
-        # Support running Intel containers.
-        echo > root/usr/lib/binfmt.d/qemu-i386.conf \
-            ':qemu-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-i386:'
-        echo > root/usr/lib/binfmt.d/qemu-i486.conf \
-            ':qemu-i486:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x06\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-i386:'
 
         # Define how to mount the bootstrap partition, but leave it unmounted.
         mkdir root/boot ; echo >> root/etc/fstab PARTLABEL=bootstrap \

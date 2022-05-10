@@ -9,7 +9,8 @@ function create_buildroot() {
         local -r release=$($curl -L "$dir/md5sums.txt" | $sed -n 's/.*-bootstrap-\([0-9.]*\)-.*/\1/p')
         local -r image="$dir/archlinux-bootstrap-$release-$DEFAULT_ARCH.tar.gz"
 
-        opt bootable && packages_buildroot+=(dracut intel-ucode linux-firmware linux-hardened)
+        opt bootable && packages_buildroot+=(dracut linux-hardened)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(intel-ucode linux-firmware)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)

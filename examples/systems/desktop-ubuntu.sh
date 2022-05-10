@@ -149,7 +149,7 @@ function customize() {
         exclude_paths+=(
                 usr/include
                 usr/{'lib*',share}/pkgconfig
-                usr/lib/firmware/{netronome,'*-ucode'}
+                usr/lib/firmware/{'*-ucode',liquidio,mellanox,mrvl,netronome,qcom,qed}
         )
 
         # Support an executable VM image for quick testing.
@@ -157,7 +157,7 @@ function customize() {
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
     -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user \
+    -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"

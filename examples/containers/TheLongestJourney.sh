@@ -11,7 +11,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=35 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=36 [squash]=1)
 
 packages+=(scummvm)
 
@@ -20,6 +20,9 @@ packages_buildroot+=(innoextract)
 function initialize_buildroot() {
         $cp "${1:-setup_the_longest_journey_142_lang_update_(24607).exe}" "$output/install.exe"
         $cp "${2:-setup_the_longest_journey_142_lang_update_(24607)-1.bin}" "$output/install-1.bin"
+
+        echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
+        echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
 
         # Support an option for running on a host with proprietary drivers.
         if opt nvidia
@@ -31,16 +34,12 @@ function initialize_buildroot() {
         fi
 }
 
-function customize_buildroot() {
-        echo tsflags=nodocs >> /etc/dnf/dnf.conf
-}
-
 function customize() {
         exclude_paths+=(
                 root
                 usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/{systemd,tmpfiles.d}
+                usr/lib/{sysimage,systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )

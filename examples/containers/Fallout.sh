@@ -18,10 +18,9 @@ packages_buildroot+=(innoextract)
 
 function initialize_buildroot() {
         $cp "${1:-setup_fallout_2.1.0.18.exe}" "$output/install.exe"
-}
 
-function customize_buildroot() {
-        sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' /etc/zypp/zypp.conf
+        echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
+        $sed -i -e '/^[# ]*rpm.install.excludedocs/s/^[# ]*//' "$buildroot/etc/zypp/zypp.conf"
 }
 
 function customize() {
@@ -29,7 +28,7 @@ function customize() {
                 root
                 usr/{include,lib/debug,local,src}
                 usr/{lib,share}/locale
-                usr/lib/{systemd,tmpfiles.d}
+                usr/lib/{sysimage,systemd,tmpfiles.d}
                 usr/lib'*'/gconv
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )

@@ -7,7 +7,8 @@ function create_buildroot() {
 #       local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH.tar.xz"
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/$(archmap_container)/docker/centos-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel-core microcode_ctl)
+        opt bootable && packages_buildroot+=(kernel-core)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt secureboot && packages_buildroot+=(pesign)
@@ -59,7 +60,7 @@ function distro_tweaks() {
         echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
         test -x root/usr/bin/update-crypto-policies &&
-        chroot root /usr/bin/update-crypto-policies --set FUTURE
+        chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
 
         test -s root/etc/dnf/dnf.conf &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf

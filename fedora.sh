@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 packages_buildroot=()
 
-DEFAULT_RELEASE=35
+DEFAULT_RELEASE=36
 
 function create_buildroot() {
-        local -r cver=1.2
+        local -r cver=1.5
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
-        opt bootable && packages_buildroot+=(kernel-core microcode_ctl zstd)
+        opt bootable && packages_buildroot+=(kernel-core zstd)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(linux-firmware microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
+        opt gpt && packages_buildroot+=(util-linux)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt read_only || packages_buildroot+=(findutils)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
@@ -57,6 +59,13 @@ function install_packages() {
             --releasever="${options[release]}" \
             install "${packages[@]:-filesystem}" "$@"
 
+        # Fix PAM and friends immediately before any configuration is written.
+        if [[ -x root/usr/bin/authselect ]]
+        then
+                chroot root /usr/bin/authselect select minimal --force --nobackup
+                chroot root /usr/bin/authselect opt-out
+        fi
+
         rpm -qa | sort > packages-buildroot.txt
         rpm --root="$PWD/root" -qa | sort > packages.txt
 }
@@ -67,7 +76,7 @@ function distro_tweaks() {
         rm -fr root/etc/inittab root/etc/rc.d
 
         test -x root/usr/bin/update-crypto-policies &&
-        chroot root /usr/bin/update-crypto-policies --set FUTURE
+        chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
 
         test -s root/etc/dnf/dnf.conf &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
@@ -103,12 +112,12 @@ hostonly="no"
 reproducible="yes"
 EOF
 
-        # Load NVMe support before verity so dm-init can find the partition.
-        if opt nvme
+        # Load disk support before verity so dm-init can find the partition.
+        if opt rootmod
         then
                 $mkdir -p "$buildroot/usr/lib/modprobe.d"
-                echo > "$buildroot/usr/lib/modprobe.d/nvme-verity.conf" \
-                    'softdep dm-verity pre: nvme'
+                echo > "$buildroot/usr/lib/modprobe.d/verity-root.conf" \
+                    "softdep dm-verity pre: ${options[rootmod]}"
         fi
 
         # Since systemd can't skip canonicalization, wait for a udev hack.
@@ -195,32 +204,32 @@ function verify_distro() {
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBGAcScoBEADLf8YHkezJ6adlMYw7aGGIlJalt8Jj2x/B2K+hIfIuxGtpVj7e
-LRgDU76jaT5pVD5mFMJ3pkeneR/cTmqqQkNyQshX2oQXwEzUSb1CNMCfCGgkX8Q2
-zZkrIcCrF0Q2wrKblaudhU+iVanADsm18YEqsb5AU37dtUrM3QYdWg9R+XiPfV8R
-KBjT03vVBOdMSsY39LaCn6Ip1Ovp8IEo/IeEVY1qmCOPAaK0bJH3ufg4Cueks+TS
-wQWTeCLxuZL6OMXoOPKwvMQfxbg1XD8vuZ0Ktj/cNH2xau0xmsAu9HJpekvOPRxl
-yqtjyZfroVieFypwZgvQwtnnM8/gSEu/JVTrY052mEUT7Ccb74kcHFTFfMklnkG/
-0fU4ARa504H3xj0ktbe3vKcPXoPOuKBVsHSv00UGYAyPeuy+87cU/YEhM7k3SVKj
-6eIZgyiMO0wl1YGDRKculwks9A+ulkg1oTb4s3zmZvP07GoTxW42jaK5WS+NhZee
-860XoVhbc1KpS+jfZojsrEtZ8PbUZ+YvF8RprdWArjHbJk2JpRKAxThxsQAsBhG1
-0Lux2WaMB0g2I5PcMdJ/cqjo08ccrjBXuixWri5iu9MXp8qT/fSzNmsdIgn8/qZK
-i8Qulfu77uqhW/wt2btnitgRsqjhxMujYU4Zb4hktF8hKU/XX742qhL5KwARAQAB
-tDFGZWRvcmEgKDM1KSA8ZmVkb3JhLTM1LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
-cmc+iQJOBBMBCAA4FiEEeH6mrhFH7uVsQLMM20Y5cZhnxY8FAmAcScoCGw8FCwkI
-BwIGFQoJCAsCBBYCAwECHgECF4AACgkQ20Y5cZhnxY+NYA/7BYpglySAZYHhjyKh
-/+f6zPfVvbH20Eq3kI7OFBN0nLX+BU1muvS+qTuS3WLrB3m3GultpKREJKLtm5ED
-1rGzXAoT1yp9YI8LADdMCCOyjAjsoWU87YUuC+/bnjrTeR2LROCfyPC76W985iOV
-m5S+bsQDw7C2LrldAM4MDuoyZ1SitGaZ4KQLVt+TEa14isYSGCjzo7PY8V3JOk50
-gqWg82N/bm2EzS7T83WEDb1lvj4IlvxgIqKeg11zXYxmrYSZJJCfvzf+lNS6uxgH
-jx/J0ylZ2LibGr6GAAyO9UWrAZSwSM0EcjT8wECnxkSDuyqmWwVvNBXuEIV8Oe3Y
-MiU1fJN8sd7DpsFx5M+XdnMnQS+HrjTPKD3mWrlAdnEThdYV8jZkpWhDys3/99eO
-hk0rLny0jNwkauf/iU8Oc6XvMkjLRMJg5U9VKyJuWWtzwXnjMN5WRFBqK4sZomMM
-ftbTH1+5ybRW/A3vBbaxRW2t7UzNjczekSZEiaLN9L/HcJCIR1QF8682DdAlEF9d
-k2gQiYSQAaaJ0JJAzHvRkRJLLgK2YQYiHNVy2t3JyFfsram5wSCWOfhPeIyLBTZJ
-vrpNlPbefsT957Tf2BNIugzZrC5VxDSKkZgRh1VGvSIQnCyzkQy6EU2qPpiW59G/
-hPIXZrKocK3KLS9/izJQTRltjMA=
-=PfT7
+mQINBGAkKwgBEAC+IQKqp/BI1VIvRRqcnRoAxkzsY3pxIS1L+C4gaWjIMf1eBBTq
+v9eKd4xHsW80VL/tl81WZWO/7JXKmgHODiXrv4HmDIOo6Z1hxehjVRF3Ih4+sKHR
+XCJgwcdJnMfqTKnHiycQggeDuheWbfjV2Fgmvxy0jh0M5PCB5taNz41LmPOaUQmn
+PXcI05CjP5msKjRBObw5Cd2oad60pTNhnBWRf288S8W4wH4jNISOZLZTOf6HU5gJ
+w9wU9RZoaz8kZPNArlJjZsN83S0XLCxpa6UUgYdzPDHOWGtcWGs3bvNAlTYuacun
+oICOvTH/ZJU7mgaZbbdSPVLDJdLBKRVgHbdTAK0J913FEiU93GJR5bf/W5FMN7DV
+6hsJVMiY/knJmkTFE9whDSjEc0TAYhQuC1HnzvMPGJvkeEz9nRqna5QUuo7V6LI4
+fZNTSlqFyIi/Oa3ZoliOyOshxJmU3y1HaNcHerO1nFbTtZ7s/TKBhY9oFq4T4gJV
+yFWy33p/JDxOtlVjpHEkzwXGdPe6R4xK8xHObEVraOMZMaweII+tMOGwVbxZu2kC
+A1aflM+oeyU1Fx9qqM0+dYyHO+kp3M5UtfM006RcNcdfoGrA4l6z9sUnHKsYzOLP
+RvKkzxiX3T91vHtRGCXjPOgOsJJzjkFtE1a5oFZg39fC99HZdbX0rUqAtQARAQAB
+tDFGZWRvcmEgKDM2KSA8ZmVkb3JhLTM2LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
+cmc+iQJOBBMBCAA4FiEEU97Sy5Iti42eY/0YmZ98vzircfQFAmAkKwgCGw8FCwkI
+BwIGFQoJCAsCBBYCAwECHgECF4AACgkQmZ98vzircfSGaxAAlDBWuY1Ch3YsssGE
+uaeOuaHmDj08p08WUAFUPBN0ID+0pmRQjywFzrufw8Z2g/lHwic+tpXXr/RtMmcl
++WzLh1E34TRqEngjDJ27QBq1Jyid3h1manKLhZhJ8b1usKHP7Dqh7n+eMTv2Qgrt
+6MrCNe4otWZ9WJ5vp/Bay5yAtU6lNoWBmJ+6BS1/2mg2jhoXrfg/Vey+/i6nYZIk
+M4IcYCyGCi9rjc8NMgkCyzPkPJtsy2taB+VdUcZyjFpc1acmC8sR/2/SEl4+pOtM
+UzW+OUOQFrerX/8MC5LqvmtsiPMyRDCOw3reJTXyoUIehoHoK9QtAdIRRP2nAkPy
+GKycVzsLbtheJXUZharXL1DwOkpMNlm3hp9BxX89m7dLblMSjtrQPs8CkpAExAQW
+FBltsD73ZhGnfE/XdWp7343m1w5W2m85/rczP+2et+c+HPmYTgaJTu8fAF0FoTDd
+uD1r9DxRa2oN3YBiPP/nXnhJaH//GgF/RRw7Fbc66fCh8DTrMsPgmyi/O3/pdSGe
+k0UqEfSdzNPbl7gVFlCbr4Ur5n1ph+sEZqOhMuyszLZZvYvUrHsDuanML5X25coP
+h+rqyjHJJeYlS2tMAQB1fmHB0LWhRhKYaOROAXFmUutFUxVVoigNCl8mV561DCz6
+6/zy81ZGeyUGOEIZ1NFuoY0EhC8=
+=KaIq
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 
@@ -316,18 +325,9 @@ EOF
 
 # OPTIONAL (IMAGE)
 
-function save_rpm_db() {
-        opt selinux && local policy &&
-        for policy in root/etc/selinux/*/contexts/files
-        do echo /usr/lib/rpm-db /var/lib/rpm >> "$policy/file_contexts.subs_dist"
-        done
-        mv root/var/lib/rpm root/usr/lib/rpm-db
-        ln -fns ../../usr/lib/rpm-db root/var/lib/rpm
-        echo > root/usr/lib/tmpfiles.d/rpm-db.conf \
-            'L /var/lib/rpm - - - - ../../usr/lib/rpm-db'
-
-        # Define a service and timer to check when updates are available.
-        test -x root/usr/bin/dnf || return 0
+function check_for_updates() if test -x root/usr/bin/dnf
+then
+        # Define a service to categorize which updates are available, if any.
         cat << 'EOF' > root/usr/lib/systemd/system/image-update-check.service
 [Unit]
 Description=Write the MOTD with the system update status
@@ -365,6 +365,10 @@ Type=oneshot
 [Install]
 WantedBy=multi-user.target
 EOF
+        ln -fst root/usr/lib/systemd/system/multi-user.target.wants \
+            ../image-update-check.service
+
+        # Define a timer to check for updates twice per day.
         cat << 'EOF' > root/usr/lib/systemd/system/image-update-check.timer
 [Unit]
 Description=Check for system update notifications twice daily
@@ -374,6 +378,8 @@ OnUnitInactiveSec=12h
 [Install]
 WantedBy=timers.target
 EOF
+        ln -fst root/usr/lib/systemd/system/timers.target.wants \
+            ../image-update-check.timer
 
         # Show the status message on GDM if it exists.
         if test -x root/usr/sbin/gdm
@@ -389,16 +395,7 @@ system-db:gdm
 file-db:/usr/share/gdm/greeter-dconf-defaults
 EOF
         fi
-
-        # Only enable the units if explicitly requested.
-        if [[ $* == +updates ]]
-        then
-                ln -fst root/usr/lib/systemd/system/timers.target.wants \
-                    ../image-update-check.timer
-                ln -fst root/usr/lib/systemd/system/multi-user.target.wants \
-                    ../image-update-check.service
-        fi
-}
+fi
 
 function drop_package() while read -rs
 do exclude_paths+=("${REPLY#/}")

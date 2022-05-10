@@ -95,7 +95,6 @@ dev-lang/rust *
 dev-lang/spidermonkey *
 dev-libs/gjs *
 gnome-base/librsvg *
-sys-auth/polkit *
 virtual/rust *
 x11-themes/adwaita-icon-theme *
 EOF
@@ -215,8 +214,6 @@ EOF
         echo '<media-libs/fontconfig-2.15 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
         # Accept app-i18n/ibus-1.5.26 to fix cross-compiling.
         echo '<app-i18n/ibus-1.5.27 ~*' >> "$portage/package.accept_keywords/ibus.conf"
-        # Accept polkit-0.120 to not require SpiderMonkey.
-        echo '<sys-auth/polkit-0.121 ~*' >> "$portage/package.accept_keywords/polkit.conf"
         # Accept vlc-3.0.17.3 to support newer dav1d versions.
         echo '<media-video/vlc-3.0.18 ~*' >> "$portage/package.accept_keywords/vlc.conf"
 
@@ -512,7 +509,7 @@ EOF
             $(using media-libs/libsndfile minimal || grep -Foxm1 media-libs/libsndfile /root/xdeps) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
-            $(using media-libs/mesa gallium vaapi && using x11-libs/libva opengl && grep -Foxm1 x11-libs/libva /root/xdeps) \
+            $(using media-libs/mesa vaapi && using x11-libs/libva opengl && grep -Foxm1 x11-libs/libva /root/xdeps) \
             sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
@@ -850,6 +847,7 @@ CONFIG_BINFMT_SCRIPT=y
 # Security settings
 CONFIG_BPF_JIT=y
 CONFIG_BPF_JIT_ALWAYS_ON=y
+CONFIG_DEVTMPFS_SAFE=y
 CONFIG_FORTIFY_SOURCE=y
 CONFIG_HARDEN_BRANCH_PREDICTOR=y
 CONFIG_HARDENED_USERCOPY=y
@@ -888,9 +886,6 @@ CONFIG_NET=y
 CONFIG_INET=y
 CONFIG_IPV6=y
 CONFIG_PACKET=y'
-                opt nvme && echo '# NVMe settings
-CONFIG_PCI=y
-CONFIG_BLK_DEV_NVME=y'
                 opt ramdisk || opt verity_sig && echo '# Initrd settings
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_RD_ZSTD=y'
@@ -901,6 +896,9 @@ CONFIG_BLK_DEV_LOOP_MIN_COUNT=1' || echo '# Loop settings
 CONFIG_BLK_DEV_LOOP_MIN_COUNT=0'
                 opt read_only && echo '# Overlay settings
 CONFIG_OVERLAY_FS=y'
+                [[ " ${options[rootmod]-} " == *' nvme '* ]] && echo '# NVMe settings
+CONFIG_PCI=y
+CONFIG_BLK_DEV_NVME=y'
                 opt selinux && echo '# SELinux settings
 CONFIG_AUDIT=y
 CONFIG_SECURITY=y
@@ -1040,24 +1038,24 @@ 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
-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
+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
-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
+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
@@ -1066,19 +1064,19 @@ E28ZHuYSwXIlBGMdTk1IfxWa9agnEtiVLa6cDiQqs3jFa6Qiobq/olkIzN8sP5kA
 3NAYCUcmB/7dcw0s/FWUsyOSKseUWUEHQwffxZeI9trsuMTt50hm0xh8yy60jWPd
 IzuY5V+C3M8YdP7oYS1l/9Oa0qf6nbmv+pKIq4D9zQuTUaCgL63Nyc7c2QrtY1cI
 uNTxbGYMBrf/MOPnzxhh00cQh7SsrV2aUuMp+SV88H/onYw/iYiVEXDRgaLW8aZY
-7qTAW3pS0sQ+nY5YDyo2gkIJELtXLg4tGCkQl84P/0yma5Y2F8pnSSoxXkQXzAo+
-yYNM3qP62ESVCI+GU6pC95g6GAfskNqoKh/9HoJHrZZEwn6EETbAKPBiHcgpvqNA
-FNZ+ceJqy3oJSW+odlsJoxltNJGxnxtAnwaGw/G+FB0y503EPcc+K4h9E0SUe6d3
-BB9deoXIHxeCF1o5+5UWRJlMP8Q3sX1/yzvLrbQTN9xDh1QHcXKvbmbghT4bJgJC
-4X6DZ013QkvN2E1j5+Nw74aMiG30EmXEvmC+gLYX8m7XEyjjgRqEdb1kWDo2x8D8
-XohIZe4EG6d2hp3XI5i+9SnEksm79tkdv4n4uVK3MhjxbgacZrchsDBRVOrA7ZHO
-z1CL5gmYDoaNQVXZvs1Fm2R3v4+VroeQizxAiYjL5PXJWVsVDTdKd5xJ32dLpY+J
-nA51h79X4sJQMKjqloLHtkUgdEPlVtvh04GhiEKoC9vK7yDcOQgTiMPi7TEk2LT2
-+Myv3lZXzv+FPw5hfSVWLuzoGKI56zhZvWujqJb1KHk+q9BToD/Xn855UsxKufWp
-mOg4oAGM8oMFmpxBraNRmCMt+RqAt13KgvJFBi/sL91hNTrOkXwCZaVn9f67dXBV
-MzgXmRQBLhHym4DcVwcfMaIK4NQqzVs6ZmZOKcPjv43aSZHRcaYaYOoWxXaqczL7
-yqu4wb67pwMX312ABdpW
-=kSzn
+7qTAW3pS0sQ+nY5YDyo2gkIJELtXLg4tGCkQahkP/jTKCs460FSXUQ3f+IT9U+jK
+fzIhpGQn5i9z9cWrilr1n85HwFmOuJ8uTdJEqLfymiQqnTWqMDrZf7vUOmHX254d
+pQn6WnQHLMkNygc1EhTSIomkIMviOJzSfKQy7Zil1Xq0UHQXce89015FJYcruEWu
+q6eN+XBTPhGsNad98lTMXONP6y3EyclTmTuZqAAw2bD1H+RpzJYZPTLeph4ADVMx
+weHWFi2kcoocYSQ2qJ4X7uxAb8Gf8nuBmWy3ML1QETGKfTgAl1TbxLghzQTZdJxa
+zp1NZxYY2zGGHw8cMOFvXFT217oVzCnYyLPSPcPIxTj6xOhvkuBQAc3Oavzss0Mo
+GnmlcVuhvEX2ZwrRL5yCU/GGcNyLsp+A2erjRg+ag9Zd9u5SsKWdk3dT9c3Put+K
+7W5O7LwahB6xw0raImoX6tDzEjjdhfTY0dRsVmwW5Y8pQrX3DsMY4BLj26MvNLIN
+jnzjr2e3FX3+6qm8RHULTGre1/VmRs/BMmvydFRCGqiFAOiNOGsE6D1jffB6jQB8
+ur7ti1KE/QhxHcwBtbDm8iCid6BJ1kDE+noYAVsxNFKC3pBZj9uREuYpvY3dBjmA
+xpcFrbjnn8b2lmNhlmw9OkgsEfNTHGEYAnT0gfWGd6v9ktfK3tFBu84koDSUJIYC
+910DW3Yasa//sYmdHvAt
+=Hu1K
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 
@@ -1155,10 +1153,6 @@ function write_overlay() {
         # Support cross-compiling with LLVM (#745744).
         sed -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' \
             "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
-
-        # Support autotools with EAPI 8.
-        sed -e 's/7)$/*)/' \
-            "$gentoo/eclass/autotools.eclass" > "$overlay/eclass/autotools.eclass"
 
         # Support tmpfiles with EAPI 8.
         sed -e 's/R\(DEPEND=.*\)/[[ ${EAPI} -lt 8 ]] \&\& & || I\1/' \
