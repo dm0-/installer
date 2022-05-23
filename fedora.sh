@@ -18,11 +18,11 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
+        opt uefi_vars && packages_buildroot+=(qemu-system-x86-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
         packages_buildroot+=(e2fsprogs openssl systemd)
 
-        $mkdir -p "$buildroot"
         $curl -L "${image%-Base*}-${options[release]}-$cver-$DEFAULT_ARCH-CHECKSUM" > "$output/checksum"
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output/checksum" "$output/image.txz"

@@ -25,8 +25,8 @@ packages+=(
 packages_buildroot+=(innoextract jq)
 
 function initialize_buildroot() {
-        $cp "${1:-setup_vampire_the_masquerade_-_bloodlines_1.2_(up_10.2)_(28160).exe}" "$output/install.exe"
-        $cp "${2:-setup_vampire_the_masquerade_-_bloodlines_1.2_(up_10.2)_(28160)-1.bin}" "$output/install-1.bin"
+        $cp "${1:-setup_vampire_the_masquerade_-_bloodlines_1.2_(up_11.111.010.2)_hotfix_(55110).exe}" "$output/install.exe"
+        $cp "${2:-setup_vampire_the_masquerade_-_bloodlines_1.2_(up_11.111.010.2)_hotfix_(55110)-1.bin}" "$output/install-1.bin"
 }
 
 function customize_buildroot() if opt nvidia

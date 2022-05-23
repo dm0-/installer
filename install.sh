@@ -65,10 +65,8 @@ packages=() slots=()
 [[ -n $* ]] && { . "$1" ; shift ; }
 validate_options
 
-# Define output directories
-output=$($mktemp --directory --tmpdir="$PWD" output.XXXXXXXXXX)
-buildroot="$output/buildroot"
-
+# Execute all of the build script functions.
+create_working_directory
 create_buildroot "$@"
 create_root_image
 script_with_keydb << EOF
@@ -93,6 +91,7 @@ kernel_cmdline
 save_boot_files
 produce_uefi_exe
 partition
+set_uefi_variables
 EOF
 
 # Write the file system to disk at the given partition.

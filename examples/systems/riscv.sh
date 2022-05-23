@@ -141,10 +141,6 @@ EOF
         # Accept GCC 12 to fix compilation.
         echo '<sys-devel/gcc-13 ~*' >> "$portage/package.accept_keywords/gcc.conf"
 
-        # Work around emacs-28 not supporting RISC-V seccomp.
-        echo 'EXTRA_EMAKE="SECCOMP_FILTER="' >> "$portage/env/emacs.conf"
-        echo 'app-editors/emacs emacs.conf' >> "$portage/package.env/emacs.conf"
-
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
 

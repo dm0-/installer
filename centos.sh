@@ -18,11 +18,11 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils centos-logos ImageMagick systemd-boot)
+        opt uefi_vars && packages_buildroot+=(dosfstools glibc-gconv-extra mtools qemu-kvm-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
         packages_buildroot+=(e2fsprogs openssl util-linux-core)
 
-        $mkdir -p "$buildroot"
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output/image.txz"
         $tar -C "$output" --transform='s,^\([^/]*/\)\?,tmp/,' -xJf "$output/image.txz"
@@ -152,6 +152,13 @@ eval "$(
 declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/'
 declare -f configure_initrd_generation | $sed 's/if opt ramdisk/if true/'
 )"
+
+# Override UEFI variable generation to deal with CentOS disabling vvfat.
+eval "$(declare -f set_uefi_variables | $sed -e '/timeout/i\
+mkfs.vfat -CF 32 -n ENROLL "$root.img" $(( 260 << 10 ))\
+MTOOLS_SKIP_CHECK=1 mcopy -Qsi "$root.img" "$root"/* ::/
+s|file="fat:[^,]*"|file="$root.img"|
+s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[

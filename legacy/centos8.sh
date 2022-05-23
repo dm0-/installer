@@ -4,7 +4,6 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=centos [release]=8).
 packages=(glibc-minimal-langpack)
 
 function create_buildroot() {
-#       local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/CentOS-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH/docker/centos-${options[release]}-$DEFAULT_ARCH.tar.xz"
         local -r image="https://github.com/CentOS/sig-cloud-instance-images/raw/$(archmap_container)/docker/centos-${options[release]:=$DEFAULT_RELEASE}-$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core)
@@ -15,11 +14,10 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(centos-logos ImageMagick)
+        opt uefi_vars && packages_buildroot+=(dosfstools mtools qemu-kvm-core)
         opt verity && packages_buildroot+=(veritysetup)
         packages_buildroot+=(e2fsprogs openssl)
 
-        $mkdir -p "$buildroot"
-#       $curl -L "$image.asc" > "$output/image.txz.asc"
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output"/image.txz{.asc,}
         $tar -C "$buildroot" -xJf "$output/image.txz"
@@ -31,6 +29,14 @@ function create_buildroot() {
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
 
+        # Rewrite repositories to use the archive of the last CentOS 8 release.
+        $sed -i \
+            -e 's/^mirrorlist=/#&/' \
+            -e 's/.releasever/8.5.2111/g' \
+            -e 's,/.contentdir/,/,g' \
+            -e 's,^#*\(baseurl=http://\)mirror,\1vault,' \
+            "$buildroot"/etc/yum.repos.d/CentOS-Linux-*.repo
+
         configure_initrd_generation
         initialize_buildroot "$@"
 
@@ -41,7 +47,7 @@ function create_buildroot() {
 }
 
 # Override package installation to fix modules.
-eval "$(declare -f install_packages | $sed \
+eval "$(declare -f install_packages | $sed -e 's/ systemd-resolved//' \
     -e '/{ *$/amkdir -p root/etc ; cp -pt root/etc /etc/os-release')"
 
 function distro_tweaks() {
@@ -93,43 +99,27 @@ s/ --offset=[^ ]* / /;s/ gpt.img / $esp_image /
 /^ *fi/idd bs=$bs conv=notrunc if=$esp_image of=gpt.img seek=$start
 }')"
 
-function verify_distro() {
-        local -rx GNUPGHOME="$output/gnupg"
-        trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
-        $mkdir -pm 0700 "$GNUPGHOME"
-        $gpg --import
-        $gpg --verify "$1" "$2"
-} << 'EOF'
------BEGIN PGP PUBLIC KEY BLOCK-----
+# Override UEFI variable generation to use the old QEMU bare SMBIOS argument.
+eval "$(declare -f set_uefi_variables | $sed -e '/timeout/i\
+cat <(echo -en "\\x0B\\x05\\x34\\x12\\x01") "$keydir/sb.oem" <(echo -en "\\0\\0") > "$keydir/sb.smbios"
+s/type=11,path\(=\S*\)oem/file\1smbios/')"
 
-mQINBFzMWxkBEADHrskpBgN9OphmhRkc7P/YrsAGSvvl7kfu+e9KAaU6f5MeAVyn
-rIoM43syyGkgFyWgjZM8/rur7EMPY2yt+2q/1ZfLVCRn9856JqTIq0XRpDUe4nKQ
-8BlA7wDVZoSDxUZkSuTIyExbDf0cpw89Tcf62Mxmi8jh74vRlPy1PgjWL5494b3X
-5fxDidH4bqPZyxTBqPrUFuo+EfUVEqiGF94Ppq6ZUvrBGOVo1V1+Ifm9CGEK597c
-aevcGc1RFlgxIgN84UpuDjPR9/zSndwJ7XsXYvZ6HXcKGagRKsfYDWGPkA5cOL/e
-f+yObOnC43yPUvpggQ4KaNJ6+SMTZOKikM8yciyBwLqwrjo8FlJgkv8Vfag/2UR7
-JINbyqHHoLUhQ2m6HXSwK4YjtwidF9EUkaBZWrrskYR3IRZLXlWqeOi/+ezYOW0m
-vufrkcvsh+TKlVVnuwmEPjJ8mwUSpsLdfPJo1DHsd8FS03SCKPaXFdD7ePfEjiYk
-nHpQaKE01aWVSLUiygn7F7rYemGqV9Vt7tBw5pz0vqSC72a5E3zFzIIuHx6aANry
-Gat3aqU3qtBXOrA/dPkX9cWE+UR5wo/A2UdKJZLlGhM2WRJ3ltmGT48V9CeS6N9Y
-m4CKdzvg7EWjlTlFrd/8WJ2KoqOE9leDPeXRPncubJfJ6LLIHyG09h9kKQARAQAB
-tDpDZW50T1MgKENlbnRPUyBPZmZpY2lhbCBTaWduaW5nIEtleSkgPHNlY3VyaXR5
-QGNlbnRvcy5vcmc+iQI3BBMBAgAhBQJczFsZAhsDBgsJCAcDAgYVCAIJCgsDFgIB
-Ah4BAheAAAoJEAW1VbOEg8ZdjOsP/2ygSxH9jqffOU9SKyJDlraL2gIutqZ3B8pl
-Gy/Qnb9QD1EJVb4ZxOEhcY2W9VJfIpnf3yBuAto7zvKe/G1nxH4Bt6WTJQCkUjcs
-N3qPWsx1VslsAEz7bXGiHym6Ay4xF28bQ9XYIokIQXd0T2rD3/lNGxNtORZ2bKjD
-vOzYzvh2idUIY1DgGWJ11gtHFIA9CvHcW+SMPEhkcKZJAO51ayFBqTSSpiorVwTq
-a0cB+cgmCQOI4/MY+kIvzoexfG7xhkUqe0wxmph9RQQxlTbNQDCdaxSgwbF2T+gw
-byaDvkS4xtR6Soj7BKjKAmcnf5fn4C5Or0KLUqMzBtDMbfQQihn62iZJN6ZZ/4dg
-q4HTqyVpyuzMXsFpJ9L/FqH2DJ4exGGpBv00ba/Zauy7GsqOc5PnNBsYaHCply0X
-407DRx51t9YwYI/ttValuehq9+gRJpOTTKp6AjZn/a5Yt3h6jDgpNfM/EyLFIY9z
-V6CXqQQ/8JRvaik/JsGCf+eeLZOw4koIjZGEAg04iuyNTjhx0e/QHEVcYAqNLhXG
-rCTTbCn3NSUO9qxEXC+K/1m1kaXoCGA0UWlVGZ1JSifbbMx0yxq/brpEZPUYm+32
-o8XfbocBWljFUJ+6aljTvZ3LQLKTSPW7TFO+GXycAOmCGhlXh2tlc6iTc41PACqy
-yy+mHmSv
-=kkH7
------END PGP PUBLIC KEY BLOCK-----
-EOF
+# Map supported architectures to the final CentOS 8 container image commits.
+function archmap_container() case $DEFAULT_ARCH in
+    aarch64) echo e79ccf67325a31bf0bb79a8a0e82d3d8a4de2da8 ;;
+    ppc64le) echo 76f876b31bb82108a1acf2cee1032c1d2ebc3bd9 ;;
+    x86_64)  echo 607af70702bacc6f46fab2ded055ab23d9113831 ;;
+    *) return 1 ;;
+esac
+
+# The last CentOS 8 containers had no signatures, so check their sums directly.
+function verify_distro() [[
+        $($sha256sum "$2") == $(case $DEFAULT_ARCH in
+            aarch64) echo 5beedefae3fcb64fa1e05d2facece2c764748791275e2d03f5be3518c7fd6429 ;;
+            ppc64le) echo 01afd6f91e7e97e9ce1e137ddec2d665c70aec9398facec1d7eb92f1da7985fe ;;
+            x86_64)  echo 6cc70032cb92991d1d916e8e77c2f3f6aedeacf0ba524af93bfac89c0a2438d9 ;;
+        esac)\ *
+]]
 
 # OPTIONAL (BUILDROOT)
 
@@ -261,25 +251,6 @@ rpm --checksig --define=_pkgverify_{'flags 0x0','level all'} rpmfusion-nonfree{,
 rpm --install rpmfusion-nonfree{,-tainted}.rpm
 exec rm -f rpmfusion-nonfree{,-tainted}.rpm
 EOF
-
-# WORKAROUNDS
-
-# CentOS container releases are horribly broken.  Pin them to static versions.
-function archmap_container() case $DEFAULT_ARCH in
-    aarch64) echo e79ccf67325a31bf0bb79a8a0e82d3d8a4de2da8 ;;
-    ppc64le) echo 76f876b31bb82108a1acf2cee1032c1d2ebc3bd9 ;;
-    x86_64)  echo 607af70702bacc6f46fab2ded055ab23d9113831 ;;
-    *) return 1 ;;
-esac
-
-# CentOS container releases are horribly broken.  Check sums with no signature.
-function verify_distro() [[
-        $($sha256sum "$2") == $(case $DEFAULT_ARCH in
-            aarch64) echo 5beedefae3fcb64fa1e05d2facece2c764748791275e2d03f5be3518c7fd6429 ;;
-            ppc64le) echo 01afd6f91e7e97e9ce1e137ddec2d665c70aec9398facec1d7eb92f1da7985fe ;;
-            x86_64)  echo 6cc70032cb92991d1d916e8e77c2f3f6aedeacf0ba524af93bfac89c0a2438d9 ;;
-        esac)\ *
-]]
 
 [[ options[release] -ge DEFAULT_RELEASE ]] ||
 . "legacy/${options[distro]}$(( --DEFAULT_RELEASE )).sh"

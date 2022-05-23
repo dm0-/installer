@@ -2,6 +2,7 @@
 packages_buildroot=()
 
 options[selinux]=
+options[uefi_vars]=
 options[verity_sig]=
 
 function create_buildroot() {
@@ -16,8 +17,8 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(pesign)
         opt squash && packages_buildroot+=(squashfs-tools)
         opt uefi && packages_buildroot+=(binutils librsvg imagemagick)
+        opt uefi_vars && packages_buildroot+=(qemu-system-x86)
 
-        $mkdir -p "$buildroot"
         $curl -L "$image.sig" > "$output/image.tgz.sig"
         $curl -L "$image" > "$output/image.tgz"
         verify_distro "$output"/image.tgz{.sig,}
@@ -95,6 +96,13 @@ fi
 
 # Override dm-init with userspace since the Arch kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
+
+# Override default OVMF paths for this distro's packaging.
+eval "$(declare -f set_uefi_variables | $sed \
+    -e 's,/usr/\S*VARS\S*.fd,/usr/share/edk2-ovmf/x64/OVMF_VARS.fd,' \
+    -e 's,/usr/\S*CODE\S*.fd,/usr/share/edk2-ovmf/x64/OVMF_CODE.secboot.fd,' \
+    -e 's,/usr/\S*/Shell.efi,/usr/share/edk2-shell/x64/Shell.efi,' \
+    -e 's,/usr/\S*/EnrollDefaultKeys.efi,,')"
 
 function configure_initrd_generation() if opt bootable
 then

@@ -22,6 +22,7 @@ options[selinux]=     # Enable SELinux and relabel with the given policy
 options[slot]=        # The root partition slot for the build to target
 options[squash]=      # Produce a compressed squashfs image
 options[uefi]=        # Generate a single UEFI executable containing boot files
+options[uefi_vars]=   # List of OVMF files to enroll Secure Boot certificates
 options[verity]=      # Prevent file system modification with dm-verity
 options[verity_sig]=  # Create and require a verity root hash signature
 
@@ -104,7 +105,7 @@ function imply_options() {
         local k ; for k in "${!cli_options[@]}"
         do options[$k]=${cli_options[$k]}
         done
-        opt sb_cert && opt sb_key && options[secureboot]=1
+        opt sb_cert && opt sb_key || opt uefi_vars && options[secureboot]=1
         opt verity_cert && opt verity_key && options[verity_sig]=1
         opt secureboot || opt uefi_path && options[uefi]=1
         opt selinux && options[enforcing]=1
@@ -143,6 +144,8 @@ function validate_options() {
         opt enforcing && opt selinux
         # Map the boolean SELinux option to a default policy name.
         [[ ${options[selinux]-} =~ ^(1|selinux)$ ]] && options[selinux]=targeted
+        # The only UEFI variables currently initialized are for Secure Boot.
+        opt uefi_vars && opt secureboot
         # A verity signature can't exist without verity.
         opt verity_sig && opt verity
         # Enforce the read-only setting when writing is unsupported.
@@ -232,6 +235,10 @@ ${options[verity_sig]:+:} false && openssl \
     x509 -in verity.crt -out verity.der -outform DER
 if ${options[secureboot]:+:} false
 then
+        ${options[uefi_vars]:+:} false && {
+                echo -n 4e32566d-8e9e-4f52-81d3-5bb9715f9727:
+                openssl x509 -outform DER < sb.crt | base64 --wrap=0
+        } > sb.oem
         openssl pkcs12 -export \
             -in sb.crt -inkey sb.key \
             -name sb -out sb.p12 -password pass:
@@ -253,6 +260,30 @@ function save_boot_files() { : ; }
 function initialize_buildroot() { : ; }
 function customize_buildroot() { : ; }
 function customize() { : ; }
+
+function create_working_directory() {
+        output=$($mktemp --directory --tmpdir="$PWD" output.XXXXXXXXXX)
+        buildroot="$output/buildroot"
+        $mkdir -p "$buildroot"
+
+        # Copy host-specific VM firmware files into the directory if given.
+        opt uefi_vars || return 0
+
+        local -a args=()
+        local list=${options[uefi_vars]}:
+        [[ $list == 1: || $list == uefi_vars: ]] ||
+        while [[ -n $list && ${#args[@]} -le 4 ]]
+        do args+=("${list%%:*}") ; list=${list#*:}
+        done
+
+        local -r efi=BOOT$(archmap_uefi ${options[arch]-}).EFI
+        local -r root=$buildroot/root/enroll
+        $mkdir -p "$root/EFI/BOOT"
+        [[ -z ${args[0]-} ]] || $cp "${args[0]}" "$output/vars.fd"
+        [[ -z ${args[1]-} ]] || $cp "${args[1]}" "$output/code.fd"
+        [[ -z ${args[2]-} ]] || $cp "${args[2]}" "$root/EFI/BOOT/$efi"
+        [[ -z ${args[3]-} ]] || $cp "${args[3]}" "$root/EnrollDefaultKeys.efi"
+}
 
 function create_root_image() if ! opt read_only && ! opt ramdisk || opt selinux
 then
@@ -881,6 +912,42 @@ EOF
                 cat - launch.sh | dd bs=$bs conv=notrunc of=gpt.img seek=34
                 chmod 0755 gpt.img
         fi
+fi
+
+function set_uefi_variables() if opt uefi_vars
+then
+        local -Ar defaults=(
+                [vars]=/usr/share/edk2/ovmf/OVMF_VARS.fd
+                [code]=/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd
+                [shell]=/usr/share/edk2/ovmf/Shell.efi
+                [enroll]=/usr/share/edk2/ovmf/EnrollDefaultKeys.efi
+        )
+        local -r efi=BOOT$(archmap_uefi ${options[arch]-}).EFI
+        local -r root=/root/enroll
+        [[ -s vars.fd ]] || cp "${defaults[vars]:?}" vars.fd
+        [[ -s code.fd ]] || cp "${defaults[code]:?}" code.fd
+        [[ -s $root/EFI/BOOT/$efi ]] ||
+        ln -fns "../../../..${defaults[shell]:?}" "$root/EFI/BOOT/$efi"
+        [[ -s $root/EnrollDefaultKeys.efi ]] ||
+        ln -fns "../..${defaults[enroll]:?}" "$root/EnrollDefaultKeys.efi"
+
+        cat << 'EOF' > "$root/startup.nsh"
+@echo -off
+EnrollDefaultKeys.efi --no-default
+if %lasterror% == 0 then
+        reset -s "Successfully enrolled Secure Boot certs"
+else
+        reset -s "Failed to enroll Secure Boot certs"
+endif
+EOF
+
+        timeout 3m qemu-system-x86_64 -nodefaults -nographic -no-reboot \
+            -M q35 -serial stdio < /dev/null \
+            -drive file=code.fd,format=raw,if=pflash,read-only=on \
+            -drive file=vars.fd,format=raw,if=pflash \
+            -drive file="fat:ro:$root",format=raw,if=virtio,media=disk,read-only=on \
+            -smbios type=11,path="$keydir/sb.oem" |&
+        grep -Fqs 'Successfully enrolled Secure Boot certs'
 fi
 
 function archmap_go() case ${*:-$DEFAULT_ARCH} in

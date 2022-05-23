@@ -2,6 +2,7 @@
 packages_buildroot=()
 
 options[enforcing]=
+options[uefi_vars]=
 
 DEFAULT_RELEASE=22.04
 
@@ -16,10 +17,10 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86 zstd)
         opt uefi && packages_buildroot+=(binutils imagemagick librsvg2-bin ubuntu-mono)
+        opt uefi_vars && packages_buildroot+=(ovmf qemu-system-x86)
         opt verity_sig && opt bootable && packages_buildroot+=(keyutils linux-headers-generic)
         packages_buildroot+=(debootstrap libglib2.0-bin)
 
-        $mkdir -p "$buildroot"
         $curl -L "${image%/*}/SHA256SUMS.gpg" > "$output/checksum.gpg"
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output"/checksum.gpg "$output/image.txz"
@@ -38,13 +39,13 @@ EOF
 
         script "${packages_buildroot[@]}" << 'EOF'
 export DEBIAN_FRONTEND=noninteractive INITRD=No
-apt-get update
-apt-get --assume-yes upgrade --with-new-pkgs
-exec apt-get --assume-yes install "$@"
+apt update
+apt --assume-yes upgrade --with-new-pkgs
+exec apt --assume-yes install "$@"
 EOF
 
         # Fix the old pesign option name.
-        $mkdir -p "$buildroot/etc/popt.d"
+        ! opt secureboot ||
         $sed -n '/certficate/q0;$q1' "$buildroot/etc/popt.d/pesign.popt" ||
         echo 'pesign alias --certificate --certficate' >> "$buildroot/etc/popt.d/pesign.popt"
 }
@@ -75,9 +76,9 @@ EOF
         cp -p {,root}/etc/apt/sources.list
         for dir in dev proc sys ; do mount --bind {,root}/"$dir" ; done
         trap -- 'umount root/{dev,proc,sys,var/cache/apt} ; trap - RETURN' RETURN
-        chroot root /usr/bin/apt-get update
-        chroot root /usr/bin/apt-get --assume-yes upgrade --with-new-pkgs
-        chroot root /usr/bin/apt-get --assume-yes install "${packages[@]}" "$@"
+        chroot root /usr/bin/apt update
+        chroot root /usr/bin/apt --assume-yes upgrade --with-new-pkgs
+        chroot root /usr/bin/apt --assume-yes install "${packages[@]}" "$@"
 
         dpkg-query --show > packages-buildroot.txt
         dpkg-query --admindir=root/var/lib/dpkg --show > packages.txt
@@ -249,6 +250,12 @@ eval "$(declare -f relabel | $sed \
     -e '/ldd/iopt squash && cp -t "$root/lib" /usr/lib/*/libgcc_s.so.1' \
     -e 's/qemu-system-[^ ]* /&-display none /g')"
 
+# Override default OVMF paths for this distro's packaging.
+eval "$(declare -f set_uefi_variables | $sed \
+    -e 's,/usr/\S*VARS\S*.fd,/usr/share/OVMF/OVMF_VARS_4M.fd,' \
+    -e 's,/usr/\S*CODE\S*.fd,/usr/share/OVMF/OVMF_CODE_4M.secboot.fd,' \
+    -e 's,/usr/\S*/\(Shell\|EnrollDefaultKeys\).efi,,g')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
@@ -366,3 +373,13 @@ eval "$(declare -f partition | $sed '/^ *if opt uefi/,/^ *fi/{
 s/ --offset=[^ ]* / /;s/ gpt.img / $esp_image /
 /^ *fi/idd bs=$bs conv=notrunc if=$esp_image of=gpt.img seek=$start
 }')"
+
+# Override 2020 variable generation to use the old QEMU bare SMBIOS argument.
+[[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] ||
+eval "$(declare -f set_uefi_variables | $sed -e '/timeout/i\
+cat <(echo -en "\\x0B\\x05\\x34\\x12\\x01") "$keydir/sb.oem" <(echo -en "\\0\\0") > "$keydir/sb.smbios"
+s/type=11,path\(=\S*\)oem/file\1smbios/')"
+
+# Override 20.04 default OVMF paths.
+[[ ${options[release]:-$DEFAULT_RELEASE} != 20.04 ]] ||
+eval "$(declare -f set_uefi_variables | $sed s/_4M//g)"

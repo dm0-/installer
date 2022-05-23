@@ -18,10 +18,10 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(app-emulation/qemu sys-apps/busybox)
         opt squash && packages_buildroot+=(sys-fs/squashfs-tools)
         opt uefi && packages_buildroot+=('<gnome-base/librsvg-2.41' media-gfx/imagemagick x11-themes/gentoo-artwork)
+        opt uefi_vars && packages_buildroot+=(app-emulation/qemu)
         opt verity && packages_buildroot+=(sys-fs/cryptsetup)
         packages_buildroot+=(dev-util/debugedit)
 
-        $mkdir -p "$buildroot"
         $curl -L "$stage3.asc" > "$output/stage3.txz.sig"
         $curl -L "$stage3" > "$output/stage3.txz"
         verify_distro "$output"/stage3.txz{.sig,}
@@ -53,6 +53,7 @@ EOF
 # Accept core utilities with no stable versions.
 app-crypt/pesign ~*
 app-text/mandoc ~*
+sys-apps/keyutils *
 sys-boot/vboot-utils ~*
 sys-fs/erofs-utils ~*
 sys-libs/efivar ~*
@@ -114,7 +115,6 @@ dev-lang/rust
 dev-lang/spidermonkey
 dev-libs/gjs
 gnome-base/librsvg
-sys-auth/polkit
 virtual/rust
 x11-themes/adwaita-icon-theme
 EOF
@@ -268,6 +268,7 @@ EOF
 # Always enable secure delete for SQLite.
 dev-db/sqlite secure-delete
 EOF
+        { [[ $host == x86_64-gentoo-linux-gnu ]] || echo 'EXTRA_EMAKE="SECCOMP_FILTER="' ; } >> "$portage/env/cross-emacs.conf"
         echo 'EXTRA_EMAKE="GDBUS_CODEGEN=/usr/bin/gdbus-codegen GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-emake-utils.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
@@ -285,6 +286,7 @@ EOF
 # Adjust the environment for cross-compiling broken packages.
 app-crypt/gnupg cross-libusb.conf
 app-crypt/gpgme cross-libassuan.conf
+app-editors/emacs cross-emacs.conf
 app-i18n/ibus cross-glib-genmarshal.conf
 dev-lang/lua cross-lua.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
@@ -689,6 +691,12 @@ eval "$(declare -f produce_uefi_exe | $sed \
     -e 's/objcopy/"${options[host]}-&"/' \
     -e 's,/[^ ]*.efi.stub,/usr/${options[host]}&,')"
 
+# Override default OVMF paths for this distro's packaging.
+eval "$(declare -f set_uefi_variables | $sed \
+    -e 's,/usr/\S*VARS\S*.fd,/usr/share/edk2-ovmf/OVMF_VARS.fd,' \
+    -e 's,/usr/\S*CODE\S*.fd,/usr/share/edk2-ovmf/OVMF_CODE.secboot.fd,' \
+    -e 's,/usr/\S*/\(Shell\|EnrollDefaultKeys\).efi,/usr/share/edk2-ovmf/\1.efi,g')"
+
 function create_ipe_policy() if opt ipe
 then
         if opt monolithic
@@ -831,7 +839,7 @@ CONFIG_BASE_FULL=y
 CONFIG_BLOCK=y
 CONFIG_EXPERT=y
 CONFIG_JUMP_LABEL=y
-CONFIG_KERNEL_'$([[ ${options[arch]} =~ [3-6x]86 ]] && echo ZSTD || echo XZ)'=y
+CONFIG_KERNEL_'$([[ ${options[arch]} == *[3-6x]86* ]] && echo ZSTD || echo XZ)'=y
 CONFIG_MULTIUSER=y
 CONFIG_SHMEM=y
 CONFIG_UNIX=y
@@ -853,6 +861,7 @@ CONFIG_HARDEN_BRANCH_PREDICTOR=y
 CONFIG_HARDENED_USERCOPY=y
 CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY=y
 CONFIG_RANDOMIZE_BASE=y
+CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT=y
 CONFIG_RANDOMIZE_MEMORY=y
 CONFIG_RELOCATABLE=y
 CONFIG_RETPOLINE=y
@@ -869,7 +878,7 @@ CONFIG_MODULE_SIG_FORCE=y
 CONFIG_MODULE_SIG_SHA512=y'
                 [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
 CONFIG_64BIT=y'
-                [[ ${options[arch]} = x86_64 ]] && echo 'CONFIG_SMP=y
+                [[ ${options[arch]} == x86_64 ]] && echo 'CONFIG_SMP=y
 CONFIG_X86_LOCAL_APIC=y' &&
                 [[ ${options[host]} == *x32 ]] && echo 'CONFIG_X86_X32=y
 CONFIG_IA32_EMULATION=y'

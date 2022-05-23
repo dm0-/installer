@@ -16,10 +16,10 @@ function create_buildroot() {
         opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86 zstd)
         opt squash && packages_buildroot+=(squashfs)
         opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
+        opt uefi_vars && packages_buildroot+=(ovmf qemu-ovmf-x86_64 qemu-x86)
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
         packages_buildroot+=(curl e2fsprogs glib2-tools openssl)
 
-        $mkdir -p "$buildroot"
         $curl -L "$image.sha256" > "$output/checksum"
         $curl -L "$image.sha256.asc" > "$output/checksum.sig"
         $curl -L "$image" > "$output/image.txz"
@@ -109,6 +109,12 @@ sed -i -e "/sda/iinsmod /lib/${mod##*/}.ko" "$root/init" ; done')"
 
 # Override dm-init with userspace since the openSUSE kernel doesn't enable it.
 eval "$(declare -f kernel_cmdline | $sed 's/opt ramdisk[ &]*dmsetup=/dmsetup=/')"
+
+# Override default OVMF paths for this distro's packaging.
+eval "$(declare -f set_uefi_variables | $sed \
+    -e 's,/usr/\S*VARS\S*.fd,/usr/share/qemu/ovmf-x86_64-smm-vars.bin,' \
+    -e 's,/usr/\S*CODE\S*.fd,/usr/share/qemu/ovmf-x86_64-smm-code.bin,' \
+    -e 's,/usr/\S*/\(Shell\|EnrollDefaultKeys\).efi,/usr/share/ovmf/\1.efi,g')"
 
 function configure_initrd_generation() if opt bootable
 then

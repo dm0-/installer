@@ -14,6 +14,11 @@ s/ --offset=[^ ]* / /;s/ gpt.img / $esp_image /
 /^ *fi/idd bs=$bs conv=notrunc if=$esp_image of=gpt.img seek=$start
 }')"
 
+# Override UEFI variable generation to use the old QEMU bare SMBIOS argument.
+eval "$(declare -f set_uefi_variables | $sed -e '/timeout/i\
+cat <(echo -en "\\x0B\\x05\\x34\\x12\\x01") "$keydir/sb.oem" <(echo -en "\\0\\0") > "$keydir/sb.smbios"
+s/type=11,path\(=\S*\)oem/file\1smbios/')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN
