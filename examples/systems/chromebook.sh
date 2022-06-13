@@ -19,7 +19,6 @@ options+=(
         [bootable]=1            # Build a kernel for this system.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
         [monolithic]=1          # Build all boot-related files into the kernel.
-        [networkd]=1            # Let systemd manage the network configuration.
         [verity_sig]=1          # Require verifying all verity root hashes.
 )
 
@@ -91,11 +90,11 @@ function initialize_buildroot() {
         # Tune compilation for the ARM Cortex-A17.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=cortex-a17 -mfpu=neon-vfpv4 -ftree-vectorize&/' \
+            -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=cortex-a17&/' \
             "$portage/make.conf"
         $cat << 'EOF' >> "$portage/make.conf"
 CPU_FLAGS_ARM="edsp neon thumb thumb2 v4 v5 v6 v7 vfp vfp-d32 vfpv3 vfpv4"
 RUST_TARGET="thumbv7neon-unknown-linux-gnueabihf"
-RUSTFLAGS="-C target-cpu=cortex-a17"
 EOF
         echo >> "$buildroot/etc/portage/env/rust-map.conf" \
             "RUST_CROSS_TARGETS=\"$(archmap_llvm ${options[arch]}):thumbv7neon-unknown-linux-gnueabihf:${options[host]}\""
@@ -114,20 +113,17 @@ EOF
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -gui -networkmanager -wifi'"'
+            -gui -modemmanager -ppp'"'
 
         # Disable LTO for packages broken with this architecture/ABI.
         echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
         echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
         echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
-
-        # Avoid the broken panel in 5.16.
-        echo '>=sys-kernel/gentoo-sources-5.16' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {
@@ -157,11 +153,6 @@ function customize() {
                 usr/lib/firmware
                 usr/local
         )
-
-        # Start the wireless interface if it is configured.
-        mkdir -p root/usr/lib/systemd/system/network.target.wants
-        ln -fns ../wpa_supplicant-nl80211@.service \
-            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlan0.service
 
         # Use a persistent /var partition with bare ext4.
         echo >> root/etc/fstab \
@@ -318,7 +309,6 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
 CONFIG_NFT_CT=y
 ## Support translating iptables to nftables.
 CONFIG_NFT_COMPAT=y
@@ -401,6 +391,7 @@ CONFIG_WLAN=y
 CONFIG_WLAN_VENDOR_BROADCOM=y
 CONFIG_BRCMFMAC=y
 CONFIG_BRCMFMAC_SDIO=y
+CONFIG_PACKET=y  # Required by NetworkManager-wifi
 ## ChromeOS embedded controller
 CONFIG_CHROME_PLATFORMS=y
 CONFIG_CROS_EC=y
@@ -440,7 +431,6 @@ CONFIG_MEDIA_CAMERA_SUPPORT=y
 CONFIG_MEDIA_USB_SUPPORT=y
 CONFIG_USB_VIDEO_CLASS=y
 CONFIG_VIDEO_DEV=y
-CONFIG_VIDEO_V4L2=y
 ## USB storage
 CONFIG_SCSI=y
 CONFIG_BLK_DEV_SD=y
@@ -459,7 +449,7 @@ CONFIG_PWRSEQ_SIMPLE=y
 ## Screen
 CONFIG_BACKLIGHT_CLASS_DEVICE=y
 CONFIG_BACKLIGHT_PWM=y
-CONFIG_DRM_PANEL_SIMPLE=y
+CONFIG_DRM_PANEL_EDP=y
 ## Battery
 CONFIG_BATTERY_BQ27XXX=y
 CONFIG_BATTERY_BQ27XXX_I2C=y

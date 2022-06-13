@@ -82,12 +82,12 @@ function initialize_buildroot() {
         # Tune compilation for the AMD Geode LX 800.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow -ftree-vectorize&/' \
+            -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=geode&/' \
             "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
 CPU_FLAGS_X86="3dnow 3dnowext mmx mmxext"
 GO386="softfloat"
 RUST_TARGET="$(archmap_rust i586)"
-RUSTFLAGS="-C target-cpu=geode"
 EOF
         echo >> "$buildroot/etc/portage/env/rust-map.conf" \
             "RUST_CROSS_TARGETS=\"$(archmap_llvm i586):$(archmap_rust i586):${options[host]}\""
@@ -110,7 +110,7 @@ EOF
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \

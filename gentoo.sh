@@ -46,6 +46,7 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="${options[selinux]:-targeted}"
+RUSTFLAGS="-Copt-level=2"
 USE="\$USE system-icu system-png -fortran -gtk-doc -introspection -vala"
 VIDEO_CARDS=""
 EOF
@@ -60,6 +61,7 @@ sys-libs/efivar ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
+dev-libs/icu *
 dev-libs/nspr ~*
 dev-libs/nss ~*
 media-libs/dav1d ~*
@@ -67,6 +69,7 @@ www-client/firefox ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
 # Accept viable versions of GNOME packages.
+app-i18n/ibus *
 gnome-base/* *
 gnome-extra/* *
 app-arch/gnome-autoar *
@@ -145,6 +148,8 @@ EOF
 */* -gtk2
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
+# Support working with zstd-compressed modules.
+sys-apps/kmod zstd
 # Disable trying to build an initrd, and use hardened options.
 sys-kernel/gentoo-kernel hardened -initramfs
 # Apply patches to support more CPU optimizations, and link a default version.
@@ -155,6 +160,10 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/llvm.conf"
 # Make clang use its own linker by default.
 sys-devel/clang default-lld
+EOF
+        $cat << 'EOF' >> "$portage/package.use/pulseaudio.conf"
+# Skip the PulseAudio daemon by default since PipeWire gets priority.
+media-sound/pulseaudio -daemon
 EOF
         $cat << 'EOF' >> "$portage/package.use/selinux.conf"
 # Don't pull in qt5 for SELinux tools.
@@ -208,14 +217,12 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept audit-3.0.8 to fix SWIG (#836702).
+        echo '<sys-process/audit-3.0.9 ~*' >> "$portage/package.accept_keywords/audit.conf"
         # Accept eselect-fontconfig-20220403 to fix symlinks.
         echo '<app-eselect/eselect-fontconfig-20220404 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
         # Accept fontconfig-2.14 to fix the eselect module.
         echo '<media-libs/fontconfig-2.15 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
-        # Accept app-i18n/ibus-1.5.26 to fix cross-compiling.
-        echo '<app-i18n/ibus-1.5.27 ~*' >> "$portage/package.accept_keywords/ibus.conf"
-        # Accept vlc-3.0.17.3 to support newer dav1d versions.
-        echo '<media-video/vlc-3.0.18 ~*' >> "$portage/package.accept_keywords/vlc.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -308,7 +315,6 @@ dev-libs/libaio no-lto.conf
 dev-libs/libbsd no-lto.conf
 media-gfx/potrace no-lto.conf
 media-libs/alsa-lib no-lto.conf
-media-sound/pulseaudio no-lto.conf
 sys-apps/sandbox no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
@@ -399,7 +405,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/13/bin/${name##*-}"
+prog="/usr/lib/llvm/14/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/$host-clang"
@@ -799,9 +805,8 @@ function write_unconditional_patches() {
         if opt ipe
         then
                 $mkdir -p "$patches"/sys-kernel/gentoo-{kernel,sources}
-                $curl -L 'https://patchwork.kernel.org/series/562971/mbox' \
-                    > "$patches/sys-kernel/gentoo-sources/ipe.patch"
-                [[ $($sha256sum "$patches/sys-kernel/gentoo-sources/ipe.patch") == 81920cd54c22c19eed420b5ef349d68850562943d7b30a0aedc964346ad5261a\ * ]]
+                $curl -L 'https://patchwork.kernel.org/series/648612/mbox' > "$patches/sys-kernel/gentoo-sources/ipe.patch"
+                [[ $($sha256sum "$patches/sys-kernel/gentoo-sources/ipe.patch") == 7f892c2fde9eae4c4859121de1ccb809f48cf152c2b15a761cc48b8e612b9591\ * ]]
                 $ln -fst "$patches/sys-kernel/gentoo-kernel" ../gentoo-sources/ipe.patch
         fi
 
@@ -861,10 +866,12 @@ CONFIG_HARDEN_BRANCH_PREDICTOR=y
 CONFIG_HARDENED_USERCOPY=y
 CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY=y
 CONFIG_RANDOMIZE_BASE=y
+CONFIG_RANDOMIZE_KSTACK_OFFSET=y
 CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT=y
 CONFIG_RANDOMIZE_MEMORY=y
 CONFIG_RELOCATABLE=y
 CONFIG_RETPOLINE=y
+CONFIG_SECURITY_DMESG_RESTRICT=y
 CONFIG_SECURITY_LOCKDOWN_LSM=y
 CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
 CONFIG_STACKPROTECTOR=y
@@ -872,16 +879,18 @@ CONFIG_STACKPROTECTOR_STRONG=y
 CONFIG_STRICT_KERNEL_RWX=y
 CONFIG_VMAP_STACK=y
 # Signing settings
+CONFIG_KEXEC_SIG=y
+CONFIG_KEXEC_SIG_FORCE=y
+CONFIG_MODULE_COMPRESS_ZSTD=y
 CONFIG_MODULE_SIG=y
 CONFIG_MODULE_SIG_ALL=y
 CONFIG_MODULE_SIG_FORCE=y
 CONFIG_MODULE_SIG_SHA512=y'
-                [[ ${options[arch]} =~ 64 ]] && echo '# Architecture settings
+                [[ ${options[arch]} == *64* ]] && echo '# Architecture settings
 CONFIG_64BIT=y'
                 [[ ${options[arch]} == x86_64 ]] && echo 'CONFIG_SMP=y
 CONFIG_X86_LOCAL_APIC=y' &&
-                [[ ${options[host]} == *x32 ]] && echo 'CONFIG_X86_X32=y
-CONFIG_IA32_EMULATION=y'
+                [[ ${options[host]} == *x32 ]] && echo CONFIG_X86_X32_ABI=y
                 opt ipe && { echo -n '# IPE settings
 CONFIG_SECURITY=y
 CONFIG_SECURITYFS=y
@@ -1269,5 +1278,8 @@ function drop_development() {
         done
 
         # Save required GCC shared libraries so /usr/lib/gcc can be dropped.
-        mv -t root/usr/lib root/usr/lib/gcc/*/*/*.so*
+        local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
+        local -r abi=$(portageq envvar ABI)
+        local -r lib=$(portageq envvar "LIBDIR${abi:+_$abi}")
+        mv -t "root/usr/${lib:-lib}" root/usr/lib/gcc/*/*/*.so*
 }

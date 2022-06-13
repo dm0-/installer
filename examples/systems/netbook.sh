@@ -89,11 +89,9 @@ function initialize_buildroot() {
         # Tune compilation for the ARM ARM926EJ-S.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=arm926ej-s -ftree-vectorize&/' \
+            -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=arm926ej-s&/' \
             "$portage/make.conf"
-        $cat << 'EOF' >> "$portage/make.conf"
-CPU_FLAGS_ARM="edsp thumb v4 v5"
-RUSTFLAGS="-C target-cpu=arm926ej-s"
-EOF
+        echo 'CPU_FLAGS_ARM="edsp thumb v4 v5"' >> "$portage/make.conf"
 
         # Fall back to the fbdev driver for graphical sessions and skip OpenGL.
         echo 'VIDEO_CARDS="fbdev"' >> "$portage/make.conf"
@@ -110,7 +108,7 @@ EOF
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \

@@ -833,6 +833,7 @@ EOF
 function produce_uefi_exe() if opt uefi
 then
         local -r arch=$(archmap_uefi ${options[arch]-})
+        local -r dtb=$(test -s devicetree.dtb && echo devicetree.dtb)
         local -r initrd=$(test -s initrd.img && echo initrd.img)
         local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
         local -r linux=$(test -s vmlinux && echo vmlinux || echo vmlinuz)
@@ -843,6 +844,7 @@ then
             ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=0x20000} \
             ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=0x30000} \
             ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
+            ${dtb:+--add-section .dtb="$dtb" --change-section-vma .dtb=0x1000000} \
             ${linux:+--add-section .linux="$linux" --change-section-vma .linux=0x2000000} \
             ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x4000000} \
             "/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub" unsigned.efi

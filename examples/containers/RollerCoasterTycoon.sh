@@ -58,10 +58,10 @@ done
 
 exec sudo systemd-nspawn \
     --bind=/dev/dri \
-    --bind=/tmp/.X11-unix \
-    --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
+    --bind-ro="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro=/etc/passwd \
+    --bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}" \
     --chdir=/RCT \
     --hostname=RollerCoasterTycoon \
     --image="${IMAGE:-RollerCoasterTycoon.img}" \

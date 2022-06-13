@@ -11,7 +11,6 @@ options+=(
         [distro]=gentoo         # Use Gentoo to build this image from source.
         [arch]=x86_64           # Target Intel Pentium N3530 CPUs.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
-        [networkd]=1            # Let systemd manage the network configuration.
         [squash]=1              # Use a compressed file system to save space.
         [uefi]=1                # Create a UEFI executable to boot this image.
         [verity_sig]=1          # Require verifying all verity root hashes.
@@ -84,12 +83,12 @@ function initialize_buildroot() {
         # Tune compilation for the Intel Pentium N3530, and use the x32 ABI.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=silvermont -ftree-vectorize&/' \
+            -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=silvermont&/' \
             "$portage/make.conf"
         $cat << 'EOF' >> "$portage/make.conf"
 ABI_X86="x32"
 CPU_FLAGS_X86="mmx mmxext pclmul popcnt rdrand sse sse2 sse3 sse4_1 sse4_2 ssse3"
 RUST_TARGET="x86_64-unknown-linux-gnux32"
-RUSTFLAGS="-C target-cpu=silvermont"
 EOF
         echo >> "$buildroot/etc/portage/env/rust-map.conf" \
             "RUST_CROSS_TARGETS=\"$(archmap_llvm x86_64):x86_64-unknown-linux-gnux32:${options[host]}\""
@@ -118,12 +117,12 @@ EOF
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -gui -networkmanager -wifi'"'
+            -gui -modemmanager -ppp'"'
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
         echo 'sys-apps/systemd gnuefi' >> "$buildroot/etc/portage/package.use/systemd.conf"
@@ -166,8 +165,13 @@ EOF
         echo 'MYCMAKEARGS="-DAOM_TARGET_CPU=x86_64"' >> "$portage/env/libaom.conf"
         echo 'media-libs/libaom libaom.conf' >> "$portage/package.env/libaom.conf"
 
-        # Avoid wireless drivers being incompatible with 5.17.
-        echo '>=sys-kernel/gentoo-sources-5.17' >> "$buildroot/etc/portage/package.mask/linux.conf"
+        # Fix broadcom-sta with Linux 5.18.
+        $mkdir -p "$portage/patches/net-wireless/broadcom-sta"
+        $curl -L > "$portage/patches/net-wireless/broadcom-sta/5.18.patch" \
+            https://raw.githubusercontent.com/archlinux/svntogit-community/33b4bd2b9e30679b03f5d7aa2741911d914dcf94/trunk/012-linux517.patch \
+            https://raw.githubusercontent.com/archlinux/svntogit-community/2e1fd240f9ce06f500feeaa3e4a9675e65e6b967/trunk/013-linux518.patch
+        [[ $($sha256sum "$portage/patches/net-wireless/broadcom-sta/5.18.patch") == 29501d6eb4399c472e409df504e3ad67d71b01d1d98e31ade129f9a43a7d4fa0\ * ]]
+        $sed -i -e 's/if.*4.*15.*/ifdef HAVE_TIMER_SETUP/' "$portage/patches/net-wireless/broadcom-sta/5.18.patch"
 }
 
 function customize_buildroot() {
@@ -193,14 +197,10 @@ function customize() {
                 usr/share/qemu/'*'{aarch,arm,hppa,ppc,riscv,s390,sparc}'*'
         )
 
-        # Start the wireless interface if it is configured.
-        mkdir -p root/usr/lib/systemd/system/network.target.wants
-        ln -fns ../wpa_supplicant-nl80211@.service \
-            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlp1s0.service
-
         # Sign the out-of-tree kernel modules due to required signatures.
-        for module in root/lib/modules/*/net/wireless/wl.ko
+        for module in root/lib/modules/*/net/wireless/wl.ko.zst
         do
+                unzstd --rm "$module" ; module=${module%.zst}
                 /usr/src/linux/scripts/sign-file \
                     sha512 "$keydir/sign.key" "$keydir/sign.crt" "$module"
         done
@@ -209,8 +209,8 @@ function customize() {
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -smp 4,cores=4 -m 4G -vga std -nic user \
+    -M q35 -cpu host -smp 4,cores=4 -m 4G -vga std -nic user \
+    -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"
@@ -296,7 +296,6 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NF_TABLES_IPV6=y
-CONFIG_NFT_COUNTER=y
 CONFIG_NFT_CT=y
 ## Support translating iptables to nftables.
 CONFIG_NFT_COMPAT=y
@@ -309,9 +308,11 @@ CONFIG_NET_SCHED=y
 CONFIG_NET_SCH_DEFAULT=y
 CONFIG_NET_SCH_FQ_CODEL=y
 # TARGET HARDWARE: Lenovo Yoga 2 11"
+CONFIG_MTRR=y
 CONFIG_PCI=y
 CONFIG_PCI_MSI=y
 CONFIG_PM=y
+CONFIG_X86_PAT=y
 ## Bundle firmware/microcode
 CONFIG_EXTRA_FIRMWARE="intel-ucode/06-37-08 regulatory.db regulatory.db.p7s"
 ## Intel Pentium N3530
@@ -343,10 +344,10 @@ CONFIG_USB_XHCI_HCD=y
 CONFIG_USB_XHCI_PCI=y
 ## Broadcom wireless BCM43142 (enable modules to build the proprietary driver)
 CONFIG_MODULES=y
-CONFIG_MODULE_COMPRESS_XZ=y
 CONFIG_NETDEVICES=y
 CONFIG_WIRELESS=y
 CONFIG_CFG80211=y
+CONFIG_PACKET=y  # Required by NetworkManager-wifi
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
@@ -364,7 +365,6 @@ CONFIG_MEDIA_CAMERA_SUPPORT=y
 CONFIG_MEDIA_USB_SUPPORT=y
 CONFIG_USB_VIDEO_CLASS=y
 CONFIG_VIDEO_DEV=y
-CONFIG_VIDEO_V4L2=y
 ## USB storage
 CONFIG_SCSI=y
 CONFIG_BLK_DEV_SD=y

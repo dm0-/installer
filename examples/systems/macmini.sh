@@ -87,10 +87,10 @@ function initialize_buildroot() {
         # Tune compilation for the PowerPC G4.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=7450 -maltivec -mabi=altivec -ftree-vectorize&/' \
+            -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=7450&/' \
             "$portage/make.conf"
         $cat << 'EOF' >> "$portage/make.conf"
 CPU_FLAGS_PPC="altivec"
-RUSTFLAGS="-C target-cpu=7450"
 USE="$USE ppcsha1"
 EOF
 
@@ -108,7 +108,7 @@ EOF
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \

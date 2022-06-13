@@ -97,8 +97,8 @@ function initialize_buildroot() {
         # Assume the build system is the target, and tune compilation for it.
         $sed -i \
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
+            -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=native&/' \
             "$portage/make.conf"
-        echo 'RUSTFLAGS="-C target-cpu=native"' >> "$portage/make.conf"
         $sed -n '/^vendor_id.*GenuineIntel$/q0;$q1' /proc/cpuinfo && echo CONFIG_MNATIVE_INTEL=y >> "$buildroot/etc/kernel/config.d/native.config"
         $sed -n '/^vendor_id.*AuthenticAMD$/q0;$q1' /proc/cpuinfo && echo CONFIG_MNATIVE_AMD=y >> "$buildroot/etc/kernel/config.d/native.config"
 
@@ -121,7 +121,7 @@ function initialize_buildroot() {
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gallium gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
@@ -132,14 +132,12 @@ function initialize_buildroot() {
         $sed -i -e '/^LLVM_TARGETS=/s/" *$/ AMDGPU&/' "$buildroot/etc/portage/make.conf" "$portage/make.conf"
         echo 'USE="$USE llvm"' >> "$portage/make.conf"
         echo "VIDEO_CARDS=\"amdgpu fbdev i915 intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
+        echo '<media-libs/mesa-22.2 ~*' >> "$portage/package.accept_keywords/mesa.conf"
         packages+=(x11-libs/libva-{intel,vdpau}-driver)
 
         # Install VLC.
         fix_package vlc
         packages+=(media-video/vlc)
-
-        # Avoid audit build failures with Linux 5.17 headers.
-        echo '>=sys-kernel/linux-headers-5.17' >> "$buildroot/etc/portage/package.mask/linux.conf"
 }
 
 function customize_buildroot() {
@@ -173,6 +171,7 @@ function customize() {
         )
 
         # Sign kernel modules manually since the dist-kernel package is weird.
+        find root/lib/modules -name '*.ko.zst' -exec unzstd --rm {} ';'
         find root/lib/modules -name '*.ko' -exec \
             "/usr/${options[host]}/usr/src/linux/scripts/sign-file" \
             sha512 "$keydir/sign.key" "$keydir/sign.crt" {} ';'
@@ -188,8 +187,8 @@ EOF
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -bios /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
+    -M q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
+    -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"

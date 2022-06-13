@@ -72,10 +72,10 @@ exec sudo systemd-nspawn \
     --ambient-capability=CAP_DAC_OVERRIDE \
     --bind="$XDG_CONFIG_HOME/unity3d/Squad/Kerbal Space Program:/tmp/save" \
     $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
-    --bind=/tmp/.X11-unix \
-    --bind="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
+    --bind-ro="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro=/etc/passwd \
+    --bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}" \
     --capability=CAP_DAC_OVERRIDE \
     --chdir=/KSP_linux \
     --hostname=KerbalSpaceProgram \
