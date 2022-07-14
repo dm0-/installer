@@ -67,7 +67,7 @@ function initialize_buildroot() {
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
@@ -77,7 +77,7 @@ function initialize_buildroot() {
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_9 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
+app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_10 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
 dev-libs/glib static-libs
 dev-libs/libffi static-libs
 dev-libs/libpcre static-libs
@@ -118,34 +118,15 @@ EOF
 EOF
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv/opensbi/archive/v1.0.tar.gz > "$buildroot/root/opensbi.tgz"
-        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == a5efaeb24f5ee88d13d5788e4e00623ff312ee12c0bf736aa75a6ad9a850fb76\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2022.04.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 28dbc092221235c679e9b93f2bfa7b943344193f9d922fb86c1d555ca4d997ba\ * ]]
-        $curl -L https://github.com/riscv-software-src/opensbi/commit/5d53b55aa77ffeefd4012445dfa6ad3535e1ff2c.patch > "$buildroot/root/opensbi.patch"
-        [[ $($sha256sum "$buildroot/root/opensbi.patch") == 5264a1a69395b5428f7eec1eb6778854d7017435598273c04795b4066ee76d0b\ * ]]
-        $cat << 'EOF' > "$buildroot/root/u-boot.patch"
---- a/arch/riscv/Makefile
-+++ b/arch/riscv/Makefile
-@@ -24,7 +24,7 @@
- 	CMODEL = medany
- endif
- 
--ARCH_FLAGS = -march=$(ARCH_BASE)$(ARCH_A)$(ARCH_C) -mabi=$(ABI) \
-+ARCH_FLAGS = -march=$(ARCH_BASE)$(ARCH_A)$(ARCH_C)_zicsr_zifencei -mabi=$(ABI) \
- 	     -mcmodel=$(CMODEL)
- 
- PLATFORM_CPPFLAGS	+= $(ARCH_FLAGS)
-EOF
-
-        # Accept GCC 12 to fix compilation.
-        echo '<sys-devel/gcc-13 ~*' >> "$portage/package.accept_keywords/gcc.conf"
+        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.1.tar.gz > "$buildroot/root/opensbi.tgz"
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == d183cb890130983a4f01e75fc03ee4f7ea0e16a7923b8af9c6dff7deb2fedaec\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2022.07.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 1730dea306c016348efe641d812d4974745be3910af4769aecef740de549c81b\ * ]]
+        $curl -L https://source.denx.de/u-boot/custodians/u-boot-riscv/-/commit/417e56641ab9f6b4023dfb3d2d4c59b13164d655.patch > "$buildroot/root/u-boot.patch"
+        [[ $($sha256sum "$buildroot/root/u-boot.patch") == fc32f3bb0af3e8aecbb59a5188ddecf3c5e524431aa9f2c2b2430b2a1ddd7711\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
-
-        # Work around the broken glibc paths (#797679).
-        $ln -fst "$buildroot/usr/lib64" "../${options[host]}/usr/lib64/lp64d"
 }
 
 function customize_buildroot() {
@@ -195,7 +176,6 @@ EOF
 
         # Build OpenSBI with a U-Boot payload for the firmware image.
         tar --transform='s,^/*o[^/]*,opensbi,' -C /root -xf /root/opensbi.tgz
-        patch -d /root/opensbi -p1 < /root/opensbi.patch
         make -C /root/opensbi -j"$(nproc)" all \
             CROSS_COMPILE="$host-" FW_PAYLOAD_PATH=/root/u-boot/u-boot.bin PLATFORM=generic V=1
         cp -p /root/opensbi/build/platform/generic/firmware/fw_payload.bin opensbi-uboot.bin

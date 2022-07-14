@@ -61,7 +61,6 @@ sys-libs/efivar ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
-dev-libs/icu *
 dev-libs/nspr ~*
 dev-libs/nss ~*
 media-libs/dav1d ~*
@@ -86,6 +85,7 @@ x11-wm/mutter *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
+dev-util/strace ~*
 sec-policy/* ~*
 sys-kernel/gentoo-kernel ~*
 sys-kernel/gentoo-sources ~*
@@ -148,8 +148,6 @@ EOF
 */* -gtk2
 EOF
         $cat << 'EOF' >> "$portage/package.use/linux.conf"
-# Support working with zstd-compressed modules.
-sys-apps/kmod zstd
 # Disable trying to build an initrd, and use hardened options.
 sys-kernel/gentoo-kernel hardened -initramfs
 # Apply patches to support more CPU optimizations, and link a default version.
@@ -164,6 +162,7 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/pulseaudio.conf"
 # Skip the PulseAudio daemon by default since PipeWire gets priority.
 media-sound/pulseaudio -daemon
+media-video/pipewire sound-server
 EOF
         $cat << 'EOF' >> "$portage/package.use/selinux.conf"
 # Don't pull in qt5 for SELinux tools.
@@ -217,12 +216,16 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept alsa-lib-1.2.7.1 to handle broken LTO.
+        echo '<media-libs/alsa-lib-1.2.8 ~*' >> "$portage/package.accept_keywords/alsa-lib.conf"
         # Accept audit-3.0.8 to fix SWIG (#836702).
         echo '<sys-process/audit-3.0.9 ~*' >> "$portage/package.accept_keywords/audit.conf"
-        # Accept eselect-fontconfig-20220403 to fix symlinks.
-        echo '<app-eselect/eselect-fontconfig-20220404 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
-        # Accept fontconfig-2.14 to fix the eselect module.
-        echo '<media-libs/fontconfig-2.15 ~*' >> "$portage/package.accept_keywords/fontconfig.conf"
+        # Accept iptables-1.8.8 to fix host dependencies.
+        echo '<net-firewall/iptables-1.8.9 ~*' >> "$portage/package.accept_keywords/iptables.conf"
+        # Accept kmod-29 to support zstd module compression.
+        echo -e '<app-arch/zstd-1.5.3 ~*\n<sys-apps/kmod-30 ~*' >> "$portage/package.accept_keywords/kmod.conf"
+        # Accept pinentry-1.2.0 to fix host dependencies.
+        echo '<app-crypt/pinentry-1.2.1 ~*' >> "$portage/package.accept_keywords/pinentry.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -314,7 +317,6 @@ dev-libs/icu no-lto.conf
 dev-libs/libaio no-lto.conf
 dev-libs/libbsd no-lto.conf
 media-gfx/potrace no-lto.conf
-media-libs/alsa-lib no-lto.conf
 sys-apps/sandbox no-lto.conf
 sys-libs/libselinux no-lto.conf
 sys-libs/libsemanage no-lto.conf
@@ -1225,11 +1227,10 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
 use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,'\''/usr/bin/cd-create-profile'\''," data/*/meson.build'
 
         # Remove eselect from the sysroot.
-        edit app-crypt/pinentry 's/^EAPI=.*/EAPI=8/;/app-eselect/{x;d;};${s/$/\nIDEPEND="/;G;s/$/"/;}'
         edit app-editors/emacs 's/.{IDEPEND}//'
         edit dev-lang/lua '/eselect-lua/d;$aBDEPEND+=" app-eselect/eselect-lua"'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
-        edit net-firewall/iptables 's/^EAPI=.*/EAPI=8/;/app-eselect/d;$aIDEPEND="app-eselect/eselect-iptables"'
+        edit gnome-base/gnome-keyring 's/^EAPI=.*/EAPI=8/;/eselect-pinentry/d;$aIDEPEND+=" app-eselect/eselect-pinentry"'
 }
 
 # OPTIONAL (BUILDROOT)

@@ -14,16 +14,19 @@ mkdir -p root/usr/lib/systemd/system/getty.target.wants
 ln -fns ../getty@.service \
     root/usr/lib/systemd/system/getty.target.wants/getty@tty1.service
 
-# Configure a default font and keymap for the console.
-rm -f root/etc/vconsole.conf
-local font=eurlatgr ; opt double_display_scale && font=latarcyrheb-sun32
-compgen -G "root/usr/share/kbd/consolefonts/$font.*" ||
-compgen -G "root/???/*/consolefonts/$font.*" &&
-echo "FONT=\"$font\"" >> root/etc/vconsole.conf
-compgen -G 'root/usr/*/kbd/keymaps/legacy/i386/qwerty/emacs2.*' ||
-compgen -G 'root/usr/share/kbd/keymaps/i386/qwerty/emacs2.*' ||
-compgen -G 'root/usr/share/keymaps/i386/qwerty/emacs2.*' &&
-echo 'KEYMAP="emacs2"' >> root/etc/vconsole.conf
+# Configure a default font and keymap for the console (twice, for dracut).
+local font=eurlatgr root ; opt double_display_scale && font=latarcyrheb-sun32
+for root in root ''
+do
+        rm -f "$root/etc/vconsole.conf"
+        compgen -G "$root/usr/share/kbd/consolefonts/$font.*" ||
+        compgen -G "$root/???/*/consolefonts/$font.*" &&
+        echo "FONT=\"$font\"" >> "$root/etc/vconsole.conf"
+        compgen -G "$root/usr/*/kbd/keymaps/legacy/i386/qwerty/emacs2.*" ||
+        compgen -G "$root/usr/share/kbd/keymaps/i386/qwerty/emacs2.*" ||
+        compgen -G "$root/usr/share/keymaps/i386/qwerty/emacs2.*" &&
+        echo 'KEYMAP="emacs2"' >> "$root/etc/vconsole.conf"
+done || :
 
 # Select a dbus.service unit if one was not installed.
 test -s root/usr/lib/systemd/system/dbus.service ||

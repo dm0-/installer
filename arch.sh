@@ -112,6 +112,7 @@ then
 add_drivers+=" ${options[ramdisk]:+loop} "
 compress="zstd --threads=0 --ultra -22"
 hostonly="no"
+i18n_install_all="no"
 reproducible="yes"
 EOF
 

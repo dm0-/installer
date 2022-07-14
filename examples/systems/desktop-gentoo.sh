@@ -121,7 +121,7 @@ function initialize_buildroot() {
             cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
-            acpi dri gusb kms libglvnd libkms opengl upower usb uvm vaapi vdpau \
+            acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
             cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
@@ -132,7 +132,6 @@ function initialize_buildroot() {
         $sed -i -e '/^LLVM_TARGETS=/s/" *$/ AMDGPU&/' "$buildroot/etc/portage/make.conf" "$portage/make.conf"
         echo 'USE="$USE llvm"' >> "$portage/make.conf"
         echo "VIDEO_CARDS=\"amdgpu fbdev i915 intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
-        echo '<media-libs/mesa-22.2 ~*' >> "$portage/package.accept_keywords/mesa.conf"
         packages+=(x11-libs/libva-{intel,vdpau}-driver)
 
         # Install VLC.
