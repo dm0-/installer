@@ -18,6 +18,7 @@ options+=(
         [arch]=armv5tel         # Target ARM ARM926EJ-S CPUs.
         [bootable]=1            # Build a kernel for this system.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [networkd]=1            # Let systemd manage the network configuration.
         [read_only]=1           # Use a packed efficient read-only file system.
 )

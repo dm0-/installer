@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 . fedora.sh  # Inherit Fedora's RPM functions.
 
+options[loadpin]=
 options[verity_sig]=
 
 DEFAULT_RELEASE=9

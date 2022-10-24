@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 packages_buildroot=()
 
+options[loadpin]=
+
 DEFAULT_RELEASE=36
 
 function create_buildroot() {

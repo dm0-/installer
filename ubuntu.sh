@@ -2,9 +2,10 @@
 packages_buildroot=()
 
 options[enforcing]=
+options[loadpin]=
 options[uefi_vars]=
 
-DEFAULT_RELEASE=22.04
+DEFAULT_RELEASE=22.10
 
 function create_buildroot() {
         local -r release=${options[release]:=$DEFAULT_RELEASE}
@@ -16,7 +17,7 @@ function create_buildroot() {
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86 zstd)
-        opt uefi && packages_buildroot+=(binutils imagemagick librsvg2-bin ubuntu-mono)
+        opt uefi && packages_buildroot+=(binutils imagemagick librsvg2-bin systemd-boot-efi ubuntu-mono)
         opt uefi_vars && packages_buildroot+=(ovmf qemu-system-x86)
         opt verity_sig && opt bootable && packages_buildroot+=(keyutils linux-headers-generic)
         packages_buildroot+=(debootstrap libglib2.0-bin)
@@ -52,6 +53,7 @@ EOF
 
 function install_packages() {
         opt bootable || opt networkd && packages+=(libpam-systemd)
+        opt networkd && packages+=(systemd-resolved)
         opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
         mount -o bind,X-mount.mkdir {,root}/var/cache/apt
@@ -326,6 +328,7 @@ function archmap() case ${*:-$DEFAULT_ARCH} in
 esac
 
 function releasemap() case ${*:-${options[release]:-$DEFAULT_RELEASE}} in
+    22.10) echo kinetic ;;
     22.04) echo jammy ;;
     21.10) echo impish ;;
     21.04) echo hirsute ;;
@@ -347,40 +350,6 @@ function enable_repo_ppa() {
 
 # WORKAROUNDS
 
-# Point EOL releases at the archive repository server.
-[[ ${options[release]:-$DEFAULT_RELEASE} != 20.10 ]] ||
-eval "$(declare -f create_buildroot | $sed '/fix-apt/i\
-$sed -i -e "/ubuntu.com/s,://[a-z]*,://old-releases," "$buildroot/etc/apt/sources.list"'
-declare -f install_packages | $sed -e 's,://archive,://old-releases,')"
-
-# Override 2020/2021 UEFI logo edits.
-[[ ${options[release]:-$DEFAULT_RELEASE} != 2[01].* ]] ||
-eval "$(declare -f save_boot_files | $sed \
-    -e 's,/g,&;/<svg/s/>/ viewBox="0 0 22 22">/,' \
-    -e "s/convert.*svg/& -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0'/")"
-
-# Override 2020 ramdisk creation since the kernel is too old to support zstd.
-[[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] || eval "$(
-declare -f create_buildroot | $sed 's/ zstd//'
-declare -f configure_initrd_generation | $sed /compress=/d
-declare -f relabel squash build_systemd_ramdisk | $sed \
-    -e 's/zstd --[^|>]*/xz --check=crc32 -9e /'
-)"
-
-# Override 2020 ESP creation to support old dosfstools that can't use offsets.
-[[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] ||
-eval "$(declare -f partition | $sed '/^ *if opt uefi/,/^ *fi/{
-/esp_image=/s/=.*/=esp.img ; truncate --size=$(( esp * bs )) $esp_image/
-s/ --offset=[^ ]* / /;s/ gpt.img / $esp_image /
-/^ *fi/idd bs=$bs conv=notrunc if=$esp_image of=gpt.img seek=$start
-}')"
-
-# Override 2020 variable generation to use the old QEMU bare SMBIOS argument.
-[[ ${options[release]:-$DEFAULT_RELEASE} != 20.* ]] ||
-eval "$(declare -f set_uefi_variables | $sed -e '/timeout/i\
-cat <(echo -en "\\x0B\\x05\\x34\\x12\\x01") "$keydir/sb.oem" <(echo -en "\\0\\0") > "$keydir/sb.smbios"
-s/type=11,path\(=\S*\)oem/file\1smbios/')"
-
-# Override 20.04 default OVMF paths.
-[[ ${options[release]:-$DEFAULT_RELEASE} != 20.04 ]] ||
-eval "$(declare -f set_uefi_variables | $sed s/_4M//g)"
+# Older Ubuntu releases are still available, but most of them are EOL.
+[[ ${options[release]:-$DEFAULT_RELEASE} > 22.04 ]] ||
+. "legacy/${options[distro]}22.04.sh"

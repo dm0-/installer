@@ -16,6 +16,7 @@ options+=(
         [distro]=gentoo         # Use Gentoo to build this image from source.
         [arch]=powerpc          # Target PowerPC G4 CPUs.
         [bootable]=1            # Build a kernel for this system.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [networkd]=1            # Let systemd manage the network configuration.
         [squash]=1              # Use a compressed file system to save space.
         [verity_sig]=1          # Require verifying all verity root hashes.
@@ -120,18 +121,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu *
 net-libs/libslirp *
-EOF
-        $mkdir -p "$portage/patches/app-emulation/qemu"
-        $cat << 'EOF' >> "$portage/patches/app-emulation/qemu/ppc.patch"
---- a/common-user/meson.build
-+++ b/common-user/meson.build
-@@ -1,4 +1,6 @@
-+if host_arch != 'ppc'
- common_user_inc += include_directories('host/' / host_arch)
-+endif
- 
- user_ss.add(files(
-   'safe-syscall.S',
 EOF
 
         # Build GRUB to boot from Open Firmware.

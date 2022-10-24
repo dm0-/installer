@@ -102,7 +102,7 @@ packages+=(
 
         # Browser
         firefox
-        mozilla-{https-everywhere,noscript,ublock-origin}
+        mozilla-{https-everywhere,noscript,privacy-badger,ublock-origin}
 
         # VLC
         lib{aacs,bdplus}
@@ -128,7 +128,7 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-        git -C rtl8812au reset --hard cab4e4ec56884f65e0c279c1b5ceaf70dbe79be0
+        git -C rtl8812au reset --hard e7a4a390ccbdd768411e1b2a8922c47837f76b47
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.

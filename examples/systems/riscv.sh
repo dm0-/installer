@@ -7,6 +7,7 @@ options+=(
         [distro]=gentoo         # Use Gentoo to build this image from source.
         [arch]=riscv64          # Target generic emulated RISC-V CPUs.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [monolithic]=1          # Build all boot-related files into the kernel.
         [networkd]=1            # Let systemd manage the network configuration.
         [secureboot]=           # Wait until systemd-boot supports RISC-V.
@@ -120,10 +121,10 @@ EOF
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.1.tar.gz > "$buildroot/root/opensbi.tgz"
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == d183cb890130983a4f01e75fc03ee4f7ea0e16a7923b8af9c6dff7deb2fedaec\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2022.07.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 1730dea306c016348efe641d812d4974745be3910af4769aecef740de549c81b\ * ]]
-        $curl -L https://source.denx.de/u-boot/custodians/u-boot-riscv/-/commit/417e56641ab9f6b4023dfb3d2d4c59b13164d655.patch > "$buildroot/root/u-boot.patch"
-        [[ $($sha256sum "$buildroot/root/u-boot.patch") == fc32f3bb0af3e8aecbb59a5188ddecf3c5e524431aa9f2c2b2430b2a1ddd7711\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2022.10.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 49abc4dd4daff017b8abd6ee33b63d4892de878602ba5474347167c7d721e1b6\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/commit/1dde977518f13824b847e23275001191139bc384.patch > "$buildroot/root/u-boot.patch"
+        [[ $($sha256sum "$buildroot/root/u-boot.patch") == fe0d737b98fa71e83a138f10aa8565e4adf9bdcd37a3aaae3c6eb6d207eb0c2f\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"

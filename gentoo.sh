@@ -63,7 +63,6 @@ EOF
 # Accept the latest (non-ESR) Firefox release.
 dev-libs/nspr ~*
 dev-libs/nss ~*
-media-libs/dav1d ~*
 www-client/firefox ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
@@ -98,14 +97,9 @@ EOF
 dev-lang/rust *
 dev-lang/spidermonkey *
 dev-libs/gjs *
-gnome-base/librsvg *
+gnome-base/librsvg ~*
 virtual/rust *
 x11-themes/adwaita-icon-theme *
-EOF
-        [[ $arch == aarch64 ]] && opt uefi && $cat << EOF >> "$portage/package.accept_keywords/arm64.conf"
-# Accept binutils-2.38 to support AArch64 UEFI targets.
-<sys-devel/binutils-2.39 ~*
-<cross-$host/binutils-2.39 ~*
 EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
@@ -216,16 +210,14 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept alsa-lib-1.2.7.1 to handle broken LTO.
-        echo '<media-libs/alsa-lib-1.2.8 ~*' >> "$portage/package.accept_keywords/alsa-lib.conf"
         # Accept audit-3.0.8 to fix SWIG (#836702).
         echo '<sys-process/audit-3.0.9 ~*' >> "$portage/package.accept_keywords/audit.conf"
-        # Accept iptables-1.8.8 to fix host dependencies.
-        echo '<net-firewall/iptables-1.8.9 ~*' >> "$portage/package.accept_keywords/iptables.conf"
-        # Accept kmod-29 to support zstd module compression.
-        echo -e '<app-arch/zstd-1.5.3 ~*\n<sys-apps/kmod-30 ~*' >> "$portage/package.accept_keywords/kmod.conf"
-        # Accept pinentry-1.2.0 to fix host dependencies.
-        echo '<app-crypt/pinentry-1.2.1 ~*' >> "$portage/package.accept_keywords/pinentry.conf"
+        # Accept flac-1.4.2 to fix cross-compiling.
+        echo '<media-libs/flac-1.4.3 ~*' >> "$portage/package.accept_keywords/flac.conf"
+        # Accept libgpiod-1.6.3 to fix kernel dependencies.
+        echo '<dev-libs/libgpiod-1.6.4 ~*' >> "$portage/package.accept_keywords/libgpiod.conf"
+        # Accept lua-5.4.4 to fix host dependencies.
+        echo '<dev-lang/lua-5.4.5 ~*' >> "$portage/package.accept_keywords/lua.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -274,6 +266,10 @@ EOF
 # Use the newer backend in iptables.
 net-firewall/iptables nftables
 EOF
+        $cat << 'EOF' >> "$portage/package.use/python.conf"
+# Disable bad dependencies that break cross-compilation.
+dev-python/urllib3 -brotli
+EOF
         $cat << 'EOF' >> "$portage/package.use/sqlite.conf"
 # Always enable secure delete for SQLite.
 dev-db/sqlite secure-delete
@@ -288,7 +284,6 @@ EOF
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'EXTRA_EMAKE="PYTHON_INCLUDES=/usr/\$(host)/usr/include/\$\${PYTHON##*/}"' >> "$portage/env/cross-libxml2-python.conf"
-        echo 'EXTRA_EMAKE="LIBTOOL=\$\${PWD%/src}/libtool"' >> "$portage/env/cross-lua.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
@@ -298,7 +293,6 @@ app-crypt/gnupg cross-libusb.conf
 app-crypt/gpgme cross-libassuan.conf
 app-editors/emacs cross-emacs.conf
 app-i18n/ibus cross-glib-genmarshal.conf
-dev-lang/lua cross-lua.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
 dev-libs/libxml2 cross-libxml2-python.conf
 gnome-base/gnome-settings-daemon meson-pkgconfig.conf
@@ -519,7 +513,7 @@ EOF
             $(using media-libs/libsndfile minimal || grep -Foxm1 media-libs/libsndfile /root/xdeps) \
             $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
             $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
-            $(using media-libs/mesa vaapi && using x11-libs/libva opengl && grep -Foxm1 x11-libs/libva /root/xdeps) \
+            $(using media-libs/mesa vaapi && using media-libs/libva opengl && grep -Foxm1 media-libs/libva /root/xdeps) \
             sys-apps/util-linux
 
         # Cross-compile everything and make binary packages for the target.
@@ -883,7 +877,7 @@ CONFIG_VMAP_STACK=y
 # Signing settings
 CONFIG_KEXEC_SIG=y
 CONFIG_KEXEC_SIG_FORCE=y
-CONFIG_MODULE_COMPRESS_ZSTD=y
+CONFIG_MODULE_COMPRESS_'$(opt loadpin && echo NONE || echo ZSTD)'=y
 CONFIG_MODULE_SIG=y
 CONFIG_MODULE_SIG_ALL=y
 CONFIG_MODULE_SIG_FORCE=y
@@ -901,6 +895,12 @@ CONFIG_IPE_AUDIT_HASH_SHA512=y' ; opt ramdisk || opt verity_sig && echo -n '
 CONFIG_IPE_PROP_BOOT_VERIFIED=y' ; opt verity && echo -n '
 CONFIG_IPE_PROP_DM_VERITY_ROOTHASH=y' ; opt verity_sig && echo -n '
 CONFIG_IPE_PROP_DM_VERITY_SIGNATURE=y' ; echo ; }
+                opt loadpin && { echo -n '# LoadPin settings
+CONFIG_SECURITY=y
+CONFIG_SECURITY_LOADPIN=y
+CONFIG_SECURITY_LOADPIN_ENFORCE=y' ; opt verity && echo -n '
+CONFIG_SECURITYFS=y
+CONFIG_SECURITY_LOADPIN_VERITY=y' ; echo ; }
                 opt networkd && echo '# Network settings
 CONFIG_NET=y
 CONFIG_INET=y
@@ -1197,11 +1197,11 @@ function write_overlay() {
         edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
 
         # Drop the buildroot multilib requirement for Rust (#753764).
-        edit gnome-base/librsvg 's/^EAPI=.*/EAPI=7/;s,^DEPEND=.*[^"]$,&"\nBDEPEND="x11-libs/gdk-pixbuf,;/rust/s/[[].*MULTI.*]//;/^src_prepare/a\
+        edit gnome-base/librsvg '/virtual.rust/s/[[].*//;/^src_prepare/a\
 export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET]\nlinker = \\"$CHOST-gcc\\"" > "$CARGO_HOME/config.toml"'
 
-        # Fix sestatus installation with UsrMerge (or unified bindir, really).
-        edit sys-apps/policycoreutils '/setfiles/ause split-usr || rm -f "${ED}/usr/sbin/sestatus"'
+        # Fix Python.
+        edit dev-lang/python '/src_configure/,/^}$/{/is-cross-compiler/,/fi$/d;}'
 
         # Fix the libcap dependency.
         edit sys-libs/pam 's/^EAPI=.*/EAPI=8/'
@@ -1228,7 +1228,7 @@ use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,
 
         # Remove eselect from the sysroot.
         edit app-editors/emacs 's/.{IDEPEND}//'
-        edit dev-lang/lua '/eselect-lua/d;$aBDEPEND+=" app-eselect/eselect-lua"'
+        edit dev-lang/lua '/eselect-lua/d;$aIDEPEND+=" app-eselect/eselect-lua"'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
         edit gnome-base/gnome-keyring 's/^EAPI=.*/EAPI=8/;/eselect-pinentry/d;$aIDEPEND+=" app-eselect/eselect-pinentry"'
 }

@@ -13,6 +13,7 @@ options[enforcing]=   # Enforce the SELinux policy instead of being permissive
 options[gpt]=         # Create a partitioned GPT disk image
 options[hardfp]=      # Use the hard-float ABI for ARMv6 and ARMv7 targets
 options[ipe]=         # Write and enforce an IPE policy focused on the root FS
+options[loadpin]=     # Enforce LoadPin so the kernel loads files from one FS
 options[networkd]=    # Enable minimal DHCP networking without NetworkManager
 options[ramdisk]=     # Produce an initrd that sets up the root FS in memory
 options[read_only]=   # Use tmpfs in places to make a read-only system usable
@@ -486,7 +487,8 @@ then
         echo > kernel_args.txt \
             $(opt read_only && echo ro || echo rw) \
             $(test -s final.img && echo "root=$root" "rootfstype=$type") \
-            ${options[selinux]:+security=selinux} \
+            $(opt selinux && echo security=selinux || echo selinux=0) \
+            ${options[loadpin]:+loadpin.enforce=1} \
             ${options[verity]:+"$dmsetup=\"$(<dmsetup.txt)\""} \
             ${options[verity_sig]:+dm-verity.require_signatures=1} \
             ${options[append]-}

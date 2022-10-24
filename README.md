@@ -99,6 +99,12 @@ Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (35 and the default 36
 
   * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support SquashFS with zstd compression.
 
+**LoadPin**:  The system can be restricted only to load kernel-related files from trusted file systems, which defaults to the first file system used.
+
+  * :star: *Gentoo* supports LoadPin and allows trusting additional verity root hashes.
+  * :construction: *Arch* enables LoadPin but does not build file system drivers into the kernel, so an initrd has to load modules and trigger pinning.  It also does not use a compatible module compression option by default.
+  * :fire: *CentOS*, *Fedora*, *openSUSE*, and *Ubuntu* do not support LoadPin until they enable `CONFIG_SECURITY_LOADPIN`.
+
 **Verity**:  Verity is cryptographic integrity verification that guarantees a file system has not been modified.  It creates a read-only device mapper node that returns I/O errors if anything has changed.  The verity hash block created for the root file system is directly appended to the image so there is only one file to manage for updates.  The root hash is stored in the kernel command-line, so a UEFI Secure Boot signature authenticates the entire file system.
 
   * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* support verity.
@@ -110,11 +116,6 @@ Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (35 and the default 36
   * :construction: *Fedora* and *Ubuntu* support verity signatures on non-UEFI systems.  The certificate is written into the uncompressed kernel `vmlinux`, which strips off the Linux UEFI stub and makes the kernel unbootable on UEFI.
   * :fire: *Arch* and *CentOS* cannot use verity signatures until they enable `CONFIG_SYSTEM_EXTRA_CERTIFICATE`.
   * :fire: *openSUSE* cannot use verity signatures until they enable `CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG`.
-
-**IPE**:  Integrity Policy Enforcement is an experimental (still not upstream) Linux security module that restricts file usage based on integrity properties.  It is currently used to limit sources of kernel resources like firmware and modules, and it can also block programs from executing.  IPE currently requires pairing with the RAM disk or verity option to be usable.  When using an initrd/initramfs, the default policy trusts the initial root file system, so the initrd should be verified (e.g. with Secure Boot).  Without verity signatures, the default policy trusts only the specific hash of the root file system.  With verity signatures, it trusts any verity device with a valid signature, so the system is extensible.
-
-  * :construction: *Gentoo* supports IPE, but the patch seems to cause problems with booting stable kernels.  It is only for experimentation at this point.
-  * :fire: *Arch*, *CentOS*, *Fedora*, *openSUSE*, and *Ubuntu* do not rebuild kernels to patch in IPE support.
 
 ## To Do
 

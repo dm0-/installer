@@ -13,6 +13,7 @@ options+=(
         [arch]=i686             # Target AMD Geode LX CPUs.
         [bootable]=1            # Build a kernel for this system.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [networkd]=1            # Let systemd manage the network configuration.
         [squash]=1              # Use a compressed file system to save space.
         [verity_sig]=1          # Require verifying all verity root hashes.

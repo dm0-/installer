@@ -10,6 +10,7 @@
 options+=(
         [distro]=ubuntu
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [rootmod]=virtio_blk    # Support root on a VirtIO disk.
         [selinux]=default       # Load this SELinux policy in permissive mode.
         [squash]=1              # Use a compressed file system to save space.
         [uefi]=1                # Create a UEFI executable to boot this image.
@@ -158,7 +159,7 @@ function customize() {
 exec qemu-kvm -nodefaults \
     -M q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
-    -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
+    -drive file="${IMAGE:-gpt.img}",format=raw,if=virtio,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
     "$@"
 EOF

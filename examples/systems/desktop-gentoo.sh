@@ -17,6 +17,7 @@
 options+=(
         [distro]=gentoo         # Use Gentoo to build this image from source.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [rootmod]=nvme          # Support root on an NVMe disk.
         [selinux]=targeted      # Load this SELinux policy in permissive mode.
         [squash]=1              # Use a compressed file system to save space.
@@ -132,7 +133,7 @@ function initialize_buildroot() {
         $sed -i -e '/^LLVM_TARGETS=/s/" *$/ AMDGPU&/' "$buildroot/etc/portage/make.conf" "$portage/make.conf"
         echo 'USE="$USE llvm"' >> "$portage/make.conf"
         echo "VIDEO_CARDS=\"amdgpu fbdev i915 intel nouveau${options[nvidia]:+ nvidia} panfrost radeon radeonsi qxl\"" >> "$portage/make.conf"
-        packages+=(x11-libs/libva-{intel,vdpau}-driver)
+        packages+=(media-libs/libva-intel-driver)
 
         # Install VLC.
         fix_package vlc

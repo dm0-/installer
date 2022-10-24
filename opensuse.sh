@@ -3,6 +3,7 @@ packages=(aaa_base branding-openSUSE openSUSE-release)
 packages_buildroot=()
 
 options[enforcing]=
+options[loadpin]=
 options[verity_sig]=
 
 function create_buildroot() {

@@ -18,6 +18,7 @@ options+=(
         [arch]=armv7a           # Target ARM Cortex-A17 CPUs.
         [bootable]=1            # Build a kernel for this system.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [monolithic]=1          # Build all boot-related files into the kernel.
         [verity_sig]=1          # Require verifying all verity root hashes.
 )
@@ -348,6 +349,7 @@ CONFIG_ARCH_ROCKCHIP=y
 CONFIG_ROCKCHIP_PM_DOMAINS=y
 CONFIG_ROCKCHIP_IOMMU=y
 CONFIG_DRM_ROCKCHIP=y
+CONFIG_ROCKCHIP_VOP=y
 CONFIG_ROCKCHIP_ANALOGIX_DP=y
 CONFIG_I2C_RK3X=y
 CONFIG_SPI=y

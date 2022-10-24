@@ -11,6 +11,7 @@ options+=(
         [distro]=gentoo         # Use Gentoo to build this image from source.
         [arch]=x86_64           # Target Intel Pentium N3530 CPUs.
         [gpt]=1                 # Generate a ready-to-boot full disk image.
+        [loadpin]=1             # Only load kernel files from the root FS.
         [squash]=1              # Use a compressed file system to save space.
         [uefi]=1                # Create a UEFI executable to boot this image.
         [verity_sig]=1          # Require verifying all verity root hashes.
@@ -97,7 +98,7 @@ EOF
         # Use the i915 video driver for the integrated GPU.
         echo 'VIDEO_CARDS="intel i915"' >> "$portage/make.conf"
         echo 'media-libs/mesa -classic -video_cards_intel' >> "$portage/package.use/mesa.conf"
-        packages+=(x11-libs/libva-intel-driver)
+        packages+=(media-libs/libva-intel-driver)
 
         # Use the proprietary Broadcom drivers.
         echo 'USE="$USE broadcom-sta kmod"' >> "$portage/make.conf"
@@ -165,13 +166,30 @@ EOF
         echo 'MYCMAKEARGS="-DAOM_TARGET_CPU=x86_64"' >> "$portage/env/libaom.conf"
         echo 'media-libs/libaom libaom.conf' >> "$portage/package.env/libaom.conf"
 
-        # Fix broadcom-sta with Linux 5.18.
+        # Fix broadcom-sta with Linux 6.0.
         $mkdir -p "$portage/patches/net-wireless/broadcom-sta"
         $curl -L > "$portage/patches/net-wireless/broadcom-sta/5.18.patch" \
             https://raw.githubusercontent.com/archlinux/svntogit-community/33b4bd2b9e30679b03f5d7aa2741911d914dcf94/trunk/012-linux517.patch \
             https://raw.githubusercontent.com/archlinux/svntogit-community/2e1fd240f9ce06f500feeaa3e4a9675e65e6b967/trunk/013-linux518.patch
         [[ $($sha256sum "$portage/patches/net-wireless/broadcom-sta/5.18.patch") == 29501d6eb4399c472e409df504e3ad67d71b01d1d98e31ade129f9a43a7d4fa0\ * ]]
         $sed -i -e 's/if.*4.*15.*/ifdef HAVE_TIMER_SETUP/' "$portage/patches/net-wireless/broadcom-sta/5.18.patch"
+        $cat << 'EOF' > "$portage/patches/net-wireless/broadcom-sta/6.0.patch"
+--- a/src/wl/sys/wl_cfg80211_hybrid.c
++++ b/src/wl/sys/wl_cfg80211_hybrid.c
+@@ -2360,7 +2360,12 @@
+ 
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
++	roam_info.links[0].channel = &wl->conf->channel,
++	roam_info.links[0].bssid = (u8 *)&wl->bssid,
++#else
+ 	roam_info.channel = &wl->conf->channel,
+ 	roam_info.bssid = (u8 *)&wl->bssid,
++#endif
+ 	roam_info.req_ie = conn_info->req_ie,
+ 	roam_info.req_ie_len = conn_info->req_ie_len,
+ 	roam_info.resp_ie = conn_info->resp_ie,
+EOF
 }
 
 function customize_buildroot() {
@@ -198,9 +216,9 @@ function customize() {
         )
 
         # Sign the out-of-tree kernel modules due to required signatures.
-        for module in root/lib/modules/*/net/wireless/wl.ko.zst
+        for module in root/lib/modules/*/net/wireless/wl.ko*
         do
-                unzstd --rm "$module" ; module=${module%.zst}
+                [[ $module == *.ko.zst ]] && unzstd --rm "$module" ; module=${module%.zst}
                 /usr/src/linux/scripts/sign-file \
                     sha512 "$keydir/sign.key" "$keydir/sign.crt" "$module"
         done
