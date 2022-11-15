@@ -10,7 +10,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=22.04 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=22.10 [squash]=1)
 
 packages+=(
         libasound2-plugins
@@ -25,7 +25,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/515})
+then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/520})
 fi
 
 function customize() {

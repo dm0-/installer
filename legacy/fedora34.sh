@@ -4,6 +4,10 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=34).
 # Override the resolved provider for when it was bundled with systemd.
 eval "$(declare -f install_packages | $sed 's/ systemd-resolved//')"
 
+# Override RPM Fusion URLs with the archive server for EOL releases.
+eval "$(declare -f enable_repo_rpmfusion_{,non}free | $sed '
+s,download1\([^/]*/[^/]*\),rhlx01.hs-esslingen.de/Mirrors/archive\1-archive,')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN

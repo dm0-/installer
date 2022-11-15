@@ -97,7 +97,6 @@ EOF
 
         # Use the i915 video driver for the integrated GPU.
         echo 'VIDEO_CARDS="intel i915"' >> "$portage/make.conf"
-        echo 'media-libs/mesa -classic -video_cards_intel' >> "$portage/package.use/mesa.conf"
         packages+=(media-libs/libva-intel-driver)
 
         # Use the proprietary Broadcom drivers.
@@ -125,12 +124,12 @@ EOF
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gui -modemmanager -ppp'"'
 
+        # Mask multilib since this is pure x32, and kernels are built natively.
+        echo multilib >> "$portage/profile/use.mask/multilib.conf"
+
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
         echo 'sys-apps/systemd gnuefi' >> "$buildroot/etc/portage/package.use/systemd.conf"
         echo gnuefi >> "$portage/profile/use.mask/uefi.conf"
-
-        # Enable extra bootstrapping objects for x32.
-        echo 'sys-libs/glibc multilib-bootstrap' >> "$portage/package.use/glibc.conf"
 
         # Fix libvpx.
         $mkdir -p "$portage/patches/media-libs/libvpx"

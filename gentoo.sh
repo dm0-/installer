@@ -47,7 +47,7 @@ INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="${options[selinux]:-targeted}"
 RUSTFLAGS="-Copt-level=2"
-USE="\$USE system-icu system-png -fortran -gtk-doc -introspection -vala"
+USE="\$USE system-icu system-png -gtk-doc -introspection -vala"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/core.conf"
@@ -97,7 +97,7 @@ EOF
 dev-lang/rust *
 dev-lang/spidermonkey *
 dev-libs/gjs *
-gnome-base/librsvg ~*
+gnome-base/librsvg *
 virtual/rust *
 x11-themes/adwaita-icon-theme *
 EOF
@@ -127,7 +127,7 @@ EOF
 # Choose nettle as the crypto backend.
 sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
 # Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
-sys-fs/lvm2 device-mapper-only -thin
+sys-fs/lvm2 -lvm -thin
 EOF
         $cat << 'EOF' >> "$portage/package.use/emacs.conf"
 # Disable native Emacs Lisp compilation until cross-compiling works.
@@ -210,14 +210,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept audit-3.0.8 to fix SWIG (#836702).
-        echo '<sys-process/audit-3.0.9 ~*' >> "$portage/package.accept_keywords/audit.conf"
-        # Accept flac-1.4.2 to fix cross-compiling.
-        echo '<media-libs/flac-1.4.3 ~*' >> "$portage/package.accept_keywords/flac.conf"
-        # Accept libgpiod-1.6.3 to fix kernel dependencies.
-        echo '<dev-libs/libgpiod-1.6.4 ~*' >> "$portage/package.accept_keywords/libgpiod.conf"
-        # Accept lua-5.4.4 to fix host dependencies.
-        echo '<dev-lang/lua-5.4.5 ~*' >> "$portage/package.accept_keywords/lua.conf"
+        # Accept lvm2-2.03.16 to partially fix host dependencies.
+        echo '<sys-fs/lvm2-2.03.17 ~*' >> "$portage/package.accept_keywords/lvm2.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -401,7 +395,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/14/bin/${name##*-}"
+prog="/usr/lib/llvm/15/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/$host-clang"
@@ -749,7 +743,7 @@ then
         opt verity && USE=static-libs \
         emerge --buildpkg=n --changed-use --oneshot --verbose \
             dev-libs/libaio sys-apps/util-linux virtual/libcrypt
-        USE='-* device-mapper-only static' \
+        USE='-* static' \
         emerge --buildpkg=n --nodeps --oneshot --verbose \
             sys-apps/busybox \
             ${options[verity]:+sys-fs/lvm2} \
@@ -1175,8 +1169,12 @@ function write_overlay() {
             "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
 
         # Support tmpfiles with EAPI 8.
-        sed -e 's/R\(DEPEND=.*\)/[[ ${EAPI} -lt 8 ]] \&\& & || I\1/' \
+        sed -e 's/R\(DEPEND=.*\)/[[ EAPI -lt 8 ]] \&\& & || I\1/' \
             "$gentoo/eclass/tmpfiles.eclass" > "$overlay/eclass/tmpfiles.eclass"
+
+        # Support CONFIG_DEBUG_INFO_BTF, which is enabled in the Fedora config.
+        sed -e '/^BDEPEND="/adev-util/pahole' \
+            "$gentoo/eclass/kernel-build.eclass" > "$overlay/eclass/kernel-build.eclass"
 
         # Support installing the distro kernel without /usr/src.
         sed -e '/^kernel-install_pkg_preinst/a[[ ${MERGE_TYPE} == binary ]] && return' \
@@ -1208,19 +1206,16 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
 
         # Fix tmpfiles dependencies.
         edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
-        edit sys-fs/lvm2 's/^EAPI=.*/EAPI=8/;/TMPFILES_OPTIONAL\|virtual.tmpfiles/d'
+        edit sys-fs/lvm2 '/virtual.tmpfiles/d;$aIDEPEND+=" lvm? ( virtual/tmpfiles )"'
 
         # Fix NSS self-dependency.
-        edit dev-libs/nss 's,^BDEPEND=",&dev-libs/nss ,;/^EAPI="*[^"67]/aIDEPEND="dev-libs/nss"'
+        edit dev-libs/nss 's,^BDEPEND=",&dev-libs/nss ,;$aIDEPEND+=" dev-libs/nss"'
 
         # Fix udev dependency ordering.
         edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
 
         # Fix liblockfile group dependency.
         edit net-libs/liblockfile '$aBDEPEND="acct-group/mail"'
-
-        # Fix NetworkManager configuration.
-        edit net-misc/networkmanager '/docs/s/true/use_bool introspection/'
 
         # Fix colord self-dependency.
         edit x11-misc/colord 's/^IUSE="/&+daemon /;s/.*polkit.*/daemon? ( & )/;s,^BDEPEND=",&daemon? ( ${CATEGORY}/${PN} ) ,;s/true daemon/use_bool daemon/;/^src_prepare/a\
@@ -1230,7 +1225,7 @@ use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,
         edit app-editors/emacs 's/.{IDEPEND}//'
         edit dev-lang/lua '/eselect-lua/d;$aIDEPEND+=" app-eselect/eselect-lua"'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
-        edit gnome-base/gnome-keyring 's/^EAPI=.*/EAPI=8/;/eselect-pinentry/d;$aIDEPEND+=" app-eselect/eselect-pinentry"'
+        edit gnome-base/gnome-keyring '/eselect-pinentry/d;$aIDEPEND+=" app-eselect/eselect-pinentry"'
 }
 
 # OPTIONAL (BUILDROOT)

@@ -14,7 +14,7 @@
 # This script implements an experimental function to minimize the container by
 # removing every file that is not explicitly required.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=36 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=37 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
@@ -49,6 +49,9 @@ EOF
         files=(
                 /boiwotl.swf /usr/bin/flashplayer /etc/adobe/mms.cfg
                 /usr/lib64/libcurl.so.4
+
+                # Pango crashes without a font
+                /usr/share/fonts/google-noto-vf/NotoSans-VF.ttf
 
                 # PulseAudio support
                 /etc/alsa /usr/share/alsa/alsa.conf

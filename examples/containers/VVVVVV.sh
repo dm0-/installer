@@ -9,7 +9,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=36 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=37 [squash]=1)
 
 packages+=(
         libXi
@@ -45,7 +45,7 @@ function customize_buildroot() {
 
         # Fetch the game assets.
         curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
-        [[ $(sha256sum data.zip) == 6fae3cdec06062d05827d4181c438153f3ea3900437a44db73bcd29799fe57e0\ * ]]
+        [[ $(sha256sum data.zip) == 1da4d758f5451d37b00ffeb8d34020980da5426547f1c9ac532616fe33b84cb3\ * ]]
 }
 
 function customize() {

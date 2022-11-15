@@ -106,10 +106,18 @@ overrides={'Gdk/WindowScalingFactor':<2>}
 EOF
 
 # Rewind changes for older versions.
-local -i major=$(sed -n 's,.*<platform>\([0-9]*\)</platform>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
-local -i minor=$(sed -n 's,.*<minor>\([0-9]*\)</minor>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
 local -a edits=()
-[[ major -le 41 ]] && edits+=(
+if [[ -s root/usr/share/gnome/gnome-version.xml ]]
+then
+        local -i major=$(sed -n 's,.*<platform>\([0-9]*\)</platform>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
+        local -i minor=$(sed -n 's,.*<minor>\([0-9]*\)</minor>.*,\1,p' root/usr/share/gnome/gnome-version.xml)
+else
+        edits=(0 root/usr/lib*/gnome-settings-daemon-*)
+        local -i major=$([[ ${edits[-1]} =~ -[0-9]+$ ]] && echo ${edits[-1]##*-} || echo 0)
+        local -i minor=0
+        edits=()
+fi
+[[ major -gt 0 && major -le 41 ]] && edits+=(
         '/^color-scheme/d'
         '/^[[]org.gnome.settings-daemon.plugins.media-keys]/amax-screencast-length=0'
 )

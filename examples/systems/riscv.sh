@@ -81,7 +81,7 @@ function initialize_buildroot() {
 app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_10 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
 dev-libs/glib static-libs
 dev-libs/libffi static-libs
-dev-libs/libpcre static-libs
+dev-libs/libpcre2 static-libs
 dev-libs/libxml2 static-libs
 net-libs/libslirp static-libs
 sys-apps/dtc static-libs
@@ -124,7 +124,7 @@ EOF
         $curl -L https://github.com/u-boot/u-boot/archive/v2022.10.tar.gz > "$buildroot/root/u-boot.tgz"
         [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 49abc4dd4daff017b8abd6ee33b63d4892de878602ba5474347167c7d721e1b6\ * ]]
         $curl -L https://github.com/u-boot/u-boot/commit/1dde977518f13824b847e23275001191139bc384.patch > "$buildroot/root/u-boot.patch"
-        [[ $($sha256sum "$buildroot/root/u-boot.patch") == fe0d737b98fa71e83a138f10aa8565e4adf9bdcd37a3aaae3c6eb6d207eb0c2f\ * ]]
+        [[ $($sha256sum "$buildroot/root/u-boot.patch") == 7cf53765bdbf5d82c3de93ade98954fe6f91e214d293dbf507617eae4bce9d9b\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"

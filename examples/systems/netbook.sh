@@ -121,7 +121,7 @@ function initialize_buildroot() {
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
 app-emulation/qemu qemu_user_targets_arm static-user
 dev-libs/glib static-libs
-dev-libs/libpcre static-libs
+dev-libs/libpcre2 static-libs
 sys-apps/attr static-libs
 sys-libs/zlib static-libs
 EOF
