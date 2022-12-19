@@ -30,7 +30,7 @@ function initialize_buildroot() {
 }
 
 function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/520})
+then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/525})
 fi
 
 function customize() {

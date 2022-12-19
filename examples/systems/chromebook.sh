@@ -111,7 +111,7 @@ EOF
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
-            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            cryptsetup fido2 gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
@@ -125,6 +125,10 @@ EOF
         echo 'EXTRA_ECONF="--disable-webrtc"' >> "$portage/env/firefox.conf"
         echo 'www-client/firefox firefox.conf' >> "$portage/package.env/firefox.conf"
         echo 'www-client/firefox -lto' >> "$portage/package.use/firefox.conf"
+
+        # This architecture/ABI hits an ICE when building non-integer FLAC.
+        echo CPPFLAGS=-DFLAC__INTEGER_ONLY_LIBRARY >> "$portage/env/flac.conf"
+        echo 'media-libs/flac flac.conf' >> "$portage/package.env/flac.conf"
 }
 
 function customize_buildroot() {
@@ -339,7 +343,6 @@ CONFIG_ARM_LPAE=y
 CONFIG_ARM_PATCH_IDIV=y
 CONFIG_ARM_THUMB=y
 CONFIG_ARM_THUMBEE=y
-CONFIG_ARM_CRYPTO=y
 CONFIG_CRYPTO_SHA1_ARM_NEON=y
 CONFIG_CRYPTO_SHA256_ARM=y
 CONFIG_CRYPTO_SHA512_ARM=y

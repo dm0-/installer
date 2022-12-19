@@ -90,10 +90,7 @@ function initialize_buildroot() {
             -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=7450 -maltivec -mabi=altivec -ftree-vectorize&/' \
             -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=7450&/' \
             "$portage/make.conf"
-        $cat << 'EOF' >> "$portage/make.conf"
-CPU_FLAGS_PPC="altivec"
-USE="$USE ppcsha1"
-EOF
+        echo 'CPU_FLAGS_PPC="altivec"' >> "$portage/make.conf"
 
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
         echo 'VIDEO_CARDS="radeon r200"' >> "$portage/make.conf"
@@ -106,7 +103,7 @@ EOF
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
-            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            cryptsetup fido2 gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
@@ -114,13 +111,14 @@ EOF
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -ffmpeg -networkmanager'"'
+            -ffmpeg -modemmanager -networkmanager'"'
 
         # Install QEMU to run virtual machines.
         packages+=(app-emulation/qemu)
         $cat << 'EOF' >> "$portage/package.accept_keywords/qemu.conf"
 app-emulation/qemu *
 net-libs/libslirp *
+sys-firmware/seabios-bin *
 EOF
 
         # Build GRUB to boot from Open Firmware.
@@ -334,6 +332,7 @@ CONFIG_PPC_BOOK3S_32=y
 CONFIG_PPC_PMAC=y
 CONFIG_G4_CPU=y
 CONFIG_KVM_BOOK3S_32=y
+CONFIG_CRYPTO_SHA1_PPC=y
 ## 1GiB RAM
 CONFIG_HIGHMEM=y
 ## PMU

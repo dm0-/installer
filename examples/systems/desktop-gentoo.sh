@@ -119,7 +119,7 @@ function initialize_buildroot() {
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
-            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            cryptsetup fido2 gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \

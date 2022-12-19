@@ -7,19 +7,19 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20221110.0
+        local -r cver=20221206.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
         opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && packages_buildroot+=(util-linux)
-        opt gpt && opt uefi && packages_buildroot+=(dosfstools glibc-gconv-extra mtools)
+        opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt uefi && packages_buildroot+=(binutils centos-logos ImageMagick systemd-boot)
-        opt uefi_vars && packages_buildroot+=(dosfstools glibc-gconv-extra mtools qemu-kvm-core)
+        opt uefi && packages_buildroot+=(binutils centos-logos ImageMagick)
+        opt uefi_vars && packages_buildroot+=(dosfstools mtools qemu-kvm-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
         packages_buildroot+=(e2fsprogs openssl util-linux-core)
@@ -164,10 +164,10 @@ s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo 881249fe6f58ac87fcd2850e9fb2de52ded584021ea68e5e48049ca7dc6598f7 ;;
-            ppc64le) echo 7b85d96d45c6d5b4f2d2728d8d88b16b38053209583f323e6bb65c9c41e45d82 ;;
-            s390x)   echo f57c246357c29dd2d2867fc15431cb39808e4ba7d0f58ee69642e8617ba523fa ;;
-            x86_64)  echo 7f7e909edb3b9e2b914b68417e5ed32fcd498247f0efe3396463a2d2b38c3039 ;;
+            aarch64) echo 0f356580fd44c727970aab723eb13f59e1d8249e6959b5b273a91da09ae74dbf ;;
+            ppc64le) echo 9dc238791a6c2a266b2ebe07f4a0e88df98f64eee4c87628446620e3ba72328c ;;
+            s390x)   echo b0d874dc501d3ab65602737ef2af4679389448ddd22e2b83b38ef61cfc3bc105 ;;
+            x86_64)  echo 55a686208434d0d4ebf46b5dcd4abfdd3d7c779d101eee4539ab06b02712aa03 ;;
         esac)\ *
 ]]
 

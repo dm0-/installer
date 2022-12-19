@@ -31,7 +31,7 @@ function create_buildroot() {
         # Write a portage profile common to the native host and target system.
         local portage="$buildroot/etc/portage"
         $mv "$portage" "$portage.stage3"
-        $mkdir -p "$portage"/{env,make.profile,package.{accept_keywords,env,license,mask,unmask,use},profile/{package.,}use.{force,mask},repos.conf}
+        $mkdir -p "$portage"/{env,make.profile,package.{accept_keywords,env,license,mask,unmask,use},profile/{package.,}use.{force,mask},repos.conf,sets}
         $cp -at "$portage" "$portage.stage3/make.conf"
         $cat << EOF >> "$portage/make.profile/parent"
 gentoo:$(archmap_profile)
@@ -53,11 +53,9 @@ EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/core.conf"
 # Accept core utilities with no stable versions.
 app-crypt/pesign ~*
-app-text/mandoc ~*
 sys-apps/keyutils *
 sys-boot/vboot-utils ~*
 sys-fs/erofs-utils ~*
-sys-libs/efivar ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
@@ -67,7 +65,6 @@ www-client/firefox ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/gnome.conf"
 # Accept viable versions of GNOME packages.
-app-i18n/ibus *
 gnome-base/* *
 gnome-extra/* *
 app-arch/gnome-autoar *
@@ -75,7 +72,6 @@ dev-libs/libgweather *
 gui-libs/libhandy *
 media-gfx/gnome-screenshot *
 media-libs/gsound *
-net-libs/libnma *
 net-wireless/gnome-bluetooth *
 sci-geosciences/geocode-glib *
 x11-libs/colord-gtk *
@@ -210,8 +206,10 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept lvm2-2.03.16 to partially fix host dependencies.
-        echo '<sys-fs/lvm2-2.03.17 ~*' >> "$portage/package.accept_keywords/lvm2.conf"
+        # Accept lvm2-2.03.17 to partially fix host dependencies.
+        echo '<sys-fs/lvm2-2.04 ~*' >> "$portage/package.accept_keywords/lvm2.conf"
+        # Accept libXdmcp-1.1.4 to drop unnecessary dependencies.
+        echo '<x11-libs/libXdmcp-1.1.5 ~*' >> "$portage/package.accept_keywords/libXdmcp.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -250,11 +248,6 @@ EOF
 # When a package requires a single TLS implementation, standardize on GnuTLS.
 net-misc/curl gnutls -curl_ssl_* curl_ssl_gnutls
 net-misc/networkmanager gnutls -nss
-EOF
-        $cat << 'EOF' >> "$portage/package.use/kill.conf"
-# Use the kill command from util-linux to minimize systemd dependencies.
-sys-apps/util-linux kill
-sys-process/procps -kill
 EOF
         $cat << 'EOF' >> "$portage/package.use/nftables.conf"
 # Use the newer backend in iptables.
@@ -425,7 +418,7 @@ tee {,/usr/"$host"}/etc/portage/repos.conf/fixes.conf << 'EOG'
 location = /var/db/repos/fixes
 EOG
 write_overlay /var/db/repos/fixes
-(cd /var/db/repos/gentoo/eclass ; exec ln -fst . ../../fixes/eclass/*)
+(cd /var/db/repos/gentoo/eclass && exec ln -bst . ../../fixes/eclass/*)
 
 # Update the native build root packages to the latest versions.
 emerge --changed-use --deep --update --verbose --with-bdeps=y \
@@ -501,14 +494,27 @@ EOF
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
 
         # Cheat bootstrapping packages with circular dependencies.
-        deepdeps "${packages[@]}" "${packages_sysroot[@]}" "$@" | sed 's/-[0-9].*//' > /root/xdeps
-        USE='-* drm kill minimal nettle truetype' emerge --changed-use --oneshot --verbose \
-            $(using media-libs/freetype harfbuzz && grep -Foxm1 media-libs/harfbuzz /root/xdeps) \
-            $(using media-libs/libsndfile minimal || grep -Foxm1 media-libs/libsndfile /root/xdeps) \
-            $(using media-libs/libwebp tiff && using media-libs/tiff webp && grep -Foxm1 media-libs/libwebp /root/xdeps) \
-            $(using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup && grep -Foxm1 sys-fs/cryptsetup /root/xdeps) \
-            $(using media-libs/mesa vaapi && using media-libs/libva opengl && grep -Foxm1 media-libs/libva /root/xdeps) \
-            sys-apps/util-linux
+        local -a bootstrap_packages=()
+        using media-libs/freetype harfbuzz && bootstrap_packages+=(media-libs/harfbuzz)
+        using media-libs/libsndfile minimal || bootstrap_packages+=(media-libs/libsndfile)
+        using media-libs/libwebp tiff && using media-libs/tiff webp && bootstrap_packages+=(media-libs/libwebp)
+        using media-libs/mesa vaapi && using media-libs/libva opengl && bootstrap_packages+=(media-libs/libva)
+        if [[ ${#bootstrap_packages[@]} -gt 0 ]]
+        then
+                deepdeps "${packages[@]}" "${packages_sysroot[@]}" "$@" |
+                sed 's/-[0-9].*//' |
+                grep -Fox "${bootstrap_packages[@]/#/-e}" | sort -u
+        fi > "$ROOT/etc/portage/sets/bootstrap-packages"
+        if
+                { using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup ; } ||
+                using sys-apps/systemd fido2
+        then
+                USE='-*' emerge --oneshot --onlydeps{,-with-rdeps=n} --selective --verbose sys-apps/systemd
+                USE='-*' emerge --oneshot --nodeps --selective --verbose sys-apps/systemd
+        fi
+        [[ -s $ROOT/etc/portage/sets/bootstrap-packages ]] &&
+        USE='-* drm minimal truetype' \
+        emerge --changed-use --oneshot --verbose @bootstrap-packages
 
         # Cross-compile everything and make binary packages for the target.
         emerge --changed-use --deep --update --verbose --with-bdeps=y \
@@ -1117,9 +1123,9 @@ function archmap_profile() {
             powerpc)     echo default/linux/ppc/17.0 ;;
             powerpc64le) echo default/linux/ppc64le/17.0 ;;
             riscv64)     echo default/linux/riscv/20.0/rv64gc/lp64d ;;
-            x86_64)      echo default/linux/amd64/17.1$nomulti$hardened ;;
+            x86_64)      echo default/linux/amd64/23.0$nomulti$hardened ;;
             *) return 1 ;;
-        esac
+        esac | { [[ -n $* ]] && $cat || $sed 's,amd64/23.0,amd64/17.1,' ; }
 }
 
 function archmap_stage3() {
@@ -1136,9 +1142,9 @@ function archmap_stage3() {
             armv5tel)    stage3=stage3-armv5tel-systemd ;;
             armv6*j*)    stage3=stage3-armv6j$hardfp-systemd ;;
             armv7a)      stage3=stage3-armv7a$hardfp-systemd ;;
-            i[45]86)     stage3=stage3-i486-openrc ;;
+            i[45]86)     stage3=stage3-i486-systemd ;;
             i686)        stage3=stage3-i686$hardened-openrc ;;
-            powerpc)     stage3=stage3-ppc-openrc ;;
+            powerpc)     stage3=stage3-ppc-systemd ;;
             powerpc64le) stage3=stage3-ppc64le-systemd ;;
             x86_64)      stage3=stage3-amd64$hardened$nomulti$selinux-openrc ;;
             *) return 1 ;;
@@ -1165,7 +1171,7 @@ function write_overlay() {
         }
 
         # Support cross-compiling with LLVM (#745744).
-        sed -e '/llvm_path=/s/x "/x $([[ $EAPI == 6 ]] || echo -b) "/' \
+        sed -e '/EAPI.*ESYSROOT/d' \
             "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
 
         # Support tmpfiles with EAPI 8.
@@ -1198,6 +1204,9 @@ function write_overlay() {
         edit gnome-base/librsvg '/virtual.rust/s/[[].*//;/^src_prepare/a\
 export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET]\nlinker = \\"$CHOST-gcc\\"" > "$CARGO_HOME/config.toml"'
 
+        # Work around broken pkg-config paths.
+        edit app-crypt/gcr 's/[^a]rm /&-f /'
+
         # Fix Python.
         edit dev-lang/python '/src_configure/,/^}$/{/is-cross-compiler/,/fi$/d;}'
 
@@ -1214,8 +1223,14 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
         # Fix udev dependency ordering.
         edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
 
-        # Fix liblockfile group dependency.
-        edit net-libs/liblockfile '$aBDEPEND="acct-group/mail"'
+        # Fix Cairo.
+        edit x11-libs/cairo '/meson_src_configure/i\
+echo -e "[properties]\\nipc_rmid_deferred_release = true" > "${T}/fix.ini"\
+tc-is-cross-compiler && emesonargs+=(--cross-file="${T}/fix.ini")'
+
+        # Fix Firefox on 23.0 profiles.
+        edit www-client/firefox '/NOSPAM/a\
+[[ $LDFLAGS == *pack-relative-relocs* ]] && mozconfig_add_options_ac 23.0 --disable-elf-hack'
 
         # Fix colord self-dependency.
         edit x11-misc/colord 's/^IUSE="/&+daemon /;s/.*polkit.*/daemon? ( & )/;s,^BDEPEND=",&daemon? ( ${CATEGORY}/${PN} ) ,;s/true daemon/use_bool daemon/;/^src_prepare/a\

@@ -106,7 +106,7 @@ function initialize_buildroot() {
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
-            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            cryptsetup fido2 gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
@@ -114,7 +114,7 @@ function initialize_buildroot() {
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -ffmpeg -gtk -gui -opengl'"'
+            -ffmpeg -gtk -gui -modemmanager -opengl'"'
 
         # Build a static QEMU user binary for the target CPU.
         packages_buildroot+=(app-emulation/qemu)
@@ -358,7 +358,6 @@ CONFIG_ARM_ATAG_DTB_COMPAT=y
 CONFIG_EXTRA_FIRMWARE="regulatory.db regulatory.db.p7s rt2870.bin"
 ## ARM ARM926EJ-S
 CONFIG_ARM_THUMB=y
-CONFIG_ARM_CRYPTO=y
 CONFIG_CRYPTO_SHA1_ARM=y
 ## SoC WM8505
 CONFIG_ARCH_WM8505=y

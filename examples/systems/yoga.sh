@@ -18,7 +18,7 @@ options+=(
 
         # Customize the target triplet and profile for the x32 ABI.
         [host]=x86_64-gentoo-linux-gnux32
-        [profile]=default/linux/amd64/17.0/x32
+        [profile]=default/linux/amd64/23.0/x32
 )
 
 packages+=(
@@ -114,7 +114,7 @@ EOF
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
-            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            cryptsetup fido2 gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
@@ -165,13 +165,14 @@ EOF
         echo 'MYCMAKEARGS="-DAOM_TARGET_CPU=x86_64"' >> "$portage/env/libaom.conf"
         echo 'media-libs/libaom libaom.conf' >> "$portage/package.env/libaom.conf"
 
-        # Fix broadcom-sta with Linux 6.0.
+        # Fix broadcom-sta with Linux 6.1.
         $mkdir -p "$portage/patches/net-wireless/broadcom-sta"
-        $curl -L > "$portage/patches/net-wireless/broadcom-sta/5.18.patch" \
+        $curl -L > "$portage/patches/net-wireless/broadcom-sta/6.1.patch" \
             https://raw.githubusercontent.com/archlinux/svntogit-community/33b4bd2b9e30679b03f5d7aa2741911d914dcf94/trunk/012-linux517.patch \
-            https://raw.githubusercontent.com/archlinux/svntogit-community/2e1fd240f9ce06f500feeaa3e4a9675e65e6b967/trunk/013-linux518.patch
-        [[ $($sha256sum "$portage/patches/net-wireless/broadcom-sta/5.18.patch") == 29501d6eb4399c472e409df504e3ad67d71b01d1d98e31ade129f9a43a7d4fa0\ * ]]
-        $sed -i -e 's/if.*4.*15.*/ifdef HAVE_TIMER_SETUP/' "$portage/patches/net-wireless/broadcom-sta/5.18.patch"
+            https://raw.githubusercontent.com/archlinux/svntogit-community/2e1fd240f9ce06f500feeaa3e4a9675e65e6b967/trunk/013-linux518.patch \
+            https://raw.githubusercontent.com/archlinux/svntogit-community/1a0e588f98a71eed44ed05fe6b197d94d2112f38/trunk/016-linux601.patch
+        [[ $($sha256sum "$portage/patches/net-wireless/broadcom-sta/6.1.patch") == 2a37e6e85ad9f85f9caae8c2a1dbcfe81675a7ca1ddf708559e67524590959ff\ * ]]
+        $sed -i -e 's/if.*4.*15.*/ifdef HAVE_TIMER_SETUP/' "$portage/patches/net-wireless/broadcom-sta/6.1.patch"
         $cat << 'EOF' > "$portage/patches/net-wireless/broadcom-sta/6.0.patch"
 --- a/src/wl/sys/wl_cfg80211_hybrid.c
 +++ b/src/wl/sys/wl_cfg80211_hybrid.c

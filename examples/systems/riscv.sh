@@ -65,7 +65,7 @@ function initialize_buildroot() {
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
-            cryptsetup gcrypt gmp gnutls gpg mpfr nettle \
+            cryptsetup fido2 gcrypt gmp gnutls gpg mpfr nettle \
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
@@ -73,7 +73,7 @@ function initialize_buildroot() {
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -gtk -gui -opengl -X'"'
+            -gtk -gui -modemmanager -opengl -X'"'
 
         # Build a static RISC-V QEMU in case the host system's QEMU is too old.
         packages_buildroot+=(app-emulation/qemu)
@@ -86,6 +86,8 @@ dev-libs/libxml2 static-libs
 net-libs/libslirp static-libs
 sys-apps/dtc static-libs
 sys-apps/util-linux static-libs
+sys-libs/libcap-ng static-libs
+sys-libs/libseccomp static-libs
 sys-libs/zlib static-libs
 x11-libs/pixman static-libs
 EOF
@@ -121,13 +123,15 @@ EOF
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.1.tar.gz > "$buildroot/root/opensbi.tgz"
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == d183cb890130983a4f01e75fc03ee4f7ea0e16a7923b8af9c6dff7deb2fedaec\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2022.10.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 49abc4dd4daff017b8abd6ee33b63d4892de878602ba5474347167c7d721e1b6\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/commit/1dde977518f13824b847e23275001191139bc384.patch > "$buildroot/root/u-boot.patch"
-        [[ $($sha256sum "$buildroot/root/u-boot.patch") == 7cf53765bdbf5d82c3de93ade98954fe6f91e214d293dbf507617eae4bce9d9b\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2023.01-rc4.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 3d4cbe0f5cbbd017e04b91db30b212cb181e8585da0133ee2650ab1ce0dc890b\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
+
+        # The toolchain is broken since GCC 12, so pin it to version 11.
+        echo '>=sys-devel/gcc-12' >> "$portage/package.mask/gcc.conf"
+        echo ">=cross-${options[host]}/gcc-12" >> "$buildroot/etc/portage/package.mask/gcc.conf"
 }
 
 function customize_buildroot() {
@@ -167,7 +171,6 @@ function customize() {
 
         # Build U-Boot to provide UEFI.
         tar --transform='s,^/*u[^/]*,u-boot,' -C /root -xf /root/u-boot.tgz
-        patch -d /root/u-boot -p1 < /root/u-boot.patch
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
 CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
