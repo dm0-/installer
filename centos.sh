@@ -7,7 +7,7 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20221206.0
+        local -r cver=20230109.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
@@ -164,10 +164,10 @@ s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo 0f356580fd44c727970aab723eb13f59e1d8249e6959b5b273a91da09ae74dbf ;;
-            ppc64le) echo 9dc238791a6c2a266b2ebe07f4a0e88df98f64eee4c87628446620e3ba72328c ;;
-            s390x)   echo b0d874dc501d3ab65602737ef2af4679389448ddd22e2b83b38ef61cfc3bc105 ;;
-            x86_64)  echo 55a686208434d0d4ebf46b5dcd4abfdd3d7c779d101eee4539ab06b02712aa03 ;;
+            aarch64) echo dc3acc3c3f405f0641dc03906bb4ba6ba52e76d0723ea206715cd9b147e4f494 ;;
+            ppc64le) echo a604b450ed1bc134c4f31b7527bd5e9067fac0126402a26707658917bb583c99 ;;
+            s390x)   echo 1b2fac3241c90e5b51eff7770ce73d0fff5bd2f8b588b5dbca7f5d1b053e2ade ;;
+            x86_64)  echo 77b4b5d95b42ea02d464eeb3270617555979860dfde2d7c60c44d50d7d533491 ;;
         esac)\ *
 ]]
 

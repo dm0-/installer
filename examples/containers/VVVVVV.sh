@@ -45,7 +45,7 @@ function customize_buildroot() {
 
         # Fetch the game assets.
         curl -L 'https://thelettervsixtim.es/makeandplay/data.zip' > data.zip
-        [[ $(sha256sum data.zip) == 1da4d758f5451d37b00ffeb8d34020980da5426547f1c9ac532616fe33b84cb3\ * ]]
+        [[ $(sha256sum data.zip) == c767809594f6472da9f56136e76657e38640d584164a46112250ac6293ecc0ea\ * ]]
 }
 
 function customize() {

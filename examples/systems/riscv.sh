@@ -61,7 +61,7 @@ function initialize_buildroot() {
         echo >> "$portage/make.conf" 'USE="$USE' \
             berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
+            apng bmp exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xcf xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
@@ -69,7 +69,7 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
@@ -121,17 +121,20 @@ EOF
 EOF
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.1.tar.gz > "$buildroot/root/opensbi.tgz"
-        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == d183cb890130983a4f01e75fc03ee4f7ea0e16a7923b8af9c6dff7deb2fedaec\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2023.01-rc4.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 3d4cbe0f5cbbd017e04b91db30b212cb181e8585da0133ee2650ab1ce0dc890b\ * ]]
+        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.2.tar.gz > "$buildroot/root/opensbi.tgz"
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 8fcbce598a73acc2c7f7d5607d46b9d5107d3ecbede8f68f42631dcfc25ef2b2\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2023.01.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 6214cfb022f1b99b1a021eae1e09a9671c464bfa012c43e440f49c19e3595c09\ * ]]
 
         # Work around the broken baselayout migration code (#796893).
         $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
 
         # The toolchain is broken since GCC 12, so pin it to version 11.
         echo '>=sys-devel/gcc-12' >> "$portage/package.mask/gcc.conf"
-        echo ">=cross-${options[host]}/gcc-12" >> "$buildroot/etc/portage/package.mask/gcc.conf"
+        $cat << EOF >> "$buildroot/etc/portage/package.mask/gcc.conf"
+>=cross-${options[host]}/binutils-2.40
+>=cross-${options[host]}/gcc-12
+EOF
 }
 
 function customize_buildroot() {

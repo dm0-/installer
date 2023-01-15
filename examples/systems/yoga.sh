@@ -110,7 +110,7 @@ EOF
         echo >> "$portage/make.conf" 'USE="$USE' \
             berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
+            apng bmp exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xcf xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
@@ -118,7 +118,7 @@ EOF
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
@@ -190,6 +190,14 @@ EOF
  	roam_info.req_ie_len = conn_info->req_ie_len,
  	roam_info.resp_ie = conn_info->resp_ie,
 EOF
+
+        # Install a Wayland desktop environment for testing.
+        echo 'USE="$USE screencast wayland"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/package.use/sway.conf"
+gui-libs/wlroots -X
+gui-wm/sway -X tray wallpapers
+EOF
+        packages+=(gui-apps/foot gui-wm/sway)
 }
 
 function customize_buildroot() {

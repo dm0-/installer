@@ -198,7 +198,7 @@ function enter() {
 
 function script() {
         enter /bin/bash -euo pipefail -O nullglob -- /dev/stdin "$@" < \
-            <([[ $- =~ x ]] && echo "PS4='+\e[34m+\e[0m ' ; set -x" ; exec $cat)
+            <([[ $- == *x* ]] && echo "PS4='+\e[34m+\e[0m ' ; set -x" ; exec $cat)
 }
 
 function script_with_keydb() { script "$@" << EOF ; }

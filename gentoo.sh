@@ -42,7 +42,7 @@ EOF
         $cat << EOF >> "$portage/make.conf"
 EMERGE_DEFAULT_OPTS="--jobs=$(c=(/sys/devices/system/cpu/cpu[0-9]*);for((n=${#c[@]}>>2,p=2;p<n;p<<=1))do :;done;echo $p)"
 FEATURES="multilib-strict parallel-fetch parallel-install xattr -merge-sync -network-sandbox -news -selinux"
-GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch =~ 64 ]] && echo 64 || echo 32)}"
+GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch == *64* ]] && echo 64 || echo 32)}"
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="${options[selinux]:-targeted}"
@@ -97,6 +97,18 @@ gnome-base/librsvg *
 virtual/rust *
 x11-themes/adwaita-icon-theme *
 EOF
+        $cat << 'EOF' >> "$portage/package.accept_keywords/sway.conf"
+# Accept viable versions of Sway packages.
+dev-libs/tllist *
+gui-apps/foot *
+<gui-apps/swaybg-1.2 ~*
+gui-apps/swayidle *
+<gui-apps/swaylock-1.8 ~*
+gui-libs/wlroots *
+gui-wm/sway *
+media-libs/fcft *
+sys-auth/seatd *
+EOF
         $cat << 'EOF' >> "$portage/package.license/ucode.conf"
 # Accept CPU microcode licenses.
 sys-firmware/intel-microcode intel-ucode
@@ -122,8 +134,6 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/cryptsetup.conf"
 # Choose nettle as the crypto backend.
 sys-fs/cryptsetup nettle -gcrypt -kernel -openssl
-# Skip LVM by default so it doesn't get installed for cryptsetup/veritysetup.
-sys-fs/lvm2 -lvm -thin
 EOF
         $cat << 'EOF' >> "$portage/package.use/emacs.conf"
 # Disable native Emacs Lisp compilation until cross-compiling works.
@@ -152,10 +162,10 @@ EOF
         $cat << 'EOF' >> "$portage/package.use/pulseaudio.conf"
 # Skip the PulseAudio daemon by default since PipeWire gets priority.
 media-sound/pulseaudio -daemon
-media-video/pipewire sound-server
+media-video/pipewire sound-server -modemmanager
 EOF
         $cat << 'EOF' >> "$portage/package.use/selinux.conf"
-# Don't pull in qt5 for SELinux tools.
+# Don't pull in Qt for SELinux tools.
 app-admin/setools -X
 EOF
         $cat << 'EOF' >> "$portage/package.use/shadow.conf"
@@ -206,8 +216,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept lvm2-2.03.17 to partially fix host dependencies.
-        echo '<sys-fs/lvm2-2.04 ~*' >> "$portage/package.accept_keywords/lvm2.conf"
+        # Accept libICE-1.1.1 to drop unnecessary dependencies.
+        echo '<x11-libs/libICE-1.1.2 ~*' >> "$portage/package.accept_keywords/libICE.conf"
         # Accept libXdmcp-1.1.4 to drop unnecessary dependencies.
         echo '<x11-libs/libXdmcp-1.1.5 ~*' >> "$portage/package.accept_keywords/libXdmcp.conf"
 
@@ -227,6 +237,7 @@ opt selinux && echo -e '\ngentoo:features/selinux')
 EOF
         $sed -i -e '/^COMMON_FLAGS=/s/[" ]*$/ -ggdb -flto&/' "$portage/make.conf"
         $cat <(echo) - << EOF >> "$portage/make.conf"
+BUILD_PKG_CONFIG_LIBDIR="/usr/lib$([[ $DEFAULT_ARCH == *64* ]] && echo 64)/pkgconfig"
 CHOST="$host"
 GOARCH="$(archmap_go "$arch")"$(
 [[ $arch == i[3-5]86 ]] && echo -e '\nGO386="softfloat"'
@@ -263,6 +274,7 @@ dev-db/sqlite secure-delete
 EOF
         { [[ $host == x86_64-gentoo-linux-gnu ]] || echo 'EXTRA_EMAKE="SECCOMP_FILTER="' ; } >> "$portage/env/cross-emacs.conf"
         echo 'EXTRA_EMAKE="GDBUS_CODEGEN=/usr/bin/gdbus-codegen GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-emake-utils.conf"
+        echo 'MYMESONARGS="-Dedje-cc=/usr/bin/edje_cc -Deet=/usr/bin/eet -Deldbus-codegen=/usr/bin/eldbus-codegen"' >> "$portage/env/cross-enlightenment.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
@@ -271,8 +283,9 @@ EOF
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'EXTRA_EMAKE="PYTHON_INCLUDES=/usr/\$(host)/usr/include/\$\${PYTHON##*/}"' >> "$portage/env/cross-libxml2-python.conf"
+        echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib'$([[ ${options[arch]} == *64* ]] && echo 64)'/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/cross-qt5.conf"
+        echo -e 'QT_HOST_PATH="/usr"\nMYCMAKEARGS="-DQT_HOST_PATH_CMAKE_DIR:PATH=/usr/lib'$([[ $DEFAULT_ARCH == *64* ]] && echo 64)'/cmake"' >> "$portage/env/cross-qt6.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
-        echo "BUILD_PKG_CONFIG_LIBDIR=\"/usr/lib$([[ $DEFAULT_ARCH =~ 64 ]] && echo 64)/pkgconfig\"" >> "$portage/env/meson-pkgconfig.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
@@ -282,7 +295,8 @@ app-editors/emacs cross-emacs.conf
 app-i18n/ibus cross-glib-genmarshal.conf
 dev-libs/dbus-glib cross-glib-genmarshal.conf
 dev-libs/libxml2 cross-libxml2-python.conf
-gnome-base/gnome-settings-daemon meson-pkgconfig.conf
+dev-qt/*:5 cross-qt5.conf
+dev-qt/qtbase:6 cross-qt6.conf
 gnome-base/librsvg cross-emake-utils.conf
 net-libs/libmbim cross-emake-utils.conf
 net-misc/modemmanager cross-emake-utils.conf
@@ -290,6 +304,7 @@ net-wireless/wpa_supplicant cross-libnl.conf
 sys-apps/coreutils cross-gmp.conf
 x11-drivers/xf86-input-libinput xf86-sdk.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
+x11-wm/enlightenment cross-enlightenment.conf
 EOF
         echo 'sys-apps/kbd kbd.conf' >> "$portage/package.env/kbd.conf"
         $cat << 'EOF' >> "$portage/package.env/no-lto.conf"
@@ -319,19 +334,27 @@ EOF
         echo 'dev-lang/rust rust-map.conf' >> "$portage/package.env/rust.conf"
         # Link a required library for building the SELinux labeling initrd.
         echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
-        # Mask the self-dependent NSS edit in the native root.
-        echo 'dev-libs/nss::fixes' >> "$portage/package.mask/nss.conf"
+        # Mask self-dependent edits in the native root.
+        $cat << 'EOF' >> "$portage/package.mask/self.conf"
+dev-libs/efl::fixes
+dev-libs/nss::fixes
+dev-qt/qtbase:6::fixes
+EOF
         # Skip systemd for busybox since the labeling initrd has no real init.
         echo 'sys-apps/busybox -selinux -systemd' >> "$portage/package.use/busybox.conf"
         # Install colord utilities without the daemon due to huge dependencies.
         echo 'x11-misc/colord -daemon' >> "$portage/package.use/colord.conf"
+        # Only install basic EFL tools.
+        echo 'dev-libs/efl -* lua_single_target_lua5-1' >> "$portage/package.use/efl.conf"
+        # Support zstd in CMake builds.
+        echo 'app-arch/libarchive zstd' >> "$portage/package.use/libarchive.conf"
         # Make a static libcrypt in the buildroot for busybox.
         echo -e 'sys-libs/libxcrypt static-libs\nvirtual/libcrypt static-libs' >> "$portage/package.use/libcrypt.conf"
         # Preserve JIT support in libpcre2 to avoid a needless rebuild.
         echo 'dev-libs/libpcre2 jit' >> "$portage/package.use/libpcre2.conf"
         # Rust isn't built into the stage3 to bootstrap, but it can share LLVM.
         echo 'dev-lang/rust system-llvm -system-bootstrap' >> "$portage/package.use/rust.conf"
-        # Disable journal compression to skip the massive cmake dependency.
+        # Disable journal compression to skip the massive CMake dependency.
         echo 'sys-apps/systemd -lz4' >> "$portage/package.use/systemd.conf"
         # Support building the UEFI logo image and signing tools.
         opt uefi && $cat << 'EOF' >> "$portage/package.use/uefi.conf"
@@ -340,7 +363,7 @@ media-gfx/imagemagick svg xml
 EOF
         # Work around bad dependencies requiring X on the host.
         $cat << 'EOF' >> "$portage/package.use/X.conf"
-dev-qt/qtgui X
+dev-qt/qtgui:5 X
 media-libs/libepoxy X
 media-libs/libglvnd X
 media-libs/mesa X
@@ -404,7 +427,6 @@ EOF
 
         $cat <(declare -f write_overlay) - << 'EOF' | script "$host" "${packages_buildroot[@]}"
 host=$1 ; shift
-mkdir -p /run/lock  # Ensure this exists for bad packages.
 
 # Fetch the latest package definitions, and fix them in an overlay.
 emerge-webrsync
@@ -488,7 +510,6 @@ EOF
         fi < /dev/null
 
         # Build the cross-compiled toolchain packages first.
-        mkdir -p /run/lock  # Ensure this exists for bad packages.
         COLLISION_IGNORE='*' USE=-selinux emerge --oneshot --verbose \
             sys-devel/gcc virtual/libc virtual/libcrypt virtual/os-headers
         packages+=(sys-devel/gcc virtual/libc)  # Install libstdc++ etc.
@@ -828,6 +849,21 @@ function write_unconditional_patches() {
      return rustc_target
  
 EOF
+
+        $mkdir -p "$patches/media-libs/openjpeg-2.5.0"
+        $cat << 'EOF' > "$patches/media-libs/openjpeg-2.5.0/sysroot.patch"
+--- a/cmake/OpenJPEGConfig.cmake.in
++++ b/cmake/OpenJPEGConfig.cmake.in
+@@ -27,7 +27,7 @@
+   # This is an install tree
+   include(${SELF_DIR}/OpenJPEGTargets.cmake)
+ 
+-  set(INC_DIR "@CMAKE_INSTALL_FULL_INCLUDEDIR@/@OPENJPEG_INSTALL_SUBDIR@")
++  find_path(INC_DIR openjpeg.h PATH_SUFFIXES "@OPENJPEG_INSTALL_SUBDIR@")
+   get_filename_component(OPENJPEG_INCLUDE_DIRS "${INC_DIR}" ABSOLUTE)
+ 
+ else()
+EOF
 }
 
 function write_base_kernel_config() if opt bootable
@@ -980,7 +1016,7 @@ function build_relabel_kernel() if opt selinux
 then
         echo > "$buildroot/root/config.relabel" 'CONFIG_EXPERT=y
 # Target the native CPU.
-'$([[ $DEFAULT_ARCH =~ 64 ]] || echo '#')'CONFIG_64BIT=y
+'$([[ $DEFAULT_ARCH == *64* ]] || echo '#')'CONFIG_64BIT=y
 CONFIG_SMP=y
 # Support executing programs and scripts.
 CONFIG_BINFMT_ELF=y
@@ -1119,7 +1155,7 @@ function archmap_profile() {
             armv5te*)    echo default/linux/arm/17.0/armv5te ;;
             armv6*j*)    echo default/linux/arm/17.0/armv6j$hardened ;;
             armv7a)      echo default/linux/arm/17.0/armv7a$hardened ;;
-            i[3-6]86)    echo default/linux/x86/17.0$hardened ;;
+            i[3-6]86)    echo default/linux/x86/23.0$hardened ;;
             powerpc)     echo default/linux/ppc/17.0 ;;
             powerpc64le) echo default/linux/ppc64le/17.0 ;;
             riscv64)     echo default/linux/riscv/20.0/rv64gc/lp64d ;;
@@ -1171,7 +1207,7 @@ function write_overlay() {
         }
 
         # Support cross-compiling with LLVM (#745744).
-        sed -e '/EAPI.*ESYSROOT/d' \
+        sed -e '/^llvm_pkg_setup/,/^}/s/ESYSROOT/BROOT/' \
             "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
 
         # Support tmpfiles with EAPI 8.
@@ -1190,15 +1226,18 @@ function write_overlay() {
         sed -e 's,\(KERNEL_DIR:=\)\(/usr/src\),\1${ROOT%/}\2,' \
             "$gentoo/eclass/linux-mod.eclass" > "$overlay/eclass/linux-mod.eclass"
 
-        # Support compiling basic qt5 packages in a sysroot.
+        # Support compiling basic Qt 5 packages in a sysroot.
         sed \
             -e '/conf=/a${SYSROOT:+-extprefix "${QT5_PREFIX}" -sysroot "${SYSROOT}"}' \
             -e 's/ OBJDUMP /&PKG_CONFIG /;/OBJCOPY/{p;s/OBJCOPY/PKG_CONFIG/g;}' \
             "$gentoo/eclass/qt5-build.eclass" > "$overlay/eclass/qt5-build.eclass"
-        edit dev-qt/qtgui '/^DEPEND=/iBDEPEND="~dev-qt/qtcore-${PV}"'
-        edit dev-qt/qtwidgets '/^DEPEND=/iBDEPEND="~dev-qt/qtgui-${PV}"'
-        edit dev-qt/qtsvg '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
-        edit dev-qt/qtx11extras '/^DEPEND=/iBDEPEND="~dev-qt/qtwidgets-${PV}"'
+        edit dev-qt/qtgui '/qt5-build/h;${x;/./!{x;q;};x;};$aBDEPEND+=" ~dev-qt/qtcore-${PV}"'
+        edit dev-qt/qtwidgets '/qt5-build/h;${x;/./!{x;q;};x;};$aBDEPEND+=" ~dev-qt/qtgui-${PV}"'
+        edit dev-qt/qtsvg '/qt5-build/h;${x;/./!{x;q;};x;};$aBDEPEND+=" ~dev-qt/qtwidgets-${PV}"'
+        edit dev-qt/qtx11extras '/qt5-build/h;${x;/./!{x;q;};x;};$aBDEPEND+=" ~dev-qt/qtwidgets-${PV}"'
+
+        # Support cross-compiling Qt 6 by satisfying its self-dependency.
+        edit dev-qt/qtbase '/qt6-build/h;${x;/./!{x;q;};x;};$aBDEPEND+=" ~${CATEGORY}/${P}[dbus?]"'
 
         # Drop the buildroot multilib requirement for Rust (#753764).
         edit gnome-base/librsvg '/virtual.rust/s/[[].*//;/^src_prepare/a\
@@ -1218,15 +1257,24 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
         edit sys-fs/lvm2 '/virtual.tmpfiles/d;$aIDEPEND+=" lvm? ( virtual/tmpfiles )"'
 
         # Fix NSS self-dependency.
-        edit dev-libs/nss 's,^BDEPEND=",&dev-libs/nss ,;$aIDEPEND+=" dev-libs/nss"'
+        edit dev-libs/nss 's,^BDEPEND=",&${CATEGORY}/${PN} ,;$aIDEPEND+=" ${CATEGORY}/${PN}"'
 
         # Fix udev dependency ordering.
         edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
+
+        # Fix libqrtr-glib.
+        edit net-libs/libqrtr-glib '/^IUSE="/s/"$/ introspection&/;s/dev.*ction$/introspection? ( & )/;s/-Dintro.*/$(meson_use introspection)/'
 
         # Fix Cairo.
         edit x11-libs/cairo '/meson_src_configure/i\
 echo -e "[properties]\\nipc_rmid_deferred_release = true" > "${T}/fix.ini"\
 tc-is-cross-compiler && emesonargs+=(--cross-file="${T}/fix.ini")'
+
+        # Fix Enlightenment on Wayland.
+        edit dev-libs/efl '$aBDEPEND+=" ~${CATEGORY}/${P}"'
+        edit media-libs/fcft s/EPREFIX/ESYSROOT/
+        edit media-libs/rlottie 's/ JSON / /'
+        edit x11-wm/enlightenment '$aDEPEND+=" wayland? ( dev-util/wayland-scanner )"'  # upstream error
 
         # Fix Firefox on 23.0 profiles.
         edit www-client/firefox '/NOSPAM/a\
@@ -1241,26 +1289,6 @@ use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,
         edit dev-lang/lua '/eselect-lua/d;$aIDEPEND+=" app-eselect/eselect-lua"'
         edit dev-libs/libcdio-paranoia 's/^EAPI=.*/EAPI=8/;/^RDEPEND=.*eselect/{s/^R/I/;s/$/"\nRDEPEND="/;}'
         edit gnome-base/gnome-keyring '/eselect-pinentry/d;$aIDEPEND+=" app-eselect/eselect-pinentry"'
-}
-
-# OPTIONAL (BUILDROOT)
-
-function fix_package() {
-        local -r portage="$buildroot/usr/${options[host]}/etc/portage"
-        case $* in
-            vlc)
-                [[ ${options[arch]} =~ 64 ]] &&
-                echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf" ||
-                echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/pkgconfig-redundant.conf"
-                echo 'dev-qt/* pkgconfig-redundant.conf' >> "$portage/package.env/qt.conf"
-                $cat << 'EOF' >> "$portage/package.use/vlc.conf"
-dev-qt/qtgui -dbus
-dev-qt/qtwidgets -dbus -gtk
-media-video/vlc gui -vdpau
-sys-libs/zlib minizip
-EOF
-                ;;
-        esac
 }
 
 # OPTIONAL (IMAGE)

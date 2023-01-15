@@ -94,12 +94,13 @@ function initialize_buildroot() {
 
         # Use the RV280 driver for the ATI Radeon 9200 graphics processor.
         echo 'VIDEO_CARDS="radeon r200"' >> "$portage/make.conf"
+        packages+=(media-libs/mesa-amber)
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
             berkdb dbus elfutils emacs gdbm git glib json libnotify libxml2 magic ncurses pcre2 readline sqlite udev uuid xml \
             bidi fontconfig fribidi harfbuzz icu idn libidn2 nls truetype unicode \
-            apng exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xpm \
+            apng bmp exif gif imagemagick jbig jpeg jpeg2k png svg tiff webp xcf xpm \
             a52 alsa cdda faad flac libcanberra libsamplerate mp3 ogg opus pulseaudio sndfile sound speex vorbis \
             aacs aom bdplus bluray cdio dav1d dvd ffmpeg libaom mpeg theora vpx x265 \
             brotli bzip2 gzip lz4 lzma lzo snappy xz zlib zstd \
@@ -107,7 +108,7 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
@@ -124,6 +125,34 @@ EOF
         # Build GRUB to boot from Open Firmware.
         echo 'GRUB_PLATFORMS="ieee1275"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
+
+        # Fix QEMU 7.2 build failure.
+        $mkdir -p "$portage/patches/app-emulation/qemu"
+        $cat << 'EOF' > "$portage/patches/app-emulation/qemu/no64.patch"
+--- a/tcg/ppc/tcg-target.c.inc
++++ b/tcg/ppc/tcg-target.c.inc
+@@ -1879,10 +1879,12 @@
+      * There's no convenient way to get the compiler to allocate a pair
+      * of registers at an even index, so copy into r6/r7 and clobber.
+      */
++#if 0
+     asm("mr  %%r6, %1\n\t"
+         "mr  %%r7, %2\n\t"
+         "stq %%r6, %0"
+         : "=Q"(*(__int128 *)rw) : "r"(p[0]), "r"(p[1]) : "r6", "r7");
++#endif
+     flush_idcache_range(rx, rw, 16);
+ }
+ 
+EOF
+
+        # Install a Wayland desktop environment for testing.
+        echo 'USE="$USE screencast wayland"' >> "$portage/make.conf"
+        $cat << 'EOF' >> "$portage/package.use/sway.conf"
+gui-libs/wlroots -X
+gui-wm/sway -X tray wallpapers
+EOF
+        packages+=(gui-apps/foot gui-wm/sway)
 }
 
 function customize_buildroot() {
