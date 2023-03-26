@@ -82,7 +82,7 @@ function initialize_buildroot() {
 
         # Tune compilation for the AMD Geode LX 800.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow&/' \
             -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=geode&/' \
             "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
@@ -112,9 +112,9 @@ EOF
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gdk-pixbuf gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gui -modemmanager -networkmanager'"'
 
@@ -256,15 +256,15 @@ CONFIG_NLS_DEFAULT="utf8"
 CONFIG_NLS_CODEPAGE_437=m
 CONFIG_NLS_ISO8859_1=m
 CONFIG_NLS_UTF8=m
-# Support mirroring disks via RAID.
-CONFIG_MD=y
-CONFIG_BLK_DEV_MD=y
-CONFIG_MD_AUTODETECT=y
-CONFIG_MD_RAID1=y
 # Support encrypted partitions.
+CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
+# Support mirroring disks via RAID.
+CONFIG_BLK_DEV_MD=y
+CONFIG_MD_AUTODETECT=y
+CONFIG_MD_RAID1=y
 # Support FUSE.
 CONFIG_FUSE_FS=m
 # Support running containers in nspawn.
@@ -311,7 +311,6 @@ CONFIG_EXTRA_FIRMWARE="regulatory.db regulatory.db.p7s rt73.bin"
 ## Geode LX 800 CPU
 CONFIG_MGEODE_LX=y
 CONFIG_CPU_SUP_AMD=y
-CONFIG_MICROCODE_AMD=y
 ## AES processor
 CONFIG_CRYPTO_HW=y
 CONFIG_CRYPTO_DEV_GEODE=y
@@ -340,6 +339,10 @@ CONFIG_USB_SUPPORT=y
 CONFIG_USB=y
 CONFIG_USB_DEFAULT_PERSIST=y
 CONFIG_USB_PCI=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_EHCI_PCI=y
+CONFIG_USB_OHCI_HCD=y
+CONFIG_USB_OHCI_HCD_PCI=y
 CONFIG_USB_GADGET=y
 CONFIG_USB_AMD5536UDC=y
 ## Serial support
@@ -383,10 +386,6 @@ CONFIG_HID_GENERIC=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## USB storage
-CONFIG_USB_OHCI_HCD=y
-CONFIG_USB_OHCI_HCD_PCI=y
-CONFIG_USB_EHCI_HCD=y
-CONFIG_USB_EHCI_HCD_PCI=y
 CONFIG_SCSI=y
 CONFIG_BLK_DEV_SD=y
 CONFIG_USB_STORAGE=y

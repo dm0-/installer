@@ -7,16 +7,19 @@
 # container is interchangeable with a native installation of the game.
 #
 # Since the game archive includes both i686 and x86_64 binaries, this script
-# supports using either depending on the given architecture option.  It also
-# implements an option to demonstrate supporting the proprietary NVIDIA drivers
-# on the host system.  A numeric value selects the driver branch version, and a
-# non-numeric value defaults to the latest.
+# supports using either depending on whether the CLI option "-o arch=i686" was
+# given.  The i686 build may not be trustworthy, however, because the distro's
+# RPMs for that architecture are unsigned after Fedora 30.
+#
+# This script implements an option to demonstrate supporting the proprietary
+# NVIDIA drivers on the host system.  A numeric value selects the driver branch
+# version, and a non-numeric value defaults to the latest.
 
 options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=37 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
-        libGLU
+        mesa-libGLU
 )
 
 packages_buildroot+=(unzip)
@@ -37,6 +40,28 @@ function initialize_buildroot() {
         fi
 }
 
+function customize_buildroot() if [[ ${options[arch]:-$DEFAULT_ARCH} == i686 ]]
+then
+        sed -i -e 's/^enabled=.*/enabled=0/' /etc/yum.repos.d/*.repo
+        sed "${options[nvidia]:+s/^enabled=.*/enabled=1/}" << 'EOF' > /etc/yum.repos.d/koji.repo
+[koji-fedora]
+name=Fedora $releasever - $basearch - Packages directly from Koji
+baseurl=https://kojipkgs.fedoraproject.org/repos/f$releasever-build/latest/$basearch/
+enabled=1
+gpgcheck=0
+[koji-rpmfusion-free]
+name=RPM Fusion for Fedora $releasever - Free - Packages directly from Koji
+baseurl=https://koji.rpmfusion.org/kojifiles/repos/f$releasever-free-multilibs-build/latest/$basearch/
+enabled=0
+gpgcheck=0
+[koji-rpmfusion-nonfree]
+name=RPM Fusion for Fedora $releasever - Nonfree - Packages directly from Koji
+baseurl=https://koji.rpmfusion.org/kojifiles/repos/f$releasever-nonfree-multilibs-build/latest/$basearch/
+enabled=0
+gpgcheck=0
+EOF
+fi
+
 function customize() {
         exclude_paths+=(
                 root
@@ -47,7 +72,7 @@ function customize() {
                 usr/share/{doc,help,hwdata,info,licenses,man,sounds}
         )
 
-        local -r drop=$([[ ${options[arch]} == i?86 ]] && echo amd64)
+        local -r drop=$([[ ${options[arch]:-$DEFAULT_ARCH} == i686 ]] && echo amd64)
         unzip -Cjd root ftl.zip 'data/noarch/game/data/FTL.*' -x "*FTL.${drop:-x86}" || [[ $? -eq 1 ]]
         mv root/FTL.* root/FTL
         rm -f ftl.zip

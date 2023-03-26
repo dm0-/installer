@@ -89,7 +89,7 @@ function initialize_buildroot() {
 
         # Tune compilation for the ARM ARM926EJ-S.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=arm926ej-s -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -mcpu=arm926ej-s&/' \
             -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=arm926ej-s&/' \
             "$portage/make.conf"
         echo 'CPU_FLAGS_ARM="edsp thumb v4 v5"' >> "$portage/make.conf"
@@ -110,9 +110,9 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gdk-pixbuf gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -ffmpeg -gtk -gui -modemmanager -opengl'"'
 
@@ -155,7 +155,7 @@ function customize() {
                 usr/local
         )
 
-        # Dump emacs into the image since the target CPU is so slow.
+        # Dump Emacs into the image with QEMU to skip doing this on boot.
         local -r host=${options[host]}
         local -r gccdir=/$(cd "/usr/$host" ; compgen -G "usr/lib/gcc/$host/*")
         ln -ft "/usr/$host/tmp" /usr/bin/qemu-arm
@@ -311,6 +311,7 @@ CONFIG_NLS_CODEPAGE_437=m
 CONFIG_NLS_ISO8859_1=m
 CONFIG_NLS_UTF8=m
 # Support encrypted partitions.
+CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
@@ -409,6 +410,8 @@ CONFIG_MMC_WMT=y
 CONFIG_RTC_CLASS=y
 CONFIG_RTC_DRV_VT8500=y
 ## Optional USB devices
+CONFIG_SOUND=y
+CONFIG_SND=y
 CONFIG_SND_USB=y
 CONFIG_HID_GYRATION=m   # wireless mouse and keyboard
 CONFIG_SND_USB_AUDIO=m  # headsets
@@ -420,24 +423,13 @@ function write_kernel_patch() {
         $mkdir -p "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources"
         $cat > "$buildroot/etc/portage/patches/sys-kernel/gentoo-sources/wm8505.patch"
 } << 'EOF'
-Define /chosen to fix passing kernel arguments since Linux 5.8.
-
 Add the Ethernet device.
 
 Set the default screen contrast so it is readable before udev starts.
 
 --- a/arch/arm/boot/dts/wm8505.dtsi
 +++ b/arch/arm/boot/dts/wm8505.dtsi
-@@ -10,6 +10,8 @@
- 	#size-cells = <1>;
- 	compatible = "wm,wm8505";
- 
-+	chosen { bootargs = ""; };
-+
- 	cpus {
- 		#address-cells = <0>;
- 		#size-cells = <0>;
-@@ -290,5 +292,12 @@
+@@ -290,5 +290,12 @@
  			clocks = <&clksdhc>;
  			bus-width = <4>;
  		};

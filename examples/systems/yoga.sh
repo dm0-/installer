@@ -83,7 +83,7 @@ function initialize_buildroot() {
 
         # Tune compilation for the Intel Pentium N3530, and use the x32 ABI.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=silvermont -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=silvermont&/' \
             -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=silvermont&/' \
             "$portage/make.conf"
         $cat << 'EOF' >> "$portage/make.conf"
@@ -118,9 +118,9 @@ EOF
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gdk-pixbuf gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gui -modemmanager -ppp'"'
 
@@ -130,6 +130,11 @@ EOF
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
         echo 'sys-apps/systemd gnuefi' >> "$buildroot/etc/portage/package.use/systemd.conf"
         echo gnuefi >> "$portage/profile/use.mask/uefi.conf"
+
+        # Make CET settings match between the buildroot and sysroot.
+        echo -cet >> "$portage/profile/use.mask/cet.conf"
+        echo 'USE="$USE cet"' >> "$portage/profile/make.defaults"
+        #echo "cross-${host}/* -cet" >> "$buildroot/etc/portage/package.use/x32.conf"
 
         # Fix libvpx.
         $mkdir -p "$portage/patches/media-libs/libvpx"
@@ -195,7 +200,7 @@ EOF
         echo 'USE="$USE screencast wayland"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.use/sway.conf"
 gui-libs/wlroots -X
-gui-wm/sway -X tray wallpapers
+gui-wm/sway -X
 EOF
         packages+=(gui-apps/foot gui-wm/sway)
 }
@@ -235,7 +240,7 @@ function customize() {
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -M q35 -cpu host -smp 4,cores=4 -m 4G -vga std -nic user \
+    -machine q35 -cpu host -smp 4,cores=4 -m 4G -vga std -nic user \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
@@ -277,21 +282,19 @@ fi << 'EOF'
 CONFIG_PRINTK=y
 # Support CPU microcode updates.
 CONFIG_MICROCODE=y
-# Enable bootloader interaction for managing system image updates.
-CONFIG_EFI_VARS=y
-CONFIG_EFI_BOOTLOADER_CONTROL=y
 # Support ext2/ext3/ext4 (which is not included for read-only images).
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
 # Support encrypted partitions.
+CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
 # Support FUSE.
 CONFIG_FUSE_FS=m
-# Support running virtual machines in QEMU.
+# Support running virtual machines.
 CONFIG_HIGH_RES_TIMERS=y
 CONFIG_VIRTUALIZATION=y
 CONFIG_KVM=y
@@ -343,7 +346,6 @@ CONFIG_X86_PAT=y
 CONFIG_EXTRA_FIRMWARE="intel-ucode/06-37-08 regulatory.db regulatory.db.p7s"
 ## Intel Pentium N3530
 CONFIG_MSILVERMONT=y
-CONFIG_ARCH_RANDOM=y
 CONFIG_CPU_SUP_INTEL=y
 CONFIG_CRYPTO_SHA256_SSSE3=y
 CONFIG_KVM_INTEL=y

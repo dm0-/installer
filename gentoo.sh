@@ -55,7 +55,7 @@ EOF
 app-crypt/pesign ~*
 sys-apps/keyutils *
 sys-boot/vboot-utils ~*
-sys-fs/erofs-utils ~*
+sys-fs/erofs-utils *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
@@ -101,9 +101,9 @@ EOF
 # Accept viable versions of Sway packages.
 dev-libs/tllist *
 gui-apps/foot *
-<gui-apps/swaybg-1.2 ~*
+gui-apps/swaybg *
 gui-apps/swayidle *
-<gui-apps/swaylock-1.8 ~*
+gui-apps/swaylock *
 gui-libs/wlroots *
 gui-wm/sway *
 media-libs/fcft *
@@ -216,10 +216,8 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept libICE-1.1.1 to drop unnecessary dependencies.
-        echo '<x11-libs/libICE-1.1.2 ~*' >> "$portage/package.accept_keywords/libICE.conf"
-        # Accept libXdmcp-1.1.4 to drop unnecessary dependencies.
-        echo '<x11-libs/libXdmcp-1.1.5 ~*' >> "$portage/package.accept_keywords/libXdmcp.conf"
+        # Accept qemu-7.2.0 to fix building with Linux 6.2.
+        echo '<app-emulation/qemu-7.2.0-r3 ~*' >> "$portage/package.accept_keywords/qemu.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -452,13 +450,12 @@ mkdir -p "$ROOT"/usr/{bin,src}
 ln -fns bin "$ROOT/usr/sbin"
 ln -fst "$ROOT" usr/{bin,sbin}
 emerge --nodeps --oneshot --verbose sys-apps/baselayout
-stable=$(portageq envvar ACCEPT_KEYWORDS | grep -Fqs -e '~' -e '**' || echo 1)
 unset {PORTAGE_CONFIG,,SYS}ROOT
 cat << 'EOG' >> /etc/portage/repos.conf/crossdev.conf
 [crossdev]
 location = /var/db/repos/crossdev
 EOG
-crossdev ${stable:+--stable} --target "$host"
+crossdev --stable --target "$host"
 
 # Install all requirements for building the target image.
 exec emerge --changed-use --update --verbose "$@"
@@ -1248,6 +1245,9 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
 
         # Fix Python.
         edit dev-lang/python '/src_configure/,/^}$/{/is-cross-compiler/,/fi$/d;}'
+
+        # Fix QEMU.
+        edit app-emulation/qemu 's/tc-export /&CC /'
 
         # Fix the libcap dependency.
         edit sys-libs/pam 's/^EAPI=.*/EAPI=8/'

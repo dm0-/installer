@@ -12,7 +12,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=37 [squash]=1)
+options+=([distro]=fedora [gpt]=1 [release]=37 [squash]=1)
 
 packages+=(
         freetype
@@ -105,7 +105,6 @@ exec sudo systemd-nspawn \
     --image="${IMAGE:-ArxFatalis.img}" \
     --link-journal=no \
     --machine="ArxFatalis-$USER" \
-    --personality=x86-64 \
     --private-network \
     --read-only \
     --setenv="DISPLAY=$DISPLAY" \

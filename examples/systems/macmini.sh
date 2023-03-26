@@ -108,9 +108,9 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gdk-pixbuf gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -ffmpeg -modemmanager -networkmanager'"'
 
@@ -150,7 +150,7 @@ EOF
         echo 'USE="$USE screencast wayland"' >> "$portage/make.conf"
         $cat << 'EOF' >> "$portage/package.use/sway.conf"
 gui-libs/wlroots -X
-gui-wm/sway -X tray wallpapers
+gui-wm/sway -X
 EOF
         packages+=(gui-apps/foot gui-wm/sway)
 }
@@ -305,12 +305,13 @@ CONFIG_EXT4_USE_FOR_EXT2=y
 CONFIG_MISC_FILESYSTEMS=y
 CONFIG_HFS_FS=m
 # Support encrypted partitions.
+CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m
 # Support FUSE.
 CONFIG_FUSE_FS=m
-# Support running virtual machines in QEMU.
+# Support running virtual machines.
 CONFIG_VIRTUALIZATION=y
 # Support registering handlers for other architectures.
 CONFIG_BINFMT_MISC=y
@@ -400,7 +401,7 @@ CONFIG_USB=y
 CONFIG_USB_DEFAULT_PERSIST=y
 CONFIG_USB_PCI=y
 CONFIG_USB_EHCI_HCD=y
-CONFIG_USB_EHCI_HCD_PCI=y
+CONFIG_USB_EHCI_PCI=y
 CONFIG_USB_OHCI_HCD=y
 CONFIG_USB_OHCI_HCD_PCI=y
 ## Ethernet

@@ -112,7 +112,7 @@ function imply_options() {
         opt selinux && options[enforcing]=1
         opt verity_sig && options[verity]=1
         opt squash || opt verity && options[read_only]=1
-        opt uefi || opt ramdisk && options[bootable]=1
+        opt uefi || opt ramdisk || opt loadpin && options[bootable]=1
         opt uefi && options[secureboot]=1  # Always sign the UEFI executable.
         [[ ${options[arch]:-$DEFAULT_ARCH} == armv[67]* ]] && options[hardfp]=1
         opt distro || options[distro]=fedora  # This can't be unset.
@@ -946,7 +946,7 @@ endif
 EOF
 
         timeout 3m qemu-system-x86_64 -nodefaults -nographic -no-reboot \
-            -M q35 -serial stdio < /dev/null \
+            -machine q35 -serial stdio < /dev/null \
             -drive file=code.fd,format=raw,if=pflash,read-only=on \
             -drive file=vars.fd,format=raw,if=pflash \
             -drive file="fat:ro:$root",format=raw,if=virtio,media=disk,read-only=on \

@@ -128,7 +128,7 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-        git -C rtl8812au reset --hard ee299797bcd54d5b8c58d2da8576c54cea1a03a2
+        git -C rtl8812au reset --hard eee82ac1401e211a58a42cd89ab788b4f55040af
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.
@@ -181,7 +181,7 @@ EOF
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -M q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
+    -machine q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \

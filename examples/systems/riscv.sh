@@ -69,27 +69,20 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gdk-pixbuf gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gtk -gui -modemmanager -opengl -X'"'
 
-        # Build a static RISC-V QEMU in case the host system's QEMU is too old.
+        # Build a static QEMU user binary for the target CPU.
         packages_buildroot+=(app-emulation/qemu)
         $cat << 'EOF' >> "$buildroot/etc/portage/package.use/qemu.conf"
-app-emulation/qemu -* fdt pin-upstream-blobs python_targets_python3_10 qemu_softmmu_targets_riscv64 qemu_user_targets_riscv64 slirp static static-user
+app-emulation/qemu qemu_user_targets_riscv64 static-user
 dev-libs/glib static-libs
-dev-libs/libffi static-libs
 dev-libs/libpcre2 static-libs
-dev-libs/libxml2 static-libs
-net-libs/libslirp static-libs
-sys-apps/dtc static-libs
-sys-apps/util-linux static-libs
-sys-libs/libcap-ng static-libs
-sys-libs/libseccomp static-libs
+sys-apps/attr static-libs
 sys-libs/zlib static-libs
-x11-libs/pixman static-libs
 EOF
 
         # Build RISC-V UEFI GRUB for bootloader testing.
@@ -125,16 +118,6 @@ EOF
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 8fcbce598a73acc2c7f7d5607d46b9d5107d3ecbede8f68f42631dcfc25ef2b2\ * ]]
         $curl -L https://github.com/u-boot/u-boot/archive/v2023.01.tar.gz > "$buildroot/root/u-boot.tgz"
         [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 6214cfb022f1b99b1a021eae1e09a9671c464bfa012c43e440f49c19e3595c09\ * ]]
-
-        # Work around the broken baselayout migration code (#796893).
-        $mkdir -p "$buildroot/usr/${options[host]}/usr/lib64"
-
-        # The toolchain is broken since GCC 12, so pin it to version 11.
-        echo '>=sys-devel/gcc-12' >> "$portage/package.mask/gcc.conf"
-        $cat << EOF >> "$buildroot/etc/portage/package.mask/gcc.conf"
->=cross-${options[host]}/binutils-2.40
->=cross-${options[host]}/gcc-12
-EOF
 }
 
 function customize_buildroot() {
@@ -144,9 +127,6 @@ function customize_buildroot() {
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config
-
-        # Work around the broken baselayout migration code (#796893).
-        mkdir -p "root/usr/lib64"
 }
 
 function customize() {
@@ -161,7 +141,7 @@ function customize() {
                 usr/local
         )
 
-        # Dump emacs into the image since QEMU is built already anyway.
+        # Dump Emacs into the image with QEMU to skip doing this on boot.
         local -r host=${options[host]}
         local -r gccdir=/$(cd "/usr/$host" ; compgen -G "usr/lib/gcc/$host/*")
         ln -ft "/usr/$host/tmp" /usr/bin/qemu-riscv64
@@ -175,7 +155,6 @@ function customize() {
         # Build U-Boot to provide UEFI.
         tar --transform='s,^/*u[^/]*,u-boot,' -C /root -xf /root/u-boot.tgz
         cat /root/u-boot/configs/qemu-riscv64_smode_defconfig - << 'EOF' > /root/u-boot/.config
-CONFIG_BOOTCOMMAND="fatload virtio 0:1 ${kernel_addr_r} /EFI/BOOT/BOOTRISCV64.EFI;bootefi ${kernel_addr_r}"
 CONFIG_BOOTDELAY=0
 EOF
         make -C /root/u-boot -j"$(nproc)" olddefconfig CROSS_COMPILE="$host-" V=1
@@ -189,12 +168,11 @@ EOF
         chmod 0644 opensbi-uboot.bin
 
         # Support an executable VM image for quick testing.
-        cp -pt . /usr/bin/qemu-system-riscv64
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
-#!/bin/bash -eu
-exec qemu-system-riscv64 -nographic \
+#!/bin/sh -eu
+exec qemu-system-riscv64 -nodefaults -nographic \
     -L "$PWD" -bios opensbi-uboot.bin \
-    -machine virt -cpu rv64 -m 4G \
+    -machine virt -cpu rv64 -m 4G -serial stdio \
     -drive file="${IMAGE:-gpt.img}",format=raw,id=hd0,media=disk,snapshot=on \
     -netdev user,id=net0 \
     -object rng-random,id=rng0 \
@@ -256,6 +234,7 @@ CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_EXT4_FS_SECURITY=y
 CONFIG_EXT4_USE_FOR_EXT2=y
 # Support encrypted partitions.
+CONFIG_MD=y
 CONFIG_BLK_DEV_DM=y
 CONFIG_DM_CRYPT=m
 CONFIG_DM_INTEGRITY=m

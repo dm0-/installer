@@ -97,7 +97,7 @@ function initialize_buildroot() {
 
         # Assume the build system is the target, and tune compilation for it.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native -ftree-vectorize&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=native&/' \
             -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=native&/' \
             "$portage/make.conf"
         $sed -n '/^vendor_id.*GenuineIntel$/q0;$q1' /proc/cpuinfo && echo CONFIG_MNATIVE_INTEL=y >> "$buildroot/etc/kernel/config.d/native.config"
@@ -123,9 +123,9 @@ function initialize_buildroot() {
             curl http2 ipv6 libproxy mbim modemmanager networkmanager wifi wps \
             acl caps cracklib fprint hardened pam policykit seccomp smartcard xattr xcsecurity \
             acpi dri gusb kms libglvnd opengl upower usb uvm vaapi vdpau \
-            cairo colord drm gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
+            cairo colord drm gdk-pixbuf gtk gtk3 gui lcms libdrm pango uxa wnck X xa xcb xft xinerama xkb xorg xrandr xvmc xwidgets \
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
-            dynamic-loading gzip-el hwaccel postproc startup-notification toolkit-scroll-bars wide-int \
+            dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
             -gui -modemmanager -ppp'"'
 
@@ -192,7 +192,7 @@ EOF
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -M q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
+    -machine q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
     -device intel-hda -device hda-output \
