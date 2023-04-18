@@ -116,8 +116,8 @@ EOF
         # Download sources to build a UEFI firmware image.
         $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.2.tar.gz > "$buildroot/root/opensbi.tgz"
         [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 8fcbce598a73acc2c7f7d5607d46b9d5107d3ecbede8f68f42631dcfc25ef2b2\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2023.01.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 6214cfb022f1b99b1a021eae1e09a9671c464bfa012c43e440f49c19e3595c09\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2023.04.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 98ccc5ea7e0f708b7e66a0060ecf1f7f9914d8b31d9d7ad2552027bd0aa848f2\ * ]]
 }
 
 function customize_buildroot() {

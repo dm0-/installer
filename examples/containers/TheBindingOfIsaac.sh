@@ -11,7 +11,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([distro]=fedora [gpt]=1 [release]=37 [squash]=1)
+options+=([distro]=fedora [gpt]=1 [release]=38 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
@@ -33,8 +33,8 @@ function initialize_buildroot() {
         echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
 
         # Download, verify, and extract a recent Ruffle source tag.
-        $curl -L https://github.com/ruffle-rs/ruffle/archive/refs/tags/nightly-2023-03-26.tar.gz > "$output/ruffle.tgz"
-        [[ $($sha256sum "$output/ruffle.tgz") == 144d0c43a596e9051bea57191a931d2d6a1d3cb0371664fa8a1fae53b7c5f887\ * ]]
+        $curl -L https://github.com/ruffle-rs/ruffle/archive/refs/tags/nightly-2023-04-18.tar.gz > "$output/ruffle.tgz"
+        [[ $($sha256sum "$output/ruffle.tgz") == 135b58c657ecfb2d3474bde8f8ba4a28d08d0d5f554202f9b36587d27cc9103b\ * ]]
         $tar --transform='s,^[^/]*,ruffle,' -C "$output" -xf "$output/ruffle.tgz"
         $rm -f "$output/ruffle.tgz"
 

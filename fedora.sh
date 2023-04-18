@@ -3,10 +3,10 @@ packages_buildroot=()
 
 options[loadpin]=
 
-DEFAULT_RELEASE=37
+DEFAULT_RELEASE=38
 
 function create_buildroot() {
-        local -r cver=1.7
+        local -r cver=1.6
         local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
@@ -19,7 +19,7 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(nss-tools pesign)
         opt selinux && packages_buildroot+=(busybox kernel-core policycoreutils qemu-system-x86-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick)
+        opt uefi && packages_buildroot+=(binutils fedora-logos ImageMagick systemd-boot-unsigned)
         opt uefi_vars && packages_buildroot+=(qemu-system-x86-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
@@ -92,7 +92,7 @@ function distro_tweaks() {
 function save_boot_files() if opt bootable
 then
         opt uefi && test ! -s logo.bmp &&
-        convert -background none /usr/share/fedora-logos/fedora_logo.svg -trim -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        magick -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
         test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
         test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
         if opt verity_sig
@@ -207,32 +207,32 @@ function verify_distro() {
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBGESvNwBEAC7HsCDTlugVeDSMFX6aW3zAPFMfvBssNj+89fdmbxcI9t7UY6f
-HvkkGziUET8e+9jB8R2/wXQCGOw1J+sfmwO4aN0LdVQjhKvVNj+F5jWt3m5FAIBa
-OTWS6Kvqw2ECTpH7fD86541eK3BuCni6d5U3PCd73t976FcUmpQ/1AthqMksM0Jz
-cJapvNmLTCR0NZ2XyyLmn/K1hgNXe8G5j0cSrJiY+Zpz5aQkT96j96Jm6W2A+tBI
-icU4n6V4vlj2TxmCumtXJGXGBGJnof/dCgh45aqi+sk5c429ns+5sooYcaEJojj6
-FYSITv10l+az6ZMJz/j61VYSkhMY8hQ4Wd+yL2JVzLE9N9V0L95sX1yEZ5ILmzwx
-oRKe4WHSBE6yMxNWobv7hmC+3ZC5mLPaEDS/g/0xuQj9Sy9eT2mhhFPxOv29YQ+P
-sC3zXHJMMT0tlGd72PVHQQ0JYONfMhcC+7AHGFGz8p4/wor2jIFG1ouqE6Lfzm8o
-XWZMYm3AydlrP/xkYaoWNE3jL/+dskSBr/Yz7ZzlkAqH9lb1HKnXQLTrw6gz6pmI
-KufSDXjEFNxnFI/9gMlshJtk5+QSDzezmxFm+NMviSvDUNAVIzrU1D84dauBYph4
-OrJVeECQHEotny/I53AdlVwLYB4TWkObzTs6vtV7Pz1TK2CmHpe3UW72xwARAQAB
-tDFGZWRvcmEgKDM3KSA8ZmVkb3JhLTM3LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
-cmc+iQJOBBMBCAA4FiEErLXuToMcdLt8Fo0n9VrT+1MjVSoFAmESvNwCGw8FCwkI
-BwIGFQoJCAsCBBYCAwECHgECF4AACgkQ9VrT+1MjVSoPMhAAist7kK/YtcyBL/dt
-P55hPrkJT6Ay+e2Dvt4Pixe4iT32Y3jG12aoX2LY//mxVOOpV+EhXYTTb5aLt2Jj
-a8/qCKJFk7zuCOxa1hgdRcjoR7ZbU0lNjD9mMCax/YT9QafcaMEib/FlknP3g1SN
-GRSKLObTJd6BbtZXCE80JRIX+Dy6+/Oz7LXRXeKpiimhlXT1wuTaqAJEtuHdQvg7
-dkL4DzAJ2FiURVd5gvgo266WaCMafJjFRrSGHJm0c+V+0Z9NsuH80JbPm+rCUh5U
-E9PMyztqlqtldtqc1+aZ1iUbVuXY059BUmlAhmf5sAlBktY+hEabH/4kmfGccbBL
-TyBIn03Y9q9173okZSUe6q16m/hbbWI8dwkSpIADZbGGJbRi8PJpCg9y6KI355qD
-atE2irleoy6eXqpKa+uPTRBk7i/r6jDoA+u+tZyFfcEnwvSWP8cN1j5mNklvITZl
-YF1n5b3fejkZVdOmRZQNkyzMxYEd4UZFQZNYrx0nltAagRS8b5ikqNk2UTl+dyBG
-k9gLOSZhAa2JdmAqwe9rT69jaa4kZMLlxPPC3246s83t0s7lp7vF+zLPfPSvxpsU
-tg+fuT+OFKWYdBFF7VkEA+wezHAznIP6TPyQXbBpkzE889/hOXy4BYs0wy8Bpda/
-Ve2Ba329f99dSCZKImi5DPCxJY4=
-=ZmVd
+mQINBGIC2cYBEADJye1aE0AR17qwj6wsHWlCQlcihmqkL8s4gbOk1IevBbH4iXJx
+lu6bN+NhTcCCX6eHmaL5Pwb/bpkMmLR+/r1D2cLDK24YzvN6kJnwRQUTf2dbqYmg
+mNBgIMm+kAabBZPwUHUzyQ9CT/WJpYr1OYu8JIkdxF35nrPewnnOUUqxqbi8fXRQ
+gskSLF8UveiOjFIqmWwlPwT1UtnevAaF80UGQlkwFvqjjh4b9vKY2gHMAQwt+wg5
+HFFCSwSrnd88ZoDb3pKvDMeurYUiPzF5f2r+ziVkMuaSNckvp58uge7HvyqQPAdJ
+ZRswCCxhUAo9VqkNfB4Ud25ASyalk9jOE3HB8E35gFfPXvuX1n15THXNcwMEiybk
+Omne2YwXL8ShGNr5otjqywThMrrqcl2g/pJVTcpDHTR5Hn9YRp+GHlYLjyEr+/x7
+xM19y9ca9GUiJqDbEREHcKKIhYiGmcIjjcJvei/3C/aM4pqeGFJBbVSnw3qeMxH/
+6ArAMA1sAdShCkv2YjlcF0r4uoCjXdS3xrKLz9PSCquot7RySnOE9TZ7flfJll7Z
+q+lNaSeJg7FK8VWSUb9Lit6VEYVbzWKzespDDbujrHbFpydyq8gXurk7bSR2w0te
+gsmytQqT/w1z2bydgGF6SfY9Px0wuA8GQKr48l5Bhdc6+vHHFqPKzz0PVQARAQAB
+tDFGZWRvcmEgKDM4KSA8ZmVkb3JhLTM4LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
+cmc+iQJOBBMBCAA4FiEEalG7q7o9VGe2FxIhgJqNfOsQtGQFAmIC2cYCGw8FCwkI
+BwIGFQoJCAsCBBYCAwECHgECF4AACgkQgJqNfOsQtGScyw/7BLmD4Fwi4QZY94zl
+vlJdNufZRavOemSIVVDHoCr8pQBAdrvoMypxJd5zM4ODIqFsjdYpFti+Tkeq4/4U
+25UoLPEOtU8UDt2uq7LqfdCxspaj7VyXAJIkpf7wEvLS4Jzo+YaMIlsd0dCrMXTM
+vhu4gKpBFW6C+gGlmuDyTJbyrf7ilytgVzVtIfRrT7XffylviIlZHwKm43UDjvzX
+YEl3EAFR1RjATwXMy2aJh7GCNsz+fKs+7YRKQUhpMF5un/2pyNJO+LbVGGwGZvga
+K9Kfsg/4r1ync4nDDD1dadKIHhobDeiJ9uZLoBvvVDz7Ywu7q/vv4zIPxstYBNq4
+6fLKDtYXuJCK0EV9Qy4ox67t0UGlaRGH8y5YUqOI10xH7iQej0xWlSc8w2dKhPz8
+z9XLv2OMK+PvqvflhFHhWkqEoQRqTu0TVD0fLLe4lqieJlqZcJqW0F9G/vNSSWmf
+POLa/Nim71gL2fPjCJOIRV4K/cJSyBmu5NchG7dHD5sUtJxZ4TFSuepaBZ8cPK1x
+e26TaCBqoUWgUXWmw+P89aOpYOJYEFfT/VAm2Ywn+c1EFUmD+30wQ7aP/RUFl94z
+n0BjqsWDnCKVFHydZ0TZSpeADmXMg2VYZPcp/cQR1KjoBoDxAscis7b1XPQUg7CB
+zquq5jBVAnsNIhs7g47GWKyDUJM=
+=aCLl
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 

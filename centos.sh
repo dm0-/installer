@@ -7,7 +7,7 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20230313.0
+        local -r cver=20230417.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
@@ -66,6 +66,8 @@ function distro_tweaks() {
 
 # Override the UEFI logo source to use the dark background variant for CentOS.
 eval "$(declare -f save_boot_files | $sed \
+    -e s/magick/convert/ \
+    -e "s/-trim/& -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0'/" \
     -e 's,fedora\(-logos/fedora_logo\),centos\1_darkbackground,')"
 
 # Override image generation to drop EROFS support since it's not enabled.
@@ -164,10 +166,10 @@ s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo 2f4cdff3dd9eed32873ed788806ae3bd7031bda811e6af98eb541515cb22758c ;;
-            ppc64le) echo 7556022f06c276eea2c7b3709d35d58df213404b454e9fb42ea21e20eee5c7ae ;;
-            s390x)   echo 0cf478a177fe98d86643fa8a6e945d45012ccf90a1e593e251afb04a045098ab ;;
-            x86_64)  echo e40a27e713420159aeae297701e723feccabc6ebbf90f483fcc23d4f7e21adc5 ;;
+            aarch64) echo dd95a4edd45b4b2389a0452ec09eed659f0ff5f3978de96399f83d3301371d40 ;;
+            ppc64le) echo f2057b6fac6a4cd31c357f07934056743fc602d7c1efbf89b51e7c43a9245094 ;;
+            s390x)   echo 7ad56739ec0909f61123d14ba9720a9d8547085faeb45cced63010b912a1c818 ;;
+            x86_64)  echo c3f7169769154d95fa12a8bfb44fbf06dafd3e2fa89aa9431c3150dde8374e1d ;;
         esac)\ *
 ]]
 

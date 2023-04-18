@@ -88,6 +88,7 @@ packages+=(
         gnome-terminal
         gucharmap
         NetworkManager-wifi
+        pipewire-pulseaudio
 
         # Graphics
         mesa-{dri,omx,vdpau,vulkan}-drivers
@@ -128,7 +129,7 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-        git -C rtl8812au reset --hard eee82ac1401e211a58a42cd89ab788b4f55040af
+        git -C rtl8812au reset --hard fe71d8368671cb074b8ed6278ffd57308056fa20
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.

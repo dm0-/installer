@@ -3,11 +3,12 @@
 rm -fr root/etc/systemd/system/*
 
 # Ignore the laptop lid, and kill all user processes on logout.
-test -s root/etc/systemd/logind.conf &&
-sed -i \
-    -e 's/^[# ]*\(HandleLidSwitch\)=.*/\1=ignore/' \
-    -e 's/^[# ]*\(KillUserProcesses\)=.*/\1=yes/' \
-    root/etc/systemd/logind.conf
+mkdir -p root/usr/lib/systemd/logind.conf.d
+cat << 'EOF' > root/usr/lib/systemd/logind.conf.d/00-secure.conf
+[Login]
+HandleLidSwitch=ignore
+KillUserProcesses=yes
+EOF
 
 # Always start a login prompt on tty1.
 mkdir -p root/usr/lib/systemd/system/getty.target.wants
@@ -49,8 +50,11 @@ ln -fns graphical.target root/usr/lib/systemd/system/default.target ||
 ln -fns multi-user.target root/usr/lib/systemd/system/default.target
 
 # Save pstore files to the journal on boot.
-test -s root/etc/systemd/pstore.conf &&
-sed -i -e 's/^[# ]*\(Storage\)=.*/\1=journal/' root/etc/systemd/pstore.conf
+mkdir -p root/usr/lib/systemd/pstore.conf.d
+cat << 'EOF' > root/usr/lib/systemd/pstore.conf.d/00-journal.conf
+[PStore]
+Storage=journal
+EOF
 mkdir -p root/usr/lib/systemd/system/basic.target.wants
 test -s root/usr/lib/systemd/system/systemd-pstore.service &&
 ln -fst root/usr/lib/systemd/system/basic.target.wants \
@@ -88,10 +92,11 @@ UseMTU=yes
 EOF
 
         # Disable the DNS stub listener by default.
-        test -s root/etc/systemd/resolved.conf &&
-        sed -i \
-            -e '/^#*DNSStubListener=/{s/#*//;s/=.*/=no/;}' \
-            root/etc/systemd/resolved.conf
+        mkdir -p root/usr/lib/systemd/resolved.conf.d
+        cat << 'EOF' > root/usr/lib/systemd/resolved.conf.d/00-stub.conf
+[Resolve]
+DNSStubListener=no
+EOF
         ln -fst root/etc ../run/systemd/resolve/resolv.conf
 fi
 
