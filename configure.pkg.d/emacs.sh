@@ -29,7 +29,7 @@ EOF
 
         # Generate the portable dump file on boot if it wasn't packaged.
         compgen -G "root/usr/libexec/emacs/2[7-9].*/*/" &&  # Only Emacs >= 27
-        if ! compgen -G "root/usr/libexec/emacs/*/*/emacs.pdmp"
+        if ! compgen -G "root/usr/libexec/emacs/*/*/emacs*.pdmp"
         then
                 ln -fst root/usr/libexec/emacs/*/* \
                     ../../../../../var/cache/emacs/emacs.pdmp

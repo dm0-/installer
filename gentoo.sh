@@ -47,7 +47,7 @@ INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="${options[selinux]:-targeted}"
 RUSTFLAGS="-Copt-level=2"
-USE="\$USE system-icu system-png -gtk-doc -introspection -vala"
+USE="\$USE system-icu system-png -gtk-doc -introspection -telemetry -vala"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/core.conf"
@@ -55,7 +55,7 @@ EOF
 app-crypt/pesign ~*
 sys-apps/keyutils *
 sys-boot/vboot-utils ~*
-sys-fs/erofs-utils *
+sys-fs/erofs-utils ~*
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/firefox.conf"
 # Accept the latest (non-ESR) Firefox release.
@@ -113,6 +113,14 @@ EOF
 # Accept CPU microcode licenses.
 sys-firmware/intel-microcode intel-ucode
 sys-kernel/linux-firmware linux-fw-redistributable no-source-code
+EOF
+        $cat << 'EOF' >> "$portage/package.mask/emacs.conf"
+# Block newer Emacs until cross-compiling is fixed again.
+>=app-editors/emacs-29
+EOF
+        $cat << 'EOF' >> "$portage/package.mask/rust.conf"
+# Block the wildly inappropriate default behavior of not compiling Rust.
+dev-lang/rust-bin
 EOF
         $cat << 'EOF' >> "$portage/package.unmask/rust.conf"
 # Unmask Rust users to bypass bad architecture profiles.
@@ -216,8 +224,10 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept qemu-7.2.0 to fix building with Linux 6.2.
-        echo '<app-emulation/qemu-7.2.0-r3 ~*' >> "$portage/package.accept_keywords/qemu.conf"
+        # Accept fuse-3.16 to fix cross-compiling.
+        echo 'sys-fs/fuse *' >> "$portage/package.accept_keywords/fuse.conf"
+        # Accept libxcrypt-4.4.36 to fix building with updated Perl.
+        echo 'sys-libs/libxcrypt *' >> "$portage/package.accept_keywords/libxcrypt.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -251,7 +261,7 @@ PKG_INSTALL_MASK="$PKG_INSTALL_MASK .keep*dir .keep_*_*-*"
 PKGDIR="$ROOT/var/cache/binpkgs"
 PYTHON_TARGETS="$PYTHON_SINGLE_TARGET"
 SYSROOT="$ROOT"
-USE="$USE -kmod -multiarch -static -static-libs"
+USE="$USE modules-sign -kmod -multiarch -static -static-libs"
 EOF
         $cat << 'EOF' >> "$portage/package.use/gnutls.conf"
 # When a package requires a single TLS implementation, standardize on GnuTLS.
@@ -270,13 +280,13 @@ EOF
 # Always enable secure delete for SQLite.
 dev-db/sqlite secure-delete
 EOF
+        echo 'gl_cv_macro_MB_CUR_MAX_good="yes"' >> "$portage/env/cross-coreutils.conf"
         { [[ $host == x86_64-gentoo-linux-gnu ]] || echo 'EXTRA_EMAKE="SECCOMP_FILTER="' ; } >> "$portage/env/cross-emacs.conf"
         echo 'EXTRA_EMAKE="GDBUS_CODEGEN=/usr/bin/gdbus-codegen GLIB_MKENUMS=/usr/bin/glib-mkenums"' >> "$portage/env/cross-emake-utils.conf"
         echo 'MYMESONARGS="-Dedje-cc=/usr/bin/edje_cc -Deet=/usr/bin/eet -Deldbus-codegen=/usr/bin/eldbus-codegen"' >> "$portage/env/cross-enlightenment.conf"
         echo 'GLIB_COMPILE_RESOURCES="/usr/bin/glib-compile-resources"' >> "$portage/env/cross-glib-compile-resources.conf"
         echo 'GLIB_GENMARSHAL="/usr/bin/glib-genmarshal"' >> "$portage/env/cross-glib-genmarshal.conf"
         echo 'GLIB_MKENUMS="/usr/bin/glib-mkenums"' >> "$portage/env/cross-glib-mkenums.conf"
-        echo 'EXTRA_ECONF="--with-libgmp-prefix=$SYSROOT/usr"' >> "$portage/env/cross-gmp.conf"
         echo 'LIBASSUAN_CONFIG="/usr/bin/$CHOST-pkg-config libassuan"' >> "$portage/env/cross-libassuan.conf"
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
@@ -299,7 +309,7 @@ gnome-base/librsvg cross-emake-utils.conf
 net-libs/libmbim cross-emake-utils.conf
 net-misc/modemmanager cross-emake-utils.conf
 net-wireless/wpa_supplicant cross-libnl.conf
-sys-apps/coreutils cross-gmp.conf
+sys-apps/coreutils cross-coreutils.conf
 x11-drivers/xf86-input-libinput xf86-sdk.conf
 x11-libs/gtk+ cross-glib-compile-resources.conf cross-glib-genmarshal.conf cross-glib-mkenums.conf
 x11-wm/enlightenment cross-enlightenment.conf
@@ -409,7 +419,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/15/bin/${name##*-}"
+prog="/usr/lib/llvm/16/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/$host-clang"
@@ -486,6 +496,10 @@ EOF
                         packages_sysroot+=(sys-kernel/gentoo-kernel)
                 fi
         fi
+        cat << EOF >> "$ROOT/etc/portage/make.conf"
+MODULES_SIGN_CERT="$keydir/sign.pem"
+MODULES_SIGN_KEY="$keydir/sign.pem"
+EOF
 
         # Build an unpackaged kernel now so external modules can use its files.
         if opt raw_kernel
@@ -521,14 +535,16 @@ EOF
         then
                 deepdeps "${packages[@]}" "${packages_sysroot[@]}" "$@" |
                 sed 's/-[0-9].*//' |
-                grep -Fox "${bootstrap_packages[@]/#/-e}" | sort -u
+                { grep -Fsx "${bootstrap_packages[@]/#/-e}" || : ; } | sort -u
         fi > "$ROOT/etc/portage/sets/bootstrap-packages"
         if
                 { using sys-fs/cryptsetup udev || using sys-fs/lvm2 udev && using sys-apps/systemd cryptsetup ; } ||
-                using sys-apps/systemd fido2
+                using sys-apps/systemd fido2 || using sys-apps/util-linux systemd
         then
-                USE='-*' emerge --oneshot --onlydeps{,-with-rdeps=n} --selective --verbose sys-apps/systemd
-                USE='-*' emerge --oneshot --nodeps --selective --verbose sys-apps/systemd
+                USE="-* python_single_target_$(portageq envvar PYTHON_SINGLE_TARGET)" \
+                emerge --oneshot --onlydeps{,-with-rdeps=n} --selective --verbose sys-apps/systemd
+                USE="-* python_single_target_$(portageq envvar PYTHON_SINGLE_TARGET)" \
+                emerge --oneshot --nodeps --selective --verbose sys-apps/systemd
         fi
         [[ -s $ROOT/etc/portage/sets/bootstrap-packages ]] &&
         USE='-* drm minimal truetype' \
@@ -553,6 +569,7 @@ EOF
         mv -t root/usr/bin root/gcc-bin/*/* ; rm -fr root/{binutils,gcc}-bin
 
         # Create a UTF-8 locale so things work.
+        mkdir -p root/usr/lib/locale
         localedef --prefix=root -c -f UTF-8 -i en_US en_US.UTF-8
 
         # If a modular unpackaged kernel was configured, install the modules.
@@ -666,7 +683,7 @@ then
         opt uefi && USE=gnuefi emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
         opt uefi && test ! -s logo.bmp &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
-        magick -background none /root/logo.svg -trim -color-matrix '0 1 0 0 0 0 0 1 0 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 0' logo.bmp
+        magick -background none /root/logo.svg -trim logo.bmp
         test -s $(opt monolithic && echo /root/initramfs.cpio || echo initrd.img) || build_busybox_initrd
         opt monolithic && if opt raw_kernel
         then cat >> /usr/src/linux/.config
@@ -708,7 +725,7 @@ fi
 
 # Override the UEFI function to support non-native stub files in Gentoo.
 eval "$(declare -f produce_uefi_exe | $sed \
-    -e 's/objcopy/"${options[host]}-&"/' \
+    -e 's/objcopy\|objdump/"${options[host]}-&"/' \
     -e 's,/[^ ]*.efi.stub,/usr/${options[host]}&,')"
 
 # Override default OVMF paths for this distro's packaging.
@@ -823,6 +840,44 @@ function write_unconditional_patches() {
                 [[ $($sha256sum "$patches/sys-kernel/gentoo-sources/ipe.patch") == 7f892c2fde9eae4c4859121de1ccb809f48cf152c2b15a761cc48b8e612b9591\ * ]]
                 $ln -fst "$patches/sys-kernel/gentoo-kernel" ../gentoo-sources/ipe.patch
         fi
+
+        $mkdir -p "$patches/app-arch/snappy-1.1.10"
+        $cat << 'EOF' > "$patches/app-arch/snappy-1.1.10/neon.patch"
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -207,9 +207,9 @@
+ check_cxx_source_compiles("
+ #include <arm_neon.h>
+ int main() {
+-  uint8_t val = 3, dup[8];
++  uint8_t val = 3;
+   uint8x16_t v = vld1q_dup_u8(&val);
+-  vst1q_u8(dup, v);
++  val = vmaxvq_u8(v);
+   return 0;
+ }" SNAPPY_HAVE_NEON)
+ 
+EOF
+
+        $mkdir -p "$patches/app-crypt/p11-kit-0.25.0"
+        $cat << 'EOF' > "$patches/app-crypt/p11-kit-0.25.0/cross.patch"
+--- a/meson.build
++++ b/meson.build
+@@ -307,11 +307,10 @@
+ int main (void)
+ {
+     char buf[32];
+-    return strerror_r (EINVAL, buf, 32);
++    return *strerror_r (EINVAL, buf, 32);
+ }
+ '''
+-  strerror_r_check = cc.run(strerror_r_code, name : 'strerror_r check')
+-  if strerror_r_check.returncode() == 0
++  if not cc.compiles(strerror_r_code, name : 'GNU strerror_r check')
+     conf.set('HAVE_XSI_STRERROR_R', 1)
+   else
+     conf.set('HAVE_GNU_STRERROR_R', 1)
+EOF
 
         $mkdir -p "$patches"/{dev-lang/spidermonkey,www-client/firefox}
         $ln -fst "$patches/dev-lang/spidermonkey" ../../www-client/firefox/rust.patch
@@ -1204,7 +1259,7 @@ function write_overlay() {
         }
 
         # Support cross-compiling with LLVM (#745744).
-        sed -e '/^llvm_pkg_setup/,/^}/s/ESYSROOT/BROOT/' \
+        sed -e '/^llvm_pkg_setup/,/^}/s/=.{ESYSROOT}/=${BROOT}/' \
             "$gentoo/eclass/llvm.eclass" > "$overlay/eclass/llvm.eclass"
 
         # Support tmpfiles with EAPI 8.
@@ -1212,7 +1267,7 @@ function write_overlay() {
             "$gentoo/eclass/tmpfiles.eclass" > "$overlay/eclass/tmpfiles.eclass"
 
         # Support CONFIG_DEBUG_INFO_BTF, which is enabled in the Fedora config.
-        sed -e '/^BDEPEND="/adev-util/pahole' \
+        sed -e '/^BDEPEND="/a>=dev-util/pahole-1.25' \
             "$gentoo/eclass/kernel-build.eclass" > "$overlay/eclass/kernel-build.eclass"
 
         # Support installing the distro kernel without /usr/src.
@@ -1243,14 +1298,8 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
         # Work around broken pkg-config paths.
         edit app-crypt/gcr 's/[^a]rm /&-f /'
 
-        # Fix Python.
-        edit dev-lang/python '/src_configure/,/^}$/{/is-cross-compiler/,/fi$/d;}'
-
         # Fix QEMU.
         edit app-emulation/qemu 's/tc-export /&CC /'
-
-        # Fix the libcap dependency.
-        edit sys-libs/pam 's/^EAPI=.*/EAPI=8/'
 
         # Fix tmpfiles dependencies.
         edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
@@ -1283,6 +1332,12 @@ tc-is-cross-compiler && emesonargs+=(--cross-file="${T}/fix.ini")'
         # Fix colord self-dependency.
         edit x11-misc/colord 's/^IUSE="/&+daemon /;s/.*polkit.*/daemon? ( & )/;s,^BDEPEND=",&daemon? ( ${CATEGORY}/${PN} ) ,;s/true daemon/use_bool daemon/;/^src_prepare/a\
 use daemon && sed -i -e "s,cd_idt8,'\''/usr/bin/cd-it8'\'',;s,cd_create_profile,'\''/usr/bin/cd-create-profile'\''," data/*/meson.build'
+
+        # Fix the Gentoo theme.
+        edit x11-themes/gentoo-artwork '/^src_unpack/,/^}/s/fperms /chmod /'
+
+        # Fix icons.  (Use IDEPEND with EAPI 8.)
+        edit x11-themes/hicolor-icon-theme '$aBDEPEND+=" dev-util/gtk-update-icon-cache"'
 
         # Remove eselect from the sysroot.
         edit app-editors/emacs 's/.{IDEPEND}//'

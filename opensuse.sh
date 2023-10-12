@@ -16,7 +16,7 @@ function create_buildroot() {
         opt secureboot && packages_buildroot+=(mozilla-nss-tools pesign)
         opt selinux && packages_buildroot+=(busybox kernel-default policycoreutils qemu-x86 zstd)
         opt squash && packages_buildroot+=(squashfs)
-        opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick)
+        opt uefi && packages_buildroot+=(binutils distribution-logos-openSUSE-Tumbleweed ImageMagick systemd-boot)
         opt uefi_vars && packages_buildroot+=(ovmf qemu-ovmf-x86_64 qemu-x86)
         opt verity && packages_buildroot+=(cryptsetup device-mapper)
         packages_buildroot+=(curl e2fsprogs glib2-tools openssl)
@@ -27,6 +27,7 @@ function create_buildroot() {
         verify_distro "$output"/checksum{,.sig} "$output/image.txz"
         $tar -C "$buildroot" -xJf "$output/image.txz"
         $rm -f "$output"/checksum{,.sig} "$output/image.txz"
+        $ln -fns ../proc/self/mounts "$buildroot/etc/mtab"
 
         # Disable non-OSS packages by default.
         $sed -i -e '/^enabled=/s/=.*/=0/' "$buildroot/etc/zypp/repos.d/repo-non-oss.repo"
@@ -56,13 +57,38 @@ function install_packages() {
         opt networkd && packages+=(systemd-network)
         opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
-        opt arch && sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
-        zypper --non-interactive --installroot="$PWD/root" \
+        enable_repo_ports
+        zypper --gpg-auto-import-keys --non-interactive --installroot="$PWD/root" \
             install "${packages[@]:-filesystem}" "$@" || [[ $? -eq 107 ]]
 
         # Define basic users and groups prior to configuring other stuff.
         grep -qs '^wheel:' root/etc/group ||
         groupadd --prefix /wd/root --system --gid=10 wheel
+
+        # Give this distro a compatible firewall before configuring it.
+        tee \
+            >(test -s root/usr/sbin/iptables-restore && exec sed s/6//g > root/usr/lib/systemd/system/iptables.service || exec cat > /dev/null) \
+            << 'EOF' > $(test -s root/usr/sbin/ip6tables-restore && echo root/usr/lib/systemd/system/ip6tables.service || echo /dev/null)
+[Unit]
+Description=Load ip6tables firewall rules
+Before=network-pre.target
+Wants=network-pre.target
+AssertPathExists=/etc/sysconfig/ip6tables
+
+[Service]
+ExecStart=/usr/sbin/ip6tables-restore /etc/sysconfig/ip6tables
+ExecReload=/usr/sbin/ip6tables-restore /etc/sysconfig/ip6tables
+ExecStop=/usr/sbin/ip6tables -P INPUT ACCEPT
+ExecStop=/usr/sbin/ip6tables -P FORWARD ACCEPT
+ExecStop=/usr/sbin/ip6tables -P OUTPUT ACCEPT
+ExecStop=/usr/sbin/ip6tables -F
+ExecStop=/usr/sbin/ip6tables -X
+RemainAfterExit=yes
+Type=oneshot
+
+[Install]
+WantedBy=basic.target
+EOF
 
         # List everything installed in the image and what was used to build it.
         rpm -qa | sort > packages-buildroot.txt
@@ -97,7 +123,7 @@ then
         sed '/<svg/,/>/s,>,&<style>#g885{display:none}</style>,' /usr/share/pixmaps/distribution-logos/light-dual-branding.svg > /root/logo.svg &&
         magick -background none -size 720x320 /root/logo.svg logo.bmp
         test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
-        test -s vmlinuz || cp -pt . /boot/vmlinuz
+        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
 fi
 
 # Override relabeling to add the missing modules and fix pthread_cancel.
@@ -182,6 +208,12 @@ function enable_repo_nvidia() {
         echo -e > "$buildroot/etc/zypp/repos.d/nvidia.repo" \
             "[nvidia]\nenabled=1\nautorefresh=1\nbaseurl=$repo\ngpgcheck=1"
 }
+
+function enable_repo_ports() if [[ ${options[arch]:-$DEFAULT_ARCH} != $DEFAULT_ARCH ]]
+then
+        sed -i -e "s/^[# ]*arch *=.*/arch = ${options[arch]}/" /etc/zypp/zypp.conf
+        sed -i -e "s,org/,&ports/${options[arch]/#i686/i586}/," /etc/zypp/repos.d/repo-{debug,non-oss,oss,update}.repo
+fi
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"

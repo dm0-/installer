@@ -167,7 +167,7 @@ function customize() {
         cp -pt root/usr/libexec/emacs/*/"$host" "/usr/$host/tmp/emacs.pdmp"
 
         # Make a GPIO daemon to power the wireless interface.
-        mkdir -p root/usr/lib/systemd/system/sys-subsystem-net-devices-wlan0.device.requires
+        mkdir -p root/usr/lib/systemd/system/sys-subsystem-net-devices-wlu2u2.device.requires
         cat << 'EOF' > root/usr/lib/systemd/system/gpio-power-wifi.service
 [Unit]
 Description=Power the wireless interface
@@ -176,13 +176,13 @@ After=systemd-tmpfiles-setup-dev.service
 [Service]
 ExecStart=/usr/bin/gpioset --mode=signal gpiochip0 2=1
 EOF
-        ln -fst root/usr/lib/systemd/system/sys-subsystem-net-devices-wlan0.device.requires \
+        ln -fst root/usr/lib/systemd/system/sys-subsystem-net-devices-wlu2u2.device.requires \
             ../gpio-power-wifi.service
 
         # Start the wireless interface if it is configured.
         mkdir -p root/usr/lib/systemd/system/network.target.wants
         ln -fns ../wpa_supplicant-nl80211@.service \
-            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlan0.service
+            root/usr/lib/systemd/system/network.target.wants/wpa_supplicant-nl80211@wlu2u2.service
 
         # Fix the screen contrast with udev in case of an unpatched kernel.
         echo > root/usr/lib/udev/rules.d/50-wm8505-fb.rules \
@@ -226,10 +226,10 @@ EOF
 # Override the UEFI function as a hack to produce the U-Boot files.
 function produce_uefi_exe() if opt bootable
 then
-        local -r dtb=/usr/src/linux/arch/arm/boot/dts/wm8505-ref.dtb
+        local -r dtb=/usr/src/linux/arch/arm/boot/dts/vt8500/wm8505-ref.dtb
 
         # Build the system's device tree blob.
-        make -C /usr/src/linux -j"$(nproc)" "${dtb##*/}" \
+        make -C /usr/src/linux -j"$(nproc)" "${dtb#*/dts/}" \
             ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
 
         # Build a U-Boot kernel image with the bundled DTB.
@@ -394,6 +394,7 @@ CONFIG_GPIO_CDEV_V1=y
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
+CONFIG_HID_SUPPORT=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## USB storage
@@ -427,8 +428,8 @@ Add the Ethernet device.
 
 Set the default screen contrast so it is readable before udev starts.
 
---- a/arch/arm/boot/dts/wm8505.dtsi
-+++ b/arch/arm/boot/dts/wm8505.dtsi
+--- a/arch/arm/boot/dts/vt8500/wm8505.dtsi
++++ b/arch/arm/boot/dts/vt8500/wm8505.dtsi
 @@ -290,5 +290,12 @@
  			clocks = <&clksdhc>;
  			bus-width = <4>;
@@ -444,7 +445,7 @@ Set the default screen contrast so it is readable before udev starts.
  };
 --- a/drivers/video/fbdev/wm8505fb.c
 +++ b/drivers/video/fbdev/wm8505fb.c
-@@ -342,7 +342,7 @@
+@@ -340,7 +340,7 @@
  	fbi->fb.screen_buffer		= fb_mem_virt;
  	fbi->fb.screen_size		= fb_mem_len;
  

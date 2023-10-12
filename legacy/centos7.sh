@@ -33,9 +33,10 @@ function create_buildroot() {
         configure_initrd_generation
         initialize_buildroot "$@"
 
-        enter /usr/bin/yum --assumeyes --setopt=tsflags=nodocs upgrade
-        enter /usr/bin/yum --assumeyes --setopt=tsflags=nodocs \
-            install "${packages_buildroot[@]}"
+        script "${packages_buildroot[@]}" << 'EOF'
+yum --assumeyes --setopt=tsflags=nodocs upgrade
+exec yum --assumeyes --setopt=tsflags=nodocs install "$@"
+EOF
 
         # Fix the old pesign option name.
         ! opt secureboot ||

@@ -33,8 +33,8 @@ function initialize_buildroot() {
         echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
 
         # Download, verify, and extract a recent Ruffle source tag.
-        $curl -L https://github.com/ruffle-rs/ruffle/archive/refs/tags/nightly-2023-04-18.tar.gz > "$output/ruffle.tgz"
-        [[ $($sha256sum "$output/ruffle.tgz") == 135b58c657ecfb2d3474bde8f8ba4a28d08d0d5f554202f9b36587d27cc9103b\ * ]]
+        $curl -L https://github.com/ruffle-rs/ruffle/archive/refs/tags/nightly-2023-10-12.tar.gz > "$output/ruffle.tgz"
+        [[ $($sha256sum "$output/ruffle.tgz") == 21feb50320ee56b42780ab988b2b2f2c19c65b3aaf7e01a6ca47c87e5cc7bcc7\ * ]]
         $tar --transform='s,^[^/]*,ruffle,' -C "$output" -xf "$output/ruffle.tgz"
         $rm -f "$output/ruffle.tgz"
 

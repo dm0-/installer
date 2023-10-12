@@ -86,38 +86,14 @@ sys-libs/zlib static-libs
 EOF
 
         # Build RISC-V UEFI GRUB for bootloader testing.
+        echo '<sys-boot/grub-2.13 **' >> "$buildroot/etc/portage/package.accept_keywords/grub.conf"
         packages_buildroot+=(sys-boot/grub)
-        $curl -L https://lists.gnu.org/archive/mbox/grub-devel/2020-04 > "$output/grub.mbox"
-        [[ $($sha256sum "$output/grub.mbox") == 32d142f8af7a0d4c1bf3cb0455e8cb9b4107125a04678da0f471044d90f28137\ * ]]
-        $mkdir -p "$buildroot/etc/portage/patches/sys-boot/grub"
-        local -i p ; for p in 1 2 3
-        do $sed -n "/t:[^:]*RFT $p/,/^2.25/p" "$output/grub.mbox"
-        done > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-uefi.patch"
-        $rm -f "$output/grub.mbox"
-        echo -e 'GRUB_AUTOGEN="1"\nGRUB_AUTORECONF="1"' >> "$buildroot/etc/portage/env/grub.conf"
-        echo 'sys-boot/grub grub.conf' >> "$buildroot/etc/portage/package.env/grub.conf"
-        $cat << 'EOF' > "$buildroot/etc/portage/patches/sys-boot/grub/riscv-march.patch"
---- a/configure.ac
-+++ b/configure.ac
-@@ -868,9 +868,9 @@
- 		         [grub_cv_target_cc_soft_float="-march=rv32imac -mabi=ilp32"], [])
-     fi
-     if test "x$target_cpu" = xriscv64; then
--       CFLAGS="$TARGET_CFLAGS -march=rv64imac -mabi=lp64 -Werror"
-+       CFLAGS="$TARGET_CFLAGS -march=rv64imac_zicsr_zifencei -mabi=lp64 -Werror"
-        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
--		         [grub_cv_target_cc_soft_float="-march=rv64imac -mabi=lp64"], [])
-+		         [grub_cv_target_cc_soft_float="-march=rv64imac_zicsr_zifencei -mabi=lp64"], [])
-     fi
-     if test "x$target_cpu" = xia64; then
-        CFLAGS="$TARGET_CFLAGS -mno-inline-float-divide -mno-inline-sqrt -Werror"
-EOF
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.2.tar.gz > "$buildroot/root/opensbi.tgz"
-        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 8fcbce598a73acc2c7f7d5607d46b9d5107d3ecbede8f68f42631dcfc25ef2b2\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2023.04.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 98ccc5ea7e0f708b7e66a0060ecf1f7f9914d8b31d9d7ad2552027bd0aa848f2\ * ]]
+        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.3.1.tar.gz > "$buildroot/root/opensbi.tgz"
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == ee5be2c582f9a837e9db88368220758e014dd694b566bb6c8efe1e50cfad0004\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2023.10.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == b22664ee56640bba87068a7cdcd7cb50f956973a348e844788d2fb882fe0dc55\ * ]]
 }
 
 function customize_buildroot() {

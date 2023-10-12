@@ -3,10 +3,6 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=33).
 
 packages=(glibc-minimal-langpack)
 
-# Override buildroot creation to set the container image URL.
-eval "$(declare -f create_buildroot |
-$sed 's,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,')"
-
 # Override UEFI splash screen creation for the old logo.
 eval "$(declare -f save_boot_files | $sed "s|\(convert.* \)\([^ ]*svg\)|sed \
 '/id=.g524[17]/,/[/]/{/</,/>/d;}' \2 > /root/logo.svg \&\& \1/root/logo.svg|")"

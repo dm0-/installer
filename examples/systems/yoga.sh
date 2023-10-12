@@ -102,6 +102,8 @@ EOF
         # Use the proprietary Broadcom drivers.
         echo 'USE="$USE broadcom-sta kmod"' >> "$portage/make.conf"
         echo net-wireless/broadcom-sta >> "$portage/package.accept_keywords/broadcom.conf"
+        echo 'CHECKCONFIG_DONOTHING="1"' >> "$portage/env/broadcom.conf"
+        echo 'net-wireless/broadcom-sta broadcom.conf' >> "$portage/package.env/broadcom.conf"
         echo 'net-wireless/broadcom-sta Broadcom' >> "$portage/package.license/broadcom.conf"
         echo 'net-wireless/wpa_supplicant -fils -mbo -mesh' >> "$portage/package.use/broadcom.conf"
         packages+=(net-wireless/broadcom-sta)
@@ -134,7 +136,6 @@ EOF
         # Make CET settings match between the buildroot and sysroot.
         echo -cet >> "$portage/profile/use.mask/cet.conf"
         echo 'USE="$USE cet"' >> "$portage/profile/make.defaults"
-        #echo "cross-${host}/* -cet" >> "$buildroot/etc/portage/package.use/x32.conf"
 
         # Fix libvpx.
         $mkdir -p "$portage/patches/media-libs/libvpx"
@@ -170,30 +171,17 @@ EOF
         echo 'MYCMAKEARGS="-DAOM_TARGET_CPU=x86_64"' >> "$portage/env/libaom.conf"
         echo 'media-libs/libaom libaom.conf' >> "$portage/package.env/libaom.conf"
 
-        # Fix broadcom-sta with Linux 6.1.
-        $mkdir -p "$portage/patches/net-wireless/broadcom-sta"
-        $curl -L > "$portage/patches/net-wireless/broadcom-sta/6.1.patch" \
-            https://raw.githubusercontent.com/archlinux/svntogit-community/33b4bd2b9e30679b03f5d7aa2741911d914dcf94/trunk/012-linux517.patch \
-            https://raw.githubusercontent.com/archlinux/svntogit-community/2e1fd240f9ce06f500feeaa3e4a9675e65e6b967/trunk/013-linux518.patch \
-            https://raw.githubusercontent.com/archlinux/svntogit-community/1a0e588f98a71eed44ed05fe6b197d94d2112f38/trunk/016-linux601.patch
-        [[ $($sha256sum "$portage/patches/net-wireless/broadcom-sta/6.1.patch") == 2a37e6e85ad9f85f9caae8c2a1dbcfe81675a7ca1ddf708559e67524590959ff\ * ]]
-        $sed -i -e 's/if.*4.*15.*/ifdef HAVE_TIMER_SETUP/' "$portage/patches/net-wireless/broadcom-sta/6.1.patch"
-        $cat << 'EOF' > "$portage/patches/net-wireless/broadcom-sta/6.0.patch"
---- a/src/wl/sys/wl_cfg80211_hybrid.c
-+++ b/src/wl/sys/wl_cfg80211_hybrid.c
-@@ -2360,7 +2360,12 @@
+        # Fix QEMU.
+        $mkdir -p "$portage/patches/app-emulation/qemu"
+        $cat << 'EOF' > "$portage/patches/app-emulation/qemu/x32.patch"
+--- a/hw/i386/Kconfig
++++ b/hw/i386/Kconfig
+@@ -139,5 +139,4 @@
  
- #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
-+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-+	roam_info.links[0].channel = &wl->conf->channel,
-+	roam_info.links[0].bssid = (u8 *)&wl->bssid,
-+#else
- 	roam_info.channel = &wl->conf->channel,
- 	roam_info.bssid = (u8 *)&wl->bssid,
-+#endif
- 	roam_info.req_ie = conn_info->req_ie,
- 	roam_info.req_ie_len = conn_info->req_ie_len,
- 	roam_info.resp_ie = conn_info->resp_ie,
+ config XEN_EMU
+     bool
+-    default y
+     depends on KVM && (I386 || X86_64)
 EOF
 
         # Install a Wayland desktop environment for testing.
@@ -227,14 +215,6 @@ function customize() {
                 usr/local
                 usr/share/qemu/'*'{aarch,arm,hppa,ppc,riscv,s390,sparc}'*'
         )
-
-        # Sign the out-of-tree kernel modules due to required signatures.
-        for module in root/lib/modules/*/net/wireless/wl.ko*
-        do
-                [[ $module == *.ko.zst ]] && unzstd --rm "$module" ; module=${module%.zst}
-                /usr/src/linux/scripts/sign-file \
-                    sha512 "$keydir/sign.key" "$keydir/sign.crt" "$module"
-        done
 
         # Support an executable VM image for quick testing.
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
@@ -380,6 +360,7 @@ CONFIG_PACKET=y  # Required by NetworkManager-wifi
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
+CONFIG_HID_SUPPORT=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## Keyboard, touchpad, and touchscreen

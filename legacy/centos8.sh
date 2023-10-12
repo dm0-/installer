@@ -41,9 +41,10 @@ function create_buildroot() {
         initialize_buildroot "$@"
 
         opt networkd || opt uefi && enable_repo_epel  # EPEL now has core RPMs.
-        enter /usr/bin/dnf --assumeyes --setopt=tsflags=nodocs upgrade
-        enter /usr/bin/dnf --assumeyes --setopt=tsflags=nodocs \
-            install "${packages_buildroot[@]}"
+        script "${packages_buildroot[@]}" << 'EOF'
+dnf --assumeyes --setopt=tsflags=nodocs upgrade
+exec dnf --assumeyes --setopt=tsflags=nodocs install "$@"
+EOF
 }
 
 # Override package installation to fix modules.

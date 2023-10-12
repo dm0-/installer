@@ -43,8 +43,7 @@ function create_buildroot() {
 
         script "${packages_buildroot[@]}" << 'EOF'
 dnf --assumeyes --setopt=tsflags=nodocs upgrade
-dnf --assumeyes --setopt=tsflags=nodocs install "$@"
-for fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done
+exec dnf --assumeyes --setopt=tsflags=nodocs install "$@"
 EOF
 }
 

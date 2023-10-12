@@ -82,7 +82,7 @@ function initialize_buildroot() {
 
         # Tune compilation for the AMD Geode LX 800.
         $sed -i \
-            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow&/' \
+            -e '/^COMMON_FLAGS=/s/[" ]*$/ -march=geode -mmmx -m3dnow -fcf-protection=none&/' \
             -e '/^RUSTFLAGS=/s/[" ]*$/ -Ctarget-cpu=geode&/' \
             "$portage/make.conf"
         $cat << EOF >> "$portage/make.conf"
@@ -383,6 +383,7 @@ CONFIG_SCx200_ACB=y
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
+CONFIG_HID_SUPPORT=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## USB storage

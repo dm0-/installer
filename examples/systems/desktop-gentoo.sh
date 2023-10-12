@@ -175,12 +175,6 @@ function customize() {
                 usr/share/qemu/'*'{aarch,arm,hppa,ppc,riscv,s390,sparc}'*'
         )
 
-        # Sign kernel modules manually since the dist-kernel package is weird.
-        find root/lib/modules -name '*.ko.zst' -exec unzstd --rm {} ';'
-        find root/lib/modules -name '*.ko' -exec \
-            "/usr/${options[host]}/usr/src/linux/scripts/sign-file" \
-            sha512 "$keydir/sign.key" "$keydir/sign.crt" {} ';'
-
         # Make NVIDIA use kernel mode setting and the page attribute table.
         opt nvidia && cat << 'EOF' > root/usr/lib/modprobe.d/nvidia-config.conf
 options nvidia NVreg_UsePageAttributeTable=1

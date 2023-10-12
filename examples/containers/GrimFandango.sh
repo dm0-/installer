@@ -10,11 +10,12 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=23.04 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=23.10 [squash]=1)
 
 packages+=(
         libasound2-plugins
         libgl{1,u1}
+        ${options[nvidia]:+libnvidia-gl-${options[nvidia]/#*[!0-9]*/535}}
         libx{cursor1,i6,inerama1,randr2,ss1,xf86vm1}
 )
 
@@ -23,10 +24,6 @@ packages_buildroot+=(unzip)
 function initialize_buildroot() {
         $cp "${1:-gog_grim_fandango_remastered_2.3.0.7.sh}" "$output/grim.zip"
 }
-
-function customize_buildroot() if opt nvidia
-then packages+=(libnvidia-gl-${options[nvidia]/#*[!0-9]*/530})
-fi
 
 function customize() {
         exclude_paths+=(

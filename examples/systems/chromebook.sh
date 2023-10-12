@@ -102,6 +102,10 @@ EOF
 
         # Use the Panfrost driver for the ARM Mali-T760 MP4 GPU.
         echo 'VIDEO_CARDS="panfrost"' >> "$portage/make.conf"
+        $cat << 'EOF' > "$portage/package.accept_keywords/libva.conf"
+media-libs/libva *
+media-video/libva-utils *
+EOF
 
         # Enable general system settings.
         echo >> "$portage/make.conf" 'USE="$USE' \
@@ -207,10 +211,10 @@ EOF
 # image since it's basically the same stuff that goes into the UEFI executable.
 function produce_uefi_exe() if opt bootable
 then
-        local -r dtb=/usr/src/linux/arch/arm/boot/dts/rk3288-veyron-minnie.dtb
+        local -r dtb=/usr/src/linux/arch/arm/boot/dts/rockchip/rk3288-veyron-minnie.dtb
 
         # Build the system's device tree blob.
-        make -C /usr/src/linux -j"$(nproc)" "${dtb##*/}" \
+        make -C /usr/src/linux -j"$(nproc)" "${dtb#*/dts/}" \
             ARCH=arm CROSS_COMPILE="${options[host]}-" V=1
 
         # Build the FIT binary from the kernel and DTB.
@@ -427,6 +431,7 @@ CONFIG_GPIO_ROCKCHIP=y
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
+CONFIG_HID_SUPPORT=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## Keyboard, touchpad, and touchscreen
@@ -472,7 +477,7 @@ CONFIG_CHARGER_GPIO=y
 CONFIG_COMMON_CLK_ROCKCHIP=y
 CONFIG_CLK_RK3288=y
 ## Clock, power, RTC
-CONFIG_MFD_RK808=y
+CONFIG_MFD_RK8XX_I2C=y
 CONFIG_COMMON_CLK_RK808=y
 CONFIG_REGULATOR=y
 CONFIG_REGULATOR_FIXED_VOLTAGE=y

@@ -5,7 +5,7 @@ options[enforcing]=
 options[loadpin]=
 options[uefi_vars]=
 
-DEFAULT_RELEASE=23.04
+DEFAULT_RELEASE=23.10
 
 function create_buildroot() {
         local -r release=${options[release]:=$DEFAULT_RELEASE}
@@ -17,10 +17,11 @@ function create_buildroot() {
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(busybox linux-image-generic policycoreutils qemu-system-x86 zstd)
-        opt uefi && packages_buildroot+=(binutils imagemagick librsvg2-bin systemd-boot-efi ubuntu-mono)
+        opt uefi && packages_buildroot+=(binutils gawk imagemagick librsvg2-bin systemd-boot-efi ubuntu-mono)
         opt uefi_vars && packages_buildroot+=(ovmf qemu-system-x86)
+        opt verity && packages_buildroot+=(cryptsetup-bin)
         opt verity_sig && opt bootable && packages_buildroot+=(keyutils linux-headers-generic)
-        packages_buildroot+=(debootstrap libglib2.0-bin)
+        packages_buildroot+=(debootstrap gpg libglib2.0-bin)
 
         $curl -L "${image%/*}/SHA256SUMS" > "$output/checksum"
         $curl -L "${image%/*}/SHA256SUMS.gpg" > "$output/checksum.sig"
@@ -266,7 +267,7 @@ function verify_distro() {
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
         $gpg --verify "$2" "$1"
-        [[ $($sha256sum "$3") == $($sed -n 's/ .*root.tar.xz$//p' "$1")\ * ]]
+        [[ $($sha256sum "$3") == $($sed -n "s/ .*-$(archmap)-root.tar.xz$//p" "$1")\ * ]]
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -299,12 +300,14 @@ wZb+rRS6gcyt9dlWyLU0QLlpmwHSOVJMv2rnNCUtz6pb8y/o9AN2Z48RpH9C9cfv
 EOF
 
 function archmap() case ${*:-$DEFAULT_ARCH} in
+    aarch64)  echo arm64 ;;
     i[3-6]86) echo i386 ;;
     x86_64)   echo amd64 ;;
     *) return 1 ;;
 esac
 
 function releasemap() case ${*:-${options[release]:-$DEFAULT_RELEASE}} in
+    23.10) echo mantic ;;
     23.04) echo lunar ;;
     22.10) echo kinetic ;;
     22.04) echo jammy ;;

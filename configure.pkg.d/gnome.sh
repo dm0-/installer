@@ -31,7 +31,9 @@ show-in-lock-screen=false
 numlock-state=true
 [org.gnome.desktop.peripherals.touchpad]
 natural-scroll=true
+tap-and-drag=true
 tap-to-click=true
+two-finger-scrolling-enabled=true
 [org.gnome.desktop.privacy]
 hide-identity=true
 recent-files-max-age=0

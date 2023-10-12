@@ -112,7 +112,7 @@ function initialize_buildroot() {
             aio branding haptic jit lto offensive pcap realtime system-info threads udisks utempter vte \
             dynamic-loading extra gzip-el hwaccel postproc startup-notification toolkit-scroll-bars tray wallpapers wide-int \
             -cups -dbusmenu -debug -geolocation -gstreamer -llvm -oss -perl -python -sendmail \
-            -ffmpeg -modemmanager -networkmanager'"'
+            -ffmpeg -gui -modemmanager -networkmanager'"'
 
         # Install QEMU to run virtual machines.
         packages+=(app-emulation/qemu)
@@ -125,26 +125,6 @@ EOF
         # Build GRUB to boot from Open Firmware.
         echo 'GRUB_PLATFORMS="ieee1275"' >> "$buildroot/etc/portage/make.conf"
         packages_buildroot+=(sys-boot/grub)
-
-        # Fix QEMU 7.2 build failure.
-        $mkdir -p "$portage/patches/app-emulation/qemu"
-        $cat << 'EOF' > "$portage/patches/app-emulation/qemu/no64.patch"
---- a/tcg/ppc/tcg-target.c.inc
-+++ b/tcg/ppc/tcg-target.c.inc
-@@ -1879,10 +1879,12 @@
-      * There's no convenient way to get the compiler to allocate a pair
-      * of registers at an even index, so copy into r6/r7 and clobber.
-      */
-+#if 0
-     asm("mr  %%r6, %1\n\t"
-         "mr  %%r7, %2\n\t"
-         "stq %%r6, %0"
-         : "=Q"(*(__int128 *)rw) : "r"(p[0]), "r"(p[1]) : "r6", "r7");
-+#endif
-     flush_idcache_range(rx, rw, 16);
- }
- 
-EOF
 
         # Install a Wayland desktop environment for testing.
         echo 'USE="$USE screencast wayland"' >> "$portage/make.conf"
@@ -413,6 +393,7 @@ CONFIG_SUNGEM=y
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y
 CONFIG_HID_GENERIC=y
+CONFIG_HID_SUPPORT=y
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 ## USB storage

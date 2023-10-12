@@ -7,22 +7,22 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20230417.0
+        local -r cver=20231009.1
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
-        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(microcode_ctl)
+        opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(linux-firmware microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && packages_buildroot+=(util-linux)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
-        opt uefi && packages_buildroot+=(binutils centos-logos ImageMagick)
+        opt uefi && packages_buildroot+=(binutils centos-logos ImageMagick systemd-boot-unsigned)
         opt uefi_vars && packages_buildroot+=(dosfstools mtools qemu-kvm-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
-        packages_buildroot+=(e2fsprogs openssl util-linux-core)
+        packages_buildroot+=(e2fsprogs openssl systemd)
 
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output/image.txz"
@@ -39,8 +39,7 @@ function create_buildroot() {
         opt networkd || opt uefi && enable_repo_epel  # EPEL now has core RPMs.
         script "${packages_buildroot[@]}" << 'EOF'
 dnf --assumeyes --setopt=tsflags=nodocs upgrade
-dnf --assumeyes --setopt=tsflags=nodocs install "$@"
-for fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done
+exec dnf --assumeyes --setopt=tsflags=nodocs install "$@"
 EOF
 }
 
@@ -166,10 +165,10 @@ s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo dd95a4edd45b4b2389a0452ec09eed659f0ff5f3978de96399f83d3301371d40 ;;
-            ppc64le) echo f2057b6fac6a4cd31c357f07934056743fc602d7c1efbf89b51e7c43a9245094 ;;
-            s390x)   echo 7ad56739ec0909f61123d14ba9720a9d8547085faeb45cced63010b912a1c818 ;;
-            x86_64)  echo c3f7169769154d95fa12a8bfb44fbf06dafd3e2fa89aa9431c3150dde8374e1d ;;
+            aarch64) echo e717f7be0be412ff4d125d3ecdc66d1c4810629e9a34ce5bff5147f571858467 ;;
+            ppc64le) echo 364cb4f78d5cedf124757ebdca037755c5ef6bbd5270b0e427b5e83333dfaf02 ;;
+            s390x)   echo bb0c98c3d474ab46d415e5ee3b1c6ad2f974073fff2f3f851abc4ab0d52989b0 ;;
+            x86_64)  echo b6f0266b405b236c73c5fe666997ad75efd43426514d45533a8686d8d8121db0 ;;
         esac)\ *
 ]]
 
@@ -178,6 +177,7 @@ function verify_distro() [[
 function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
+        $sed -i -e '/^[[]crb]$/,/^$/s/^enabled=.*/enabled=1/' "$buildroot/etc/yum.repos.d/centos.repo"
         test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
 } << 'EOF'
 cat << 'EOG' > /tmp/key ; rpmkeys --import /tmp/key

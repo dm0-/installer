@@ -65,6 +65,12 @@ test -s root/usr/lib/systemd/system/systemd-repart.service &&
 sed -i -e 's,^ExecStart=.*systemd-repart.*,& --discard=no,' \
     root/usr/lib/systemd/system/systemd-repart.service
 
+# Work around systemd-repart thinking it can use /var/tmp before /var exists.
+test -s root/usr/lib/systemd/system/systemd-repart.service &&
+mkdir -p root/usr/lib/systemd/system/systemd-repart.service.d &&
+echo -e '[Service]\nEnvironment=TMPDIR=/tmp' \
+    > root/usr/lib/systemd/system/systemd-repart.service.d/tmp.conf
+
 # Use systemd to configure networking and DNS when requested.
 if opt networkd
 then

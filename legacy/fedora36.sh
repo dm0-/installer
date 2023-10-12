@@ -4,6 +4,10 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=36).
 # Override buildroot creation to set the container image file name.
 eval "$(declare -f create_buildroot | $sed 's/cver=.*/cver=1.5/')"
 
+# Override buildroot post-install to fix AMD microcode in broken versions.
+[[ options[release] -gt 33 ]] && eval "$(declare -f create_buildroot | $sed \
+'/script.*EOF/,/EOF$/s,^exec \(.*\),\1\nfor fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done,')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN

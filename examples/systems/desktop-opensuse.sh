@@ -20,6 +20,7 @@ packages+=(
         distribution-logos-openSUSE-Tumbleweed kernel-default kernel-firmware
 
         # Utilities
+        7zip
         binutils
         bzip2
         emacs-nox
@@ -31,11 +32,9 @@ packages+=(
         kbd
         lsof
         man{,-pages}
-        p7zip-full
         procps
         sed
         strace
-        systemd-sysvinit
         tar
         unzip
         which
@@ -94,9 +93,8 @@ packages+=(
 
         # Graphics
         Mesa-{dri{,-nouveau},lib{d3d,OpenCL,va}}
-        libva-vdpau-driver libvdpau_{nouveau,r{3,6}00,radeonsi}
+        libva-vdpau-driver libvdpau_{nouveau,r600,radeonsi,va_gl1,virtio_gpu}
         libvulkan_{intel,radeon}
-        libXvMC_{nouveau,r600}
         xf86-{input-libinput,video-{amdgpu,intel,nouveau}}
 
         # Fonts
@@ -116,13 +114,13 @@ packages+=(
 function initialize_buildroot() if opt nvidia
 then
         enable_repo_nvidia
-        packages_buildroot+=(createrepo_c nvidia-gfxG05-kmp-default rpm-build)
+        packages_buildroot+=(createrepo_c nvidia-driver-G06-kmp-default rpm-build)
 fi
 
 # Package the bare NVIDIA modules to satisfy bad development dependencies.
 function customize_buildroot() if opt nvidia
 then
-        local -r name=nvidia-gfxG05-kmp
+        local -r name=nvidia-driver-G06-kmp
         local -r kernel=$(compgen -G '/lib/modules/*/updates/nvidia.ko' | sed -n '1s,/updates.*,,p')
         cat << EOF > "/root/$name.spec" ; rpmbuild -ba "/root/$name.spec"
 Name: $name
@@ -143,7 +141,7 @@ $kernel/updates
 EOF
         createrepo_c /usr/src/packages/RPMS
         zypper addrepo --no-gpgcheck /usr/src/packages/RPMS local
-        packages+=(nvidia-gfxG05-kmp nvidia-glG05 x11-video-nvidiaG05)
+        packages+=("$name" nvidia-gl-G06 nvidia-video-G06)
         # Remove the modules here to skip installing them into the initrd.
         rm -fr "$kernel/updates" ; depmod "${kernel##*/}"
 fi

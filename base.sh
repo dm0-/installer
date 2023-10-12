@@ -605,7 +605,7 @@ EOF
         done
 
         mkdir -p root/usr/lib/tmpfiles.d
-        cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
+        cat << 'EOF' > root/usr/lib/tmpfiles.d/home-root.conf
 C /root - - - - /etc/skel
 Z /root
 EOF
@@ -841,15 +841,18 @@ then
         local -r linux=$(test -s vmlinux && echo vmlinux || echo vmlinuz)
         local -r logo=$(test -s logo.bmp && echo logo.bmp)
         local -r osrelease=$(test -s os-release && echo os-release)
+        local -r stub=/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub
+        local -ir align=$(objdump -p "$stub" | awk '$1=="SectionAlignment"{print strtonum("0x"$2)}')
+        local -i end=$(objdump -h "$stub" | awk 'NF==7{e=strtonum("0x"$3)+strtonum("0x"$4)}END{print e}') t
 
         objcopy \
-            ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=0x20000} \
-            ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=0x30000} \
-            ${logo:+--add-section .splash="$logo" --change-section-vma .splash=0x40000} \
-            ${dtb:+--add-section .dtb="$dtb" --change-section-vma .dtb=0x1000000} \
-            ${linux:+--add-section .linux="$linux" --change-section-vma .linux=0x2000000} \
-            ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=0x4000000} \
-            "/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub" unsigned.efi
+            ${osrelease:+--add-section .osrel="$osrelease" --change-section-vma .osrel=$((end+=align-end%align,t=end,end+=$(stat -Lc%s "$osrelease"),t))} \
+            ${kargs:+--add-section .cmdline="$kargs" --change-section-vma .cmdline=$((end+=align-end%align,t=end,end+=$(stat -Lc%s "$kargs"),t))} \
+            ${logo:+--add-section .splash="$logo" --change-section-vma .splash=$((end+=align-end%align,t=end,end+=$(stat -Lc%s "$logo"),t))} \
+            ${dtb:+--add-section .dtb="$dtb" --change-section-vma .dtb=$((end+=align-end%align,t=end,end+=$(stat -Lc%s "$dtb"),t))} \
+            ${linux:+--add-section .linux="$linux" --change-section-vma .linux=$((end+=align-end%align,t=end,end+=$(stat -Lc%s "$linux"),t))} \
+            ${initrd:+--add-section .initrd="$initrd" --change-section-vma .initrd=$((end+=align-end%align,t=end,end+=$(stat -Lc%s "$initrd"),t))} \
+            "$stub" unsigned.efi
 
         if opt secureboot
         then
@@ -1035,7 +1038,7 @@ function store_home_on_var() {
                         echo /var/roothome /root >> "$policy/file_contexts.subs_dist"
                 done
                 mv root/root root/var/roothome ; ln -fns var/roothome root/root
-                cat << 'EOF' > root/usr/lib/tmpfiles.d/root.conf
+                cat << 'EOF' > root/usr/lib/tmpfiles.d/home-root.conf
 C /var/roothome 0700 root root - /etc/skel
 Z /var/roothome
 EOF
