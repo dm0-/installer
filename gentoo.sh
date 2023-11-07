@@ -224,10 +224,14 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
+        # Accept libgpiod-2.0 to use the new kernel API.
+        echo '<dev-libs/libgpiod-2.1 ~*' >> "$portage/package.accept_keywords/libgpiod.conf"
         # Accept fuse-3.16 to fix cross-compiling.
         echo 'sys-fs/fuse *' >> "$portage/package.accept_keywords/fuse.conf"
-        # Accept libxcrypt-4.4.36 to fix building with updated Perl.
-        echo 'sys-libs/libxcrypt *' >> "$portage/package.accept_keywords/libxcrypt.conf"
+        # Accept openjpeg-2.5.0 to fix cross-compiling.
+        echo '<media-libs/openjpeg-2.5.1 ~*' >> "$portage/package.accept_keywords/openjpeg.conf"
+        # Accept p11-kit-0.25.1 to fix cross-compiling.
+        echo '<app-crypt/p11-kit-0.26 ~*' >> "$portage/package.accept_keywords/p11-kit.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -680,7 +684,7 @@ eval "$(declare -f squash | $sed \
 function save_boot_files() if opt bootable
 then
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
-        opt uefi && USE=gnuefi emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
+        opt uefi && USE=boot emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
         opt uefi && test ! -s logo.bmp &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
         magick -background none /root/logo.svg -trim logo.bmp
@@ -859,26 +863,6 @@ function write_unconditional_patches() {
  
 EOF
 
-        $mkdir -p "$patches/app-crypt/p11-kit-0.25.0"
-        $cat << 'EOF' > "$patches/app-crypt/p11-kit-0.25.0/cross.patch"
---- a/meson.build
-+++ b/meson.build
-@@ -307,11 +307,10 @@
- int main (void)
- {
-     char buf[32];
--    return strerror_r (EINVAL, buf, 32);
-+    return *strerror_r (EINVAL, buf, 32);
- }
- '''
--  strerror_r_check = cc.run(strerror_r_code, name : 'strerror_r check')
--  if strerror_r_check.returncode() == 0
-+  if not cc.compiles(strerror_r_code, name : 'GNU strerror_r check')
-     conf.set('HAVE_XSI_STRERROR_R', 1)
-   else
-     conf.set('HAVE_GNU_STRERROR_R', 1)
-EOF
-
         $mkdir -p "$patches"/{dev-lang/spidermonkey,www-client/firefox}
         $ln -fst "$patches/dev-lang/spidermonkey" ../../www-client/firefox/rust.patch
         $cat << 'EOF' > "$patches/www-client/firefox/rust.patch"
@@ -900,21 +884,6 @@ EOF
      assert_rust_compile(target, rustc_target, rustc)
      return rustc_target
  
-EOF
-
-        $mkdir -p "$patches/media-libs/openjpeg-2.5.0"
-        $cat << 'EOF' > "$patches/media-libs/openjpeg-2.5.0/sysroot.patch"
---- a/cmake/OpenJPEGConfig.cmake.in
-+++ b/cmake/OpenJPEGConfig.cmake.in
-@@ -27,7 +27,7 @@
-   # This is an install tree
-   include(${SELF_DIR}/OpenJPEGTargets.cmake)
- 
--  set(INC_DIR "@CMAKE_INSTALL_FULL_INCLUDEDIR@/@OPENJPEG_INSTALL_SUBDIR@")
-+  find_path(INC_DIR openjpeg.h PATH_SUFFIXES "@OPENJPEG_INSTALL_SUBDIR@")
-   get_filename_component(OPENJPEG_INCLUDE_DIRS "${INC_DIR}" ABSOLUTE)
- 
- else()
 EOF
 }
 

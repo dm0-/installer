@@ -332,5 +332,5 @@ function enable_repo_ppa() {
 # WORKAROUNDS
 
 # Older Ubuntu releases are still available, but most of them are EOL.
-[[ ${options[release]:-$DEFAULT_RELEASE} > 22.04 ]] ||
-. "legacy/${options[distro]}22.04.sh"
+[[ ${options[release]:-$DEFAULT_RELEASE} > 22.10 ]] ||
+. "legacy/${options[distro]}22.10.sh"

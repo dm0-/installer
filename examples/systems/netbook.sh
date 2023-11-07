@@ -174,7 +174,7 @@ Description=Power the wireless interface
 DefaultDependencies=no
 After=systemd-tmpfiles-setup-dev.service
 [Service]
-ExecStart=/usr/bin/gpioset --mode=signal gpiochip0 2=1
+ExecStart=/usr/bin/gpioset --chip=gpiochip0 --strict 2=1
 EOF
         ln -fst root/usr/lib/systemd/system/sys-subsystem-net-devices-wlu2u2.device.requires \
             ../gpio-power-wifi.service
@@ -389,7 +389,6 @@ CONFIG_RT2X00=y
 CONFIG_RT2800USB=y
 ## GPIO
 CONFIG_GPIO_CDEV=y
-CONFIG_GPIO_CDEV_V1=y
 ## Input
 CONFIG_HID=y
 CONFIG_HID_BATTERY_STRENGTH=y

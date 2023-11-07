@@ -130,8 +130,8 @@ EOF
         echo multilib >> "$portage/profile/use.mask/multilib.conf"
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
-        echo 'sys-apps/systemd gnuefi' >> "$buildroot/etc/portage/package.use/systemd.conf"
-        echo gnuefi >> "$portage/profile/use.mask/uefi.conf"
+        echo 'sys-apps/systemd boot' >> "$buildroot/etc/portage/package.use/systemd.conf"
+        echo 'sys-apps/systemd boot' >> "$portage/profile/package.use.mask/systemd.conf"
 
         # Make CET settings match between the buildroot and sysroot.
         echo -cet >> "$portage/profile/use.mask/cet.conf"
@@ -329,7 +329,6 @@ CONFIG_MSILVERMONT=y
 CONFIG_CPU_SUP_INTEL=y
 CONFIG_CRYPTO_SHA256_SSSE3=y
 CONFIG_KVM_INTEL=y
-CONFIG_MICROCODE_INTEL=y
 CONFIG_NR_CPUS=4
 CONFIG_SCHED_MC=y
 CONFIG_SCHED_MC_PRIO=y

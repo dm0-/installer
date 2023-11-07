@@ -5,8 +5,14 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=36).
 eval "$(declare -f create_buildroot | $sed 's/cver=.*/cver=1.5/')"
 
 # Override buildroot post-install to fix AMD microcode in broken versions.
-[[ options[release] -gt 33 ]] && eval "$(declare -f create_buildroot | $sed \
-'/script.*EOF/,/EOF$/s,^exec \(.*\),\1\nfor fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done,')"
+eval "$(declare -f create_buildroot | $sed 's/amd-ucode-firmware/linux-firmware/g')"
+[[ options[release] -gt 33 ]] && eval "$(declare -f create_buildroot | $sed '
+/script.*EOF/,/EOF$/s,^exec \(.*\),\1\nfor fw in /lib/firmware/amd-ucode/*.bin.xz ; do unxz "$fw" ; done,')"
+
+# Point EOL releases at the archive repository server.
+eval "$(declare -f create_buildroot enable_repo_rpmfusion_{,non}free | $sed '
+s,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,g
+s,download1.rpmfusion.org/\([^/]*\),rhlx01.hs-esslingen.de/Mirrors/archive.rpmfusion.org/\1-archive,g')"
 
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
