@@ -22,6 +22,7 @@ pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false
 pref("browser.newtabpage.enabled", false);
 // Don't try to predict search terms, and don't prioritize them over history.
 pref("browser.search.suggest.enabled", false);
+pref("browser.urlbar.quicksuggest.enabled", false);
 pref("browser.urlbar.showSearchSuggestionsFirst", false);
 // Don't download autocomplete URLs.
 pref("browser.urlbar.speculativeConnect.enabled", false);

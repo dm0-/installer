@@ -10,12 +10,12 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=23.10 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=24.04 [squash]=1)
 
 packages+=(
         libasound2-plugins
         libgl1
-        ${options[nvidia]:+libnvidia-gl-${options[nvidia]/#*[!0-9]*/535}}
+        ${options[nvidia]:+libnvidia-gl-${options[nvidia]/#*[!0-9]*/550}}
         libxcursor1
 )
 

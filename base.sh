@@ -332,7 +332,7 @@ test -x /bin/mksquashfs && /bin/mksquashfs /sysroot /sysroot/squash.img \
     -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
 test -x /bin/mkfs.erofs && IFS=$'\n' && /bin/mkfs.erofs \
     $(while read ; do echo "$REPLY" ; done < /ef) \
-    -Eforce-inode-compact /sysroot/erofs.img /sysroot
+    /sysroot/erofs.img /sysroot
 echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
 EOF
@@ -349,7 +349,7 @@ EOF
                 local path
                 for path in "$disk" "${exclude_paths[@]//\*/[^/]*}"
                 do
-                        path=${path//+/\\+} ; path=${path//./\\.}
+                        path=${path//+/[+]} ; path=${path//./[.]}
                         echo "--exclude-regex=^${path//\?/[^/]}$"
                 done > "$root/ef"
                 cp -t "$root/bin" /usr/*bin/mkfs.erofs
@@ -423,10 +423,10 @@ then
         disk=erofs.img
         for path in "${exclude_paths[@]//\*/[^/]*}"
         do
-                path=${path//+/\\+} ; path=${path//./\\.}
+                path=${path//+/[+]} ; path=${path//./[.]}
                 args+=("--exclude-regex=^${path//\?/[^/]}$")
         done
-        mkfs.erofs "${args[@]}" -Eforce-inode-compact -x-1 "$disk" root
+        mkfs.erofs "${args[@]}" -x-1 "$disk" root
 elif ! opt read_only
 then
         local path

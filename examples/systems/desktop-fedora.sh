@@ -22,6 +22,7 @@ packages+=(
         glibc-langpack-en kernel-modules-extra linux-firmware
 
         # Utilities
+        bash-color-prompt
         binutils
         bzip2
         crypto-policies-scripts
@@ -68,7 +69,7 @@ packages+=(
         squashfs-tools
 
         # Host
-        qemu-{audio-pa,system-x86-core,ui-curses,ui-gtk}
+        qemu-{audio-pipewire,system-x86-core,ui-curses,ui-gtk}
         systemd-container
 
         # Installer
@@ -91,7 +92,8 @@ packages+=(
         pipewire-pulseaudio
 
         # Graphics
-        mesa-{dri,omx,vdpau,vulkan}-drivers
+        mesa-{dri,omx,vulkan}-drivers
+        mesa-{va,vdpau}-drivers-freeworld
         xorg-x11-drv-{amdgpu,intel,nouveau}
 
         # Fonts
@@ -103,12 +105,14 @@ packages+=(
 
         # Browser
         firefox
-        mozilla-{https-everywhere,noscript,privacy-badger,ublock-origin}
+        mozilla-{noscript,openh264,privacy-badger,ublock-origin}
 
         # VLC
+        lib{avcodec,heif}-freeworld
         lib{aacs,bdplus}
         libdvdcss
-        vlc
+        vlc vlc-plugin-{ffmpeg,pipewire}
+        vlc-plugins-freeworld
 )
 
 # Install the akmod package to build the proprietary NVIDIA drivers.
@@ -119,7 +123,7 @@ then
         $mkdir -p  "$buildroot/usr/lib/modprobe.d"
         echo 'blacklist nouveau' > "$buildroot/usr/lib/modprobe.d/nvidia.conf"
         packages_buildroot+=("akmod-nvidia${suffix##-*[!0-9]*xx}")
-        packages+=(rpmfusion-nonfree-release{,-rawhide,-tainted})
+        packages+=(libva-nvidia-driver rpmfusion-nonfree-release{,-rawhide,-tainted})
 else enable_repo_rpmfusion_free
 fi
 
@@ -129,7 +133,7 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-        git -C rtl8812au reset --hard 4a983e47dafc048019412350d36270864f6b5f2d
+        git -C rtl8812au reset --hard 63cf0b4584aa8878b0fe8ab38017f31c319bde3d
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.

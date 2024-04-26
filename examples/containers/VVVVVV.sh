@@ -9,7 +9,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([distro]=fedora [gpt]=1 [release]=39 [squash]=1)
+options+=([distro]=fedora [gpt]=1 [release]=40 [squash]=1)
 
 packages+=(
         libXi
@@ -17,7 +17,7 @@ packages+=(
         SDL2_mixer
 )
 
-packages_buildroot+=(cmake gcc-c++ ninja-build SDL2_mixer-devel)
+packages_buildroot+=(cmake gcc-c++ ninja-build SDL2_mixer-devel unzip)
 
 function initialize_buildroot() {
         echo tsflags=nodocs >> "$buildroot/etc/dnf/dnf.conf"
@@ -35,10 +35,11 @@ function initialize_buildroot() {
 
 function customize_buildroot() {
         # Build the game engine before installing packages into the image.
-        curl -L 'https://github.com/TerryCavanagh/VVVVVV/archive/refs/tags/2.3.6.tar.gz' > VVVVVV.tgz
-        [[ $(sha256sum VVVVVV.tgz) == a3366aab9e8462d330044ab1ec63927e9f5c3801c0ed96b24f08c553dcb911e9\ * ]]
-        tar --transform='s,^/*[^/]*,VVVVVV,' -xf VVVVVV.tgz
-        rm -f VVVVVV.tgz
+        curl -L 'https://github.com/TerryCavanagh/VVVVVV/releases/download/2.4.1/VVVVVV-2.4.1.zip' > VVVVVV.zip
+        [[ $(sha256sum VVVVVV.zip) == c453373cfa29456318c2ece7d452b2e971595004c1b353cd7073f6912b3c3d12\ * ]]
+        unzip VVVVVV.zip
+        rm -f VVVVVV.zip
+        CFLAGS=-Wno-error=implicit-function-declaration \
         cmake -GNinja -S VVVVVV/desktop_version -B VVVVVV/desktop_version/build \
             -DCMAKE_INSTALL_PREFIX:PATH=/usr
         ninja -C VVVVVV/desktop_version/build -j"$(nproc)" all

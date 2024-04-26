@@ -58,7 +58,7 @@ EOF
 function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-fedora-${options[release]}"
         local url="https://rhlx01.hs-esslingen.de/Mirrors/archive.rpmfusion.org/free-archive/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -102,7 +102,7 @@ function enable_repo_rpmfusion_nonfree() {
         local key="RPM-GPG-KEY-rpmfusion-nonfree-fedora-${options[release]}"
         local url="https://rhlx01.hs-esslingen.de/Mirrors/archive.rpmfusion.org/nonfree-archive/fedora/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-nonfree-release-${options[release]}-2.noarch.rpm"
         enable_repo_rpmfusion_free
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

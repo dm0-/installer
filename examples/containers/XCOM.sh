@@ -10,7 +10,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([distro]=fedora [gpt]=1 [release]=39 [squash]=1)
+options+=([distro]=fedora [gpt]=1 [release]=40 [squash]=1)
 
 packages+=(
         dosbox

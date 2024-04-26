@@ -46,8 +46,8 @@ GRUB_PLATFORMS="${options[uefi]:+efi-$([[ $arch == *64* ]] && echo 64 || echo 32
 INPUT_DEVICES="libinput"
 LLVM_TARGETS="$(archmap_llvm "$arch")"
 POLICY_TYPES="${options[selinux]:-targeted}"
-RUSTFLAGS="-Copt-level=2"
-USE="\$USE system-icu system-png -gtk-doc -introspection -telemetry -vala"
+RUSTFLAGS="-Copt-level=3"
+USE="\$USE system-icu system-png -dracut -gtk-doc -initramfs -installkernel -introspection -telemetry -vala"
 VIDEO_CARDS=""
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/core.conf"
@@ -80,7 +80,7 @@ x11-wm/mutter *
 EOF
         $cat << 'EOF' >> "$portage/package.accept_keywords/linux.conf"
 # Accept the newest kernel and SELinux policy.
-dev-util/strace ~*
+dev-debug/strace ~*
 sec-policy/* ~*
 sys-kernel/gentoo-kernel ~*
 sys-kernel/gentoo-sources ~*
@@ -224,14 +224,10 @@ I_KNOW_WHAT_I_AM_DOING_CROSS="yes"
 RUST_CROSS_TARGETS="$(archmap_llvm "$arch"):$(archmap_rust "$arch"):$host"
 EOF
 
-        # Accept libgpiod-2.0 to use the new kernel API.
-        echo '<dev-libs/libgpiod-2.1 ~*' >> "$portage/package.accept_keywords/libgpiod.conf"
-        # Accept fuse-3.16 to fix cross-compiling.
-        echo 'sys-fs/fuse *' >> "$portage/package.accept_keywords/fuse.conf"
-        # Accept openjpeg-2.5.0 to fix cross-compiling.
-        echo '<media-libs/openjpeg-2.5.1 ~*' >> "$portage/package.accept_keywords/openjpeg.conf"
-        # Accept p11-kit-0.25.1 to fix cross-compiling.
-        echo '<app-crypt/p11-kit-0.26 ~*' >> "$portage/package.accept_keywords/p11-kit.conf"
+        # Accept busybox-1.36 to fix compiling with Linux 6.8.
+        echo '<sys-apps/busybox-1.37 ~*' >> "$portage/package.accept_keywords/busybox.conf"
+        # Accept libgpiod-2 to use the new kernel API.
+        echo '<dev-libs/libgpiod-3 ~*' >> "$portage/package.accept_keywords/libgpiod.conf"
 
         write_unconditional_patches "$portage/patches"
 
@@ -295,13 +291,14 @@ EOF
         echo 'CFLAGS="$CFLAGS -I$SYSROOT/usr/include/libnl3"' >> "$portage/env/cross-libnl.conf"
         echo 'CPPFLAGS="$CPPFLAGS -I$SYSROOT/usr/include/libusb-1.0"' >> "$portage/env/cross-libusb.conf"
         echo 'EXTRA_EMAKE="PYTHON_INCLUDES=/usr/\$(host)/usr/include/\$\${PYTHON##*/}"' >> "$portage/env/cross-libxml2-python.conf"
+        echo 'NPTH_CONFIG="$SYSROOT/usr/bin/npth-config"' >> "$portage/env/cross-npth.conf"
         echo 'PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib'$([[ ${options[arch]} == *64* ]] && echo 64)'/pkgconfig:$SYSROOT/usr/share/pkgconfig"' >> "$portage/env/cross-qt5.conf"
         echo -e 'QT_HOST_PATH="/usr"\nMYCMAKEARGS="-DQT_HOST_PATH_CMAKE_DIR:PATH=/usr/lib'$([[ $DEFAULT_ARCH == *64* ]] && echo 64)'/cmake"' >> "$portage/env/cross-qt6.conf"
         echo 'AT_M4DIR="m4"' >> "$portage/env/kbd.conf"
         echo 'EXTRA_ECONF="--with-sdkdir=/usr/include/xorg"' >> "$portage/env/xf86-sdk.conf"
         $cat << 'EOF' >> "$portage/package.env/fix-cross-compiling.conf"
 # Adjust the environment for cross-compiling broken packages.
-app-crypt/gnupg cross-libusb.conf
+app-crypt/gnupg cross-libusb.conf cross-npth.conf
 app-crypt/gpgme cross-libassuan.conf
 app-editors/emacs cross-emacs.conf
 app-i18n/ibus cross-glib-genmarshal.conf
@@ -423,7 +420,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/16/bin/${name##*-}"
+prog="/usr/lib/llvm/17/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/$host-clang"
@@ -684,7 +681,7 @@ eval "$(declare -f squash | $sed \
 function save_boot_files() if opt bootable
 then
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
-        opt uefi && USE=boot emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
+        opt uefi && USE='boot kernel-install' emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
         opt uefi && test ! -s logo.bmp &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
         magick -background none /root/logo.svg -trim logo.bmp
@@ -884,6 +881,21 @@ EOF
      assert_rust_compile(target, rustc_target, rustc)
      return rustc_target
  
+EOF
+
+        $mkdir -p "$patches/net-misc/networkmanager"
+        $cat << 'EOF' > "$patches/net-misc/networkmanager/cross.patch"
+--- a/meson.build
++++ b/meson.build
+@@ -248,7 +248,7 @@
+ dbus_dep = dependency('dbus-1', version: '>= 1.1')
+ libndp_dep = dependency('libndp')
+ 
+-jansson_dep = dependency('jansson', version: '>= 2.7', required: false)
++jansson_dep = disabler()
+ config_h.set10('WITH_JANSSON', jansson_dep.found())
+ 
+ jansson_msg = 'no'
 EOF
 }
 
@@ -1086,7 +1098,7 @@ make -C /usr/src/linux -j"$(nproc)" V=1 \
     allnoconfig KCONFIG_ALLCONFIG=/root/config.relabel
 make -C /usr/src/linux -j"$(nproc)" V=1
 make -C /usr/src/linux install V=1
-mv /boot/vmlinuz-* vmlinuz.relabel
+mv /boot/vmlinuz* /boot/*/*/linux vmlinuz.relabel
 rm -f /boot/*
 exec make -C /usr/src/linux -j"$(nproc)" mrproper V=1
 EOF
@@ -1169,17 +1181,19 @@ esac
 
 function archmap_profile() {
         local -r hardened=/hardened
+        local -r hardfp=$(opt hardfp && echo _hf || echo _sf)
         local -r nomulti=$(opt multilib || echo /no-multilib)
         case ${*:-$DEFAULT_ARCH} in
-            aarch64)     echo default/linux/arm64/17.0$hardened ;;
-            armv4t*)     echo default/linux/arm/17.0/armv4t ;;
-            armv5te*)    echo default/linux/arm/17.0/armv5te ;;
-            armv6*j*)    echo default/linux/arm/17.0/armv6j$hardened ;;
-            armv7a)      echo default/linux/arm/17.0/armv7a$hardened ;;
-            i[3-6]86)    echo default/linux/x86/23.0$hardened ;;
-            powerpc)     echo default/linux/ppc/17.0 ;;
-            powerpc64le) echo default/linux/ppc64le/17.0 ;;
-            riscv64)     echo default/linux/riscv/20.0/rv64gc/lp64d ;;
+            aarch64)     echo default/linux/arm64/23.0$hardened ;;
+            armv4t*)     echo default/linux/arm/23.0/armv4t ;;
+            armv5te*)    echo default/linux/arm/23.0/armv5te ;;
+            armv6*j*)    echo default/linux/arm/23.0/armv6j$hardfp$hardened ;;
+            armv7a)      echo default/linux/arm/23.0/armv7a$hardfp$hardened ;;
+            i[45]86)     echo default/linux/x86/23.0/i486$hardened ;;
+            i686)        echo default/linux/x86/23.0/i686$hardened ;;
+            powerpc)     echo default/linux/ppc/23.0 ;;
+            powerpc64le) echo default/linux/ppc64le/23.0 ;;
+            riscv64)     echo default/linux/riscv/23.0/rv64/lp64d ;;
             x86_64)      echo default/linux/amd64/23.0$nomulti$hardened ;;
             *) return 1 ;;
         esac | { [[ -n $* ]] && $cat || $sed 's,amd64/23.0,amd64/17.1,' ; }
@@ -1195,8 +1209,8 @@ function archmap_stage3() {
         local stage3
         case ${*:-$DEFAULT_ARCH} in
             aarch64)     stage3=stage3-arm64-systemd ;;
-            armv4tl)     stage3=stage3-armv4tl-systemd ;;
-            armv5tel)    stage3=stage3-armv5tel-systemd ;;
+            armv4t*l)    stage3=stage3-armv4tl-systemd ;;
+            armv5te*l)   stage3=stage3-armv5tel-systemd ;;
             armv6*j*)    stage3=stage3-armv6j$hardfp-systemd ;;
             armv7a)      stage3=stage3-armv7a$hardfp-systemd ;;
             i[45]86)     stage3=stage3-i486-systemd ;;
@@ -1267,11 +1281,13 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
         # Work around broken pkg-config paths.
         edit app-crypt/gcr 's/[^a]rm /&-f /'
 
+        # Work around bad util-linux dependencies breaking binpkgs.
+        edit sys-apps/util-linux '/cryptsetup?/{h;d;};/!build?/{s/.*/"\nPDEPEND="\n&/p;x;};s/{RDEPEND}/& ${PDEPEND}/'
+
         # Fix QEMU.
         edit app-emulation/qemu 's/tc-export /&CC /'
 
         # Fix tmpfiles dependencies.
-        edit sys-fs/cryptsetup 's/^EAPI=.*/EAPI=8/'
         edit sys-fs/lvm2 '/virtual.tmpfiles/d;$aIDEPEND+=" lvm? ( virtual/tmpfiles )"'
 
         # Fix NSS self-dependency.

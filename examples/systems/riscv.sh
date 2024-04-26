@@ -21,7 +21,7 @@ packages+=(
         app-arch/tar
         app-arch/unzip
         app-editors/emacs
-        dev-util/strace
+        dev-debug/strace
         dev-vcs/git
         sys-apps/diffutils
         sys-apps/file
@@ -86,14 +86,13 @@ sys-libs/zlib static-libs
 EOF
 
         # Build RISC-V UEFI GRUB for bootloader testing.
-        echo '<sys-boot/grub-2.13 **' >> "$buildroot/etc/portage/package.accept_keywords/grub.conf"
         packages_buildroot+=(sys-boot/grub)
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.3.1.tar.gz > "$buildroot/root/opensbi.tgz"
-        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == ee5be2c582f9a837e9db88368220758e014dd694b566bb6c8efe1e50cfad0004\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2023.10.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == b22664ee56640bba87068a7cdcd7cb50f956973a348e844788d2fb882fe0dc55\ * ]]
+        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.4.tar.gz > "$buildroot/root/opensbi.tgz"
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 319b62a4186fbce9b81a0c5f0ec9f003a10c808397a72138bc9745d9b87b1eb1\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2024.04.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == d6b57ce574a0a0504a5b6596644ceacb7f77bde9353779bcf2fde07c4b9a2b92\ * ]]
 }
 
 function customize_buildroot() {

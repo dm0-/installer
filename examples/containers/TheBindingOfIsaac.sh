@@ -11,15 +11,16 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([distro]=fedora [gpt]=1 [release]=39 [squash]=1)
+options+=([distro]=fedora [gpt]=1 [release]=40 [squash]=1)
 
 packages+=(
         alsa-plugins-pulseaudio
+        libxkbcommon-x11
         gtk3
 )
 
 packages_buildroot+=(
-        {alsa-lib,gtk3,openssl}-devel
+        {alsa-lib,gtk3,libudev,openssl}-devel
         cargo
         java-latest-openjdk-headless
         tar
@@ -33,8 +34,8 @@ function initialize_buildroot() {
         echo '%_install_langs %{nil}' >> "$buildroot/etc/rpm/macros"
 
         # Download, verify, and extract a recent Ruffle source tag.
-        $curl -L https://github.com/ruffle-rs/ruffle/archive/refs/tags/nightly-2023-11-05.tar.gz > "$output/ruffle.tgz"
-        [[ $($sha256sum "$output/ruffle.tgz") == 4b3918369cee9bce0708ad3a193027659f0e5ab8cd979929816233aef9b90def\ * ]]
+        $curl -L https://github.com/ruffle-rs/ruffle/archive/refs/tags/nightly-2024-04-25.tar.gz > "$output/ruffle.tgz"
+        [[ $($sha256sum "$output/ruffle.tgz") == 7a9cd22757861b8475c3e3962b2cb504c523cb344bd8758d3a87cd96209a73c8\ * ]]
         $tar --transform='s,^[^/]*,ruffle,' -C "$output" -xf "$output/ruffle.tgz"
         $rm -f "$output/ruffle.tgz"
 

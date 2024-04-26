@@ -63,16 +63,16 @@ function distro_tweaks() {
         echo > root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d/tmpfiles.conf \
             -e '[Unit]\nAfter=systemd-tmpfiles-setup.service'
 
-        test -x root/usr/libexec/upowerd &&
+        [[ -x root/usr/libexec/upowerd ]] &&
         echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
-        test -x root/usr/bin/update-crypto-policies &&
+        [[ -x root/usr/bin/update-crypto-policies ]] &&
         chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
 
-        test -s root/etc/dnf/dnf.conf &&
+        [[ -s root/etc/dnf/dnf.conf ]] &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
-        test -s root/etc/locale.conf ||
+        [[ -s root/etc/locale.conf ]] ||
         echo LANG=C.UTF-8 > root/etc/locale.conf
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
@@ -80,6 +80,16 @@ function distro_tweaks() {
 
 # Override the UEFI logo source to use the old distro name.
 eval "$(declare -f save_boot_files | $sed s/centos/redhat/)"
+
+# Override image generation to drop EROFS support since the kernel is too old.
+eval "$(
+declare -f create_root_image {,un}mount_root | $sed \
+    -e '/if\|size/s/read_only/squash/' \
+    -e 's/! opt ramdisk/{ opt verity || & ; }/'
+declare -f relabel | $sed s/read_only/squash/
+declare -f squash | $sed '/!/s/read_only/squash/'
+declare -f kernel_cmdline | $sed /type=erofs/d
+)"
 
 # Override SELinux initrd/squashfs creation to remove zstd.
 eval "$(declare -f relabel | $sed \
@@ -127,7 +137,8 @@ function verify_distro() [[
 function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        $sed -i -e '/^[[]powertools]$/,/^$/s/^enabled=.*/enabled=1/' "$buildroot/etc/yum.repos.d/CentOS-Linux-PowerTools.repo"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -169,7 +180,7 @@ function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
         local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-0.1.noarch.rpm"
         enable_repo_epel
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -213,7 +224,7 @@ function enable_repo_rpmfusion_nonfree() {
         local key="RPM-GPG-KEY-rpmfusion-nonfree-el-${options[release]}"
         local url="https://download1.rpmfusion.org/nonfree/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-nonfree-release-${options[release]}-0.1.noarch.rpm"
         enable_repo_rpmfusion_free
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

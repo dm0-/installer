@@ -29,7 +29,7 @@ packages+=(
         app-arch/tar
         app-arch/unzip
         app-editors/emacs
-        dev-util/strace
+        dev-debug/strace
         dev-vcs/git
         sys-apps/diffutils
         sys-apps/file

@@ -39,6 +39,9 @@ function create_buildroot() {
         # Let the configuration decide if the system should have documentation.
         $sed -i -e 's/^rpm.install.excludedocs/# &/' "$buildroot/etc/zypp/zypp.conf"
 
+        # Disable broken UEFI script.
+        ln -fns ../bin/true "$buildroot/usr/sbin/sdbootutil"
+
         configure_initrd_generation
         initialize_buildroot "$@"
 

@@ -72,7 +72,7 @@ function distro_tweaks() {
         echo > root/usr/lib/systemd/system/systemd-journal-catalog-update.service.d/tmpfiles.conf \
             -e '[Unit]\nAfter=systemd-tmpfiles-setup.service'
 
-        test -x root/usr/libexec/upowerd &&
+        [[ -x root/usr/libexec/upowerd ]] &&
         echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
@@ -80,9 +80,9 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && test ! -s logo.bmp && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
-        test -s initrd.img || build_systemd_ramdisk /boot/initramfs-*
-        test -s vmlinuz || cp -p /boot/vmlinuz-* vmlinuz
+        opt uefi && [[ ! -s logo.bmp ]] && convert -background none /usr/share/centos-logos/fedora_logo_darkbackground.svg -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0' logo.bmp
+        [[ -s initrd.img ]] || build_systemd_ramdisk /boot/initramfs-*
+        [[ -s vmlinuz ]] || cp -p /boot/vmlinuz-* vmlinuz
 fi
 
 # Override ext4 file system handling to work with old CentOS 7 command options.
@@ -140,7 +140,7 @@ function verify_distro() [[
 function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -182,7 +182,7 @@ function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-el-${options[release]}"
         local url="https://download1.rpmfusion.org/free/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-free-release-${options[release]}-4.noarch.rpm"
         enable_repo_epel
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -226,7 +226,7 @@ function enable_repo_rpmfusion_nonfree() {
         local key="RPM-GPG-KEY-rpmfusion-nonfree-el-${options[release]}"
         local url="https://download1.rpmfusion.org/nonfree/el/updates/${options[release]}/$DEFAULT_ARCH/r/rpmfusion-nonfree-release-${options[release]}-4.noarch.rpm"
         enable_repo_rpmfusion_free
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 rpmkeys --import /dev/stdin << 'EOG'
 -----BEGIN PGP PUBLIC KEY BLOCK-----

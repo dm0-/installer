@@ -27,7 +27,7 @@ packages+=(
         app-arch/tar
         app-arch/unzip
         app-editors/emacs
-        dev-util/strace
+        dev-debug/strace
         dev-vcs/git
         sys-apps/diffutils
         sys-apps/file
@@ -130,8 +130,8 @@ EOF
         echo multilib >> "$portage/profile/use.mask/multilib.conf"
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
-        echo 'sys-apps/systemd boot' >> "$buildroot/etc/portage/package.use/systemd.conf"
-        echo 'sys-apps/systemd boot' >> "$portage/profile/package.use.mask/systemd.conf"
+        echo 'sys-apps/systemd boot kernel-install' >> "$buildroot/etc/portage/package.use/systemd.conf"
+        echo 'sys-apps/systemd boot kernel-install' >> "$portage/profile/package.use.mask/systemd.conf"
 
         # Make CET settings match between the buildroot and sysroot.
         echo -cet >> "$portage/profile/use.mask/cet.conf"

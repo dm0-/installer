@@ -5,7 +5,7 @@ options[enforcing]=
 options[loadpin]=
 options[uefi_vars]=
 
-DEFAULT_RELEASE=23.10
+DEFAULT_RELEASE=24.04
 
 function create_buildroot() {
         local -r release=${options[release]:=$DEFAULT_RELEASE}
@@ -77,6 +77,8 @@ APT::Install-Suggests "false";
 EOF
 
         local -rx DEBIAN_FRONTEND=noninteractive INITRD=No
+        compgen -G '/etc/apt/sources.list.d/*.sources' &&
+        cp -pt root/etc/apt/sources.list.d /etc/apt/sources.list.d/*.sources
         cp -p {,root}/etc/apt/sources.list
         for dir in dev proc sys ; do mount --bind {,root}/"$dir" ; done
         trap -- 'umount root/{dev,proc,sys,var/cache/apt} ; trap - RETURN' RETURN
@@ -307,6 +309,7 @@ function archmap() case ${*:-$DEFAULT_ARCH} in
 esac
 
 function releasemap() case ${*:-${options[release]:-$DEFAULT_RELEASE}} in
+    24.04) echo noble ;;
     23.10) echo mantic ;;
     23.04) echo lunar ;;
     22.10) echo kinetic ;;

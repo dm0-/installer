@@ -7,7 +7,7 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20231106.0
+        local -r cver=20240422.0
         local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
@@ -15,6 +15,7 @@ function create_buildroot() {
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && packages_buildroot+=(util-linux)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core zstd)
         opt squash && packages_buildroot+=(squashfs-tools)
@@ -36,7 +37,7 @@ function create_buildroot() {
         configure_initrd_generation
         initialize_buildroot "$@"
 
-        opt networkd || opt uefi && enable_repo_epel  # EPEL now has core RPMs.
+        opt networkd || { opt read_only && ! opt squash ; } || opt uefi && enable_repo_epel  # EPEL now has core RPMs.
         script "${packages_buildroot[@]}" << 'EOF'
 dnf --assumeyes --setopt=tsflags=nodocs upgrade
 exec dnf --assumeyes --setopt=tsflags=nodocs install "$@"
@@ -51,13 +52,13 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
-        test -x root/usr/bin/update-crypto-policies &&
+        [[ -x root/usr/bin/update-crypto-policies ]] &&
         chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
 
-        test -s root/etc/dnf/dnf.conf &&
+        [[ -s root/etc/dnf/dnf.conf ]] &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
-        test -s root/etc/locale.conf ||
+        [[ -s root/etc/locale.conf ]] ||
         echo LANG=C.UTF-8 > root/etc/locale.conf
 
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
@@ -68,15 +69,6 @@ eval "$(declare -f save_boot_files | $sed \
     -e s/magick/convert/ \
     -e "s/-trim/& -color-matrix '0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0'/" \
     -e 's,fedora\(-logos/fedora_logo\),centos\1_darkbackground,')"
-
-# Override image generation to drop EROFS support since it's not enabled.
-eval "$(
-declare -f create_root_image {,un}mount_root | $sed \
-    -e '/if\|size/s/read_only/squash/' \
-    -e 's/! opt ramdisk/{ opt verity || & ; }/'
-declare -f squash | $sed '/!/s/read_only/squash/'
-declare -f kernel_cmdline | $sed /type=erofs/d
-)"
 
 # Override SELinux labeling to work with the CentOS kernel (and no busybox).
 function relabel() if opt selinux
@@ -99,9 +91,13 @@ done
 mount /dev/sda /sysroot
 load_policy -i
 policy=$(sed -n 's/^SELINUXTYPE=//p' /etc/selinux/config)
-/bin/setfiles -vFr /sysroot \
+setfiles -vFr /sysroot \
     "/sysroot/etc/selinux/$policy/contexts/files/file_contexts" /sysroot
-mksquashfs /sysroot /sysroot/squash.img -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
+[[ -x /bin/mksquashfs ]] && /bin/mksquashfs /sysroot /sysroot/squash.img \
+    -noappend -comp zstd -Xcompression-level 22 -wildcards -ef /ef
+[[ -x /bin/mkfs.erofs ]] && IFS=$'\n' && /bin/mkfs.erofs \
+    $(while read ; do echo "$REPLY" ; done < /ef) \
+    /sysroot/erofs.img /sysroot
 echo SUCCESS > /sysroot/LABEL-SUCCESS
 umount /sysroot
 EOF
@@ -112,7 +108,16 @@ EOF
                 echo "$disk" > "$root/ef"
                 (IFS=$'\n' ; echo "${exclude_paths[*]}") >> "$root/ef"
                 cp -t "$root/bin" /usr/sbin/mksquashfs
-        else sed -i -e '/^mksquashfs /d' "$root/init"
+        elif opt read_only
+        then
+                disk=erofs.img
+                local path
+                for path in "$disk" "${exclude_paths[@]//\*/[^/]*}"
+                do
+                        path=${path//+/[+]} ; path=${path//./[.]}
+                        echo "--exclude-regex=^${path//\?/[^/]}$"
+                done > "$root/ef"
+                cp -t "$root/bin" /usr/bin/mkfs.erofs
         fi
 
         cp -t "$root/bin" \
@@ -134,15 +139,15 @@ EOF
         zstd --threads=0 --ultra -22 > relabel.img
 
         umount root
-        local -r cores=$(test -e /dev/kvm && nproc)
+        local -r cores=$([[ -e /dev/kvm ]] && nproc)
         /usr/libexec/qemu-kvm -nodefaults -no-reboot -serial stdio < /dev/null \
             ${cores:+-cpu host -smp cores="$cores"} -m 1G \
             -kernel /lib/modules/*/vmlinuz -initrd relabel.img \
             -append 'console=ttyS0 enforcing=0 lsm=selinux' \
             -drive file=/dev/loop-root,format=raw,media=disk
         mount /dev/loop-root root
-        opt squash && mv -t . "root/$disk"
-        test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS
+        opt read_only && mv -t . "root/$disk"
+        [[ -s root/LABEL-SUCCESS ]] ; rm -f root/LABEL-SUCCESS
 fi
 
 # Override early microcode ramdisk creation for CentOS Intel paths.
@@ -165,10 +170,10 @@ s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo 5469bf398c3dec82f453e2d26fe10c1e5e92d081768bdf65043349d42cf555d1 ;;
-            ppc64le) echo 99bcede9ac5b254d59a02b111af55811f2e72d19dc28315acb0dc79eda7bb562 ;;
-            s390x)   echo 65f6eed9d4a90ef369af4cae6bb0e58434f61a1e90a5843d31b2739875fb162f ;;
-            x86_64)  echo cb3aae01ae2787c1b974075d3fa9bc94b4dd039c53ebeaf8ef1fd490ffe5e922 ;;
+            aarch64) echo a17d859825244be6ff306844992cdda9ca6277540c3df979d0235525015fa05b ;;
+            ppc64le) echo 4c4e47704473c94305271716fc37b8aaea05d64f33926ed48a76811eabfe176a ;;
+            s390x)   echo b7f9963452693fc71c523d36503598d217ed78111be7e9a98dc94a0e0a2632dc ;;
+            x86_64)  echo e6223b854f5ff6c6a3cbf686f3e69f67593ab4fad2bd0261e29df3f84f714c67 ;;
         esac)\ *
 ]]
 
@@ -178,7 +183,7 @@ function enable_repo_epel() {
         local -r key="RPM-GPG-KEY-EPEL-${options[release]}"
         local -r url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${options[release]}.noarch.rpm"
         $sed -i -e '/^[[]crb]$/,/^$/s/^enabled=.*/enabled=1/' "$buildroot/etc/yum.repos.d/centos.repo"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 cat << 'EOG' > /tmp/key ; rpmkeys --import /tmp/key
 -----BEGIN PGP PUBLIC KEY BLOCK-----

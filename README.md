@@ -55,7 +55,7 @@ The majority of the code in this repository is just writing configuration files,
 
 ## Feature Support
 
-Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (38 and the default 39), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (23.04 and the default 23.10).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
+Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (40), *Gentoo*, *openSUSE* (Tumbleweed), and *Ubuntu* (24.04).  This installer only implements features as supported in the distros themselves; i.e. it does not build newer package versions or take better tools from other distros to accomplish tasks.  As such, a different feature set is available depending on the distro choice.  The following describes the level of support for some of the major features across distros.
 
 | Status         | Definition                            |
 | :---:          | :---                                  |
@@ -92,8 +92,7 @@ Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (38 and the default 39
 
 **Read-only Root**:  When building an immutable image in general, a read-only file system is used for the installation.
 
-  * :star: *Arch*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* create a packed uncompressed EROFS image for the root file system.
-  * :construction: *CentOS* disables EROFS support, so it uses ext4 with the read-only flag set.
+  * :star: *Arch*, *CentOS*, *Fedora*, *Gentoo*, *openSUSE*, and *Ubuntu* create a packed uncompressed EROFS image for the root file system.
 
 **SquashFS**:  Immutable systems can opt to use SquashFS for a compressed root file system to save space at the cost of runtime decompression.  All compression in the installer (kernels, initrds, root images, binary packages, etc.) aims to standardize on zstd for the best size-to-resource-utilization ratio.
 
@@ -124,3 +123,5 @@ Six distros are supported: *Arch*, *CentOS* (9), *Fedora* (38 and the default 39
 **Prepopulate a Wine prefix for the game containers.**  I need to figure out what Wine needs so it can initialize itself in a chroot instead of a full container.  The games currently generate the Wine prefix (and its `C:` drive) every run as a workaround.  By installing a prebuilt `C:` drive and Wine prefix with the GOG registry changes applied, runtime memory will be reduced by potentially hundreds of megabytes and startup times will improve by several seconds.
 
 **Provide server examples.**  The only bootable system examples right now are simple standalone workstations.  I should try to generalize some of my server configurations, or set up a network workstation example with LDAP/Kerberos/NFS integration.  Also, something should demonstrate persistent encrypted storage, which servers are going to require.  (Just add one line to `/etc/crypttab` and `/etc/fstab` to mount `/var`.)
+
+**Add compatibility with UAPI stuff.**  Since this project began, the UAPI Group has tried to standardize a lot of areas related to this project.  An optional switch that builds images targeting their more opinionated standards could be a nice alternative to the generalized methods used here.

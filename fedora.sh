@@ -3,11 +3,11 @@ packages_buildroot=()
 
 options[loadpin]=
 
-DEFAULT_RELEASE=39
+DEFAULT_RELEASE=40
 
 function create_buildroot() {
-        local -r cver=1.5
-        local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
+        local -r cver=1.14
+        local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-Generic.$DEFAULT_ARCH-${options[release]}-$cver.oci.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
         opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(amd-ucode-firmware microcode_ctl)
@@ -28,8 +28,12 @@ function create_buildroot() {
         $curl -L "${image%-Base*}-${options[release]}-$cver-$DEFAULT_ARCH-CHECKSUM" > "$output/checksum"
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output/checksum" "$output/image.txz"
-        $tar -xJOf "$output/image.txz" '*/layer.tar' | $tar -C "$buildroot" -x
-        $rm -f "$output/checksum" "$output/image.txz"
+        $mkdir -p "$output/oci"
+        $tar -C "$output/oci" -xJf "$output/image.txz"
+        local -r manifest=$($sed -n 's/.*"sha256:\([^"]*\).*/\1/p' "$output/oci/index.json")
+        local -r layer=$($sed -n 's/.*layers[^]]*"sha256:\([^"]*\).*/\1/p' "$output/oci/blobs/sha256/$manifest")
+        $tar -C "$buildroot" -xzf "$output/oci/blobs/sha256/$layer"
+        $rm -fr "$output/checksum" "$output/image.txz" "$output/oci"
 
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
@@ -63,7 +67,7 @@ function install_packages() {
         # Fix PAM and friends immediately before any configuration is written.
         if [[ -x root/usr/bin/authselect ]]
         then
-                chroot root /usr/bin/authselect select minimal --force --nobackup
+                chroot root /usr/bin/authselect select local --force --nobackup
                 chroot root /usr/bin/authselect opt-out
         fi
 
@@ -76,24 +80,26 @@ function distro_tweaks() {
 
         rm -fr root/etc/inittab root/etc/rc.d
 
-        test -x root/usr/bin/update-crypto-policies &&
+        [[ -x root/usr/bin/update-crypto-policies ]] &&
         chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
 
-        test -s root/etc/dnf/dnf.conf &&
+        [[ -s root/etc/dnf/dnf.conf ]] &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
         compgen -G 'root/etc/yum.repos.d/*cisco*.repo' &&
         sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*{cisco,modular}*.repo
 
+        [[ -s root/etc/profile.d/bash-color-prompt.sh ]] &&
+        sed -i -e "s/PS1='"'/&$? /' root/etc/profile.d/bash-color-prompt.sh
         sed -i -e 's/^[^#]*PS1="./&\\$? /;s/mask 002$/mask 022/' root/etc/bashrc
 }
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && test ! -s logo.bmp &&
+        opt uefi && [[ ! -s logo.bmp ]] &&
         magick -background none /usr/share/fedora-logos/fedora_logo.svg -trim logo.bmp
-        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
-        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
+        [[ -s initrd.img ]] || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
+        [[ -s vmlinuz ]] || cp -pt . /lib/modules/*/vmlinuz
         if opt verity_sig
         then
                 local -r v=$(echo /lib/modules/[0-9]*)
@@ -202,36 +208,36 @@ function verify_distro() {
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
         $gpg --verify "$1"
-        [[ $($sha256sum "$2") == $($sed -n '/=/{s/.* //p;q;}' "$1")\ * ]]
+        [[ $($sha256sum "$2") == $($sed -n '/Generic\..*=/{s/.* //p;q;}' "$1")\ * ]]
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBGLykg8BEADURjKtgQpQNoluifXia+U3FuqGCTQ1w7iTqx1UvNhLX6tb9Qjy
-l/vjl1iXxucrd2JBnrT/21BdtaABhu2hPy7bpcGEkG8MDinAMZBzcyzHcS/JiGHZ
-d/YmMWQUgbDlApbxFSGWiXMgT0Js5QdcywHI5oiCmV0lkZ+khZ4PkVWmk6uZgYWf
-JOG5wp5TDPnoYXlA4CLb6hu2691aDm9b99XYqEjhbeIzS9bFQrdrQzRMKyzLr8NW
-s8Pq2tgyzu8txlWdBXJyAMKldTPstqtygLL9UUdo7CIQQzWqeDbAnv+WdOmiI/hR
-etbbwNV+thkLJz0WD90C2L3JEeUJX5Qa4oPvfNLDeCKmJFEFUTCEdm0AYoQDjLJQ
-3d3q9M09thXO/jYM0cSnJDclssLNsNWfjJAerLadLwNnYRuralw7f74QSLYdJAJU
-SFShBlctWKnlhQ7ehockqtgXtWckkqPZZjGiMXwHde9b9Yyi+VqtUQWxSWny+9g9
-6tcoa3AdnmpqSTHQxYajD0EGXJ0z0NXfqxkI0lo8UxzypEBy4sARZ4XhTU73Zwk0
-LGhEUHlfyxXgRs6RRvM2UIoo+gou2M9rn/RWkhuHJNSfgrM0BmIBCjhjwGiS33Qh
-ysLDWJMdch8lsu1fTmLEFQrOB93oieOJQ0Ysi5gQY8TOT+oZvVi9pSMJuwARAQAB
-tDFGZWRvcmEgKDM5KSA8ZmVkb3JhLTM5LXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
-cmc+iQJOBBMBCAA4FiEE6PI5lvIyGGQMtEy+dc9axBi450wFAmLykg8CGw8FCwkI
-BwIGFQoJCAsCBBYCAwECHgECF4AACgkQdc9axBi450yd4w//ZtghbZX5KFstOdBS
-rcbBfCK9zmRvzeejzGl6lPKfqwx7OOHYxFlRa9MYLl8QG7Aq6yRRWzzEHiSb0wJw
-WXz5tbkAmV/fpS4wnb3FDArD44u317UAnaU+UlhgK1g62lwI2dGpvTSvohMBMeBY
-B5aBd+sLi3UtiSRM2XhxvxaWwr/oFLjKDukgrPQzeV3F/XdxGhSz/GZUVFVprcrB
-h/dIo4k0Za7YVRhlVM0coOIcKbcjxAK9CCZ8+jtdIh3/BN5zJ0RFMgqSsrWYWeft
-BI3KWLbyMfRwEtp7xSi17WXbRfsSoqwIVgP+RCSaAdVuiYs/GCRsT3ydYcDvutuJ
-YZoE53yczemM/1HZZFI04zI7KBsKm9NFH0o4K2nBWuowBm59iFvWHFpX6em54cq4
-45NwY01FkSQUqntfqCWFSowwFHAZM4gblOikq2B5zHoIntCiJlPGuaJiVSw9ZpEc
-+IEQfmXJjKGSkMbU9tmNfLR9skVQJizMTtoUQ12DWC+14anxnnR2hxnhUDAabV6y
-J5dGeb/ArmxQj3IMrajdNwjuk9GMeMSSS2EMY8ryOuYwRbFhBOLhGAnmM5OOSUxv
-A4ipWraXDW0bK/wXI7yHMkc6WYrdV3SIXEqJBTp7npimv3JC+exWEbTLcgvV70FP
-X55M9nDtzUSayJuEcfFP2c9KQCE=
-=J4qZ
+mQINBGPQTCwBEADFUL0EQLzwpKHtlPkacVI156F2LnWp6K69g/6yzllidHI3b7EV
+QgQ9/Kdou6wNuOahNKa6WcEi6grEXexD7pAcu4xdRUp79XxQy5pC7Aq2/Dwf0vRL
+2y0kqof+C7iSzhHsfLoaqKKeh2njAo1KLZXYTHAWAMbXEyO/FJevaHLXe2+yYd7j
+luD58gyXgGDXXJ2lymLqs2jobjWdmGPNZGFl36RP3Dnk0FpbdH78kyIIsc2foYuF
+00rnuumwCtK3V58VOZo6IkaYk2irdyeetmJjVHwLHwJB3EaAwGy9Z2oAH3LxxFfk
+rQb0DH0Nzb3fpEziopOOqSi+6guV4RHUKAkCUMu+Mo5XwFVPUAIfNRTVqoIaEasC
+WO26lhkB87wwIvyb/TPGSeh6laHPRf0QOUOLkugdkSHoaJFWoTCcu9Y4aeDpf+ZQ
+fMVmkJNRS1tXONgz+pDk1rro/tNrkusYG18xjvSZTB0P0C4b4+jgK5l7me0NU6G3
+Ww/hIng5lxWfXgE9bpxlN834v1xy5Z3v17guJu1ec/jzKzQQ4356wyegXURjYoWe
+awcnK1S+9gxivnkOk1bGLNxrEh5vB6PDcI1VQ1ECH50EHyvE1IXJDaaStdAkacv2
+qHcd15CnlBW1LYFj0CHs/sGu9FD0iSF95OVRX4gjg9Wa4f8KvtEO/f+FeQARAQAB
+tDFGZWRvcmEgKDQwKSA8ZmVkb3JhLTQwLXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
+cmc+iQJOBBMBCAA4FiEEEV35rvhXhT7oRF0KBydwfqFbecwFAmPQTCwCGw8FCwkI
+BwIGFQoJCAsCBBYCAwECHgECF4AACgkQBydwfqFbecxJOw//XaoJG3zN01bVM63H
+nFmMW/EnLzKrZqH8ZNq8CP9ycoc4q8SYcMprHKG9jufzj5/FhtpYecp3kBMpSYHt
+Vu46LS9NajJDwdfvUMezVbieNIQ8icTR5s5IUYFlc47eG6PRe3k0n5fOPcIb6q82
+byrK3dQnanOcVdoGU7QO9LAAHO9hg0zgZa0MxQAlDQov3dZcr7u7qGcQmU5JzcRS
+JgfDxHxDuMjmq6Kd0/UwD00kd2ptZgRls0ntXdm9CZGtQ/Q0baJ3eRzccpd/8bxy
+RWF9MnOdmV6ojcFKYECjEzcuheUlcKQH9rLkeBSfgrIlK3L7LG8bg5ouZLdx17rQ
+XABNQGmJTaGAiEnS/48G3roMS8R7fhUljcKr6t63QQQJ2qWdPvI6EMC2xKZsLHK4
+XiUvrmJpUprvEQSKBUOf/2zuXDBshtAnoKh7h5aG+TvozL4yNG5DKpSH3MRj1E43
+KoMsP/GN/X5h+vJnvhiCWxNMPP81Op0czBAgukBm627FTnsvieJOOrzyxb1s75+W
+56gJombmhzUfzr88AYY9mFy7diTw/oldDZcfwa8rvOAGJVDlyr2hqkLoGl+5jPex
+slt3NF4caE/wP9wPMgFRkmMOr8eiRhjlWLrO6mQdBp7Qsj3kEXioP+CZ1cv/sbaK
+4DM7VidB4PLrMFQMaf0LpjpC2DM=
+=wOl2
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 
@@ -240,7 +246,8 @@ EOF
 function enable_repo_rpmfusion_free() {
         local key="RPM-GPG-KEY-rpmfusion-free-fedora-${options[release]}"
         local url="https://download1.rpmfusion.org/free/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-free-release-${options[release]}-1.noarch.rpm"
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        $sed -i -e '/^[[]fedora-cisco-openh264]$/,/^$/s/^enabled=.*/enabled=1/' "$buildroot/etc/yum.repos.d/fedora-cisco-openh264.repo"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 cat << 'EOG' > /tmp/key ; rpmkeys --import /tmp/key
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -284,7 +291,7 @@ function enable_repo_rpmfusion_nonfree() {
         local key="RPM-GPG-KEY-rpmfusion-nonfree-fedora-${options[release]}"
         local url="https://download1.rpmfusion.org/nonfree/fedora/releases/${options[release]}/Everything/$DEFAULT_ARCH/os/Packages/r/rpmfusion-nonfree-release-${options[release]}-1.noarch.rpm"
         enable_repo_rpmfusion_free
-        test -s "$buildroot/etc/pki/rpm-gpg/$key" || script "$url"
+        [[ -s $buildroot/etc/pki/rpm-gpg/$key ]] || script "$url"
 } << 'EOF'
 cat << 'EOG' > /tmp/key ; rpmkeys --import /tmp/key
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -327,7 +334,7 @@ EOF
 
 # OPTIONAL (IMAGE)
 
-function check_for_updates() if test -x root/usr/bin/dnf
+function check_for_updates() if [[ -x root/usr/bin/dnf ]]
 then
         # Define a service to categorize which updates are available, if any.
         cat << 'EOF' > root/usr/lib/systemd/system/image-update-check.service
@@ -336,32 +343,32 @@ Description=Write the MOTD with the system update status
 After=network.target network-online.target
 #Before=display-manager.service sshd.service  # Don't delay booting.
 [Service]
-ExecStart=/bin/bash -eo pipefail -c 'declare -A total=() ; \
-for retry in 1 2 3 4 5 ; do while read -rs count type extra ; \
-do [[ $$count =~ [0-9]+ ]] && total[$$type]=$$count || \
-{ [[ $$count == Error: ]] && break ; } ; \
-done < <(exec /usr/bin/dnf --quiet updateinfo summary --available 2>&1) ; \
-[[ -n $$count ]] && /usr/bin/sleep 10 || break ; done ; \
-[[ -n $$count ]] && exit 1 ; unset "total["{New,Moderate,Low}"]" ; \
-/usr/bin/mkdir -pZ /run/motd.d ; exec > /run/motd.d/image-update-check ; \
-[[ $${#total[@]} -gt 0 ]] || exit 0 ; \
-{ (( total[Critical] + total[Important] )) && echo -n UPDATES REQUIRED ; } || \
-{ (( total[Security] )) && echo -n Security updates are available ; } || \
-{ (( total[Bugfix] )) && echo -n Bug fixes are available ; } || \
-echo -n Updates are available ; sec= ; \
-(( total[Critical] )) && sec+=" ($${total[Critical]} critical)" ; \
-(( total[Important] )) && { sec="$${sec/%?/, }" ; \
-sec="${sec:- (}$${total[Important]} important)" ; } ; \
-echo -n $${total[Security]:+, $${total[Security]} security$$sec} ; \
-echo -n $${total[Bugfix]:+, $${total[Bugfix]} bugfix} ; \
-echo -n $${total[Enhancement]:+, $${total[Enhancement]} enhancement} ; \
-echo -n $${total[other]:+, $${total[other]} other}'
-ExecStartPost=-/bin/bash -euo pipefail -c 'test -x /usr/bin/dconf || exit 0 ; \
-test -s /etc/dconf/db/gdm.d/01-banner -a -s /run/motd.d/image-update-check && \
-echo -e > /etc/dconf/db/gdm.d/02-banner "[org/gnome/login-screen]\n\
-banner-message-text=\'$(</run/motd.d/image-update-check)\'" || \
-/usr/bin/rm -f /etc/dconf/db/gdm.d/02-banner ; \
-exec /usr/bin/dconf update'
+ExecStart=/bin/bash -eo pipefail -c 'declare -A total=() ;\
+ for retry in 1 2 3 4 5 ; do while read -rs count type extra ;\
+ do [[ $$count =~ [0-9]+ ]] && total[$$type]=$$count ||\
+ { [[ $$count == Error: ]] && break ; } ;\
+ done < <(exec /usr/bin/dnf --quiet updateinfo summary --available 2>&1) ;\
+ [[ -n $$count ]] && /usr/bin/sleep 10 || break ; done ;\
+ [[ -n $$count ]] && exit 1 ; unset "total["{New,Moderate,Low}"]" ;\
+ /usr/bin/mkdir -pZ /run/motd.d ; exec > /run/motd.d/image-update-check ;\
+ [[ $${#total[@]} -gt 0 ]] || exit 0 ;\
+ { (( total[Critical] + total[Important] )) && echo -n UPDATES REQUIRED ; } ||\
+ { (( total[Security] )) && echo -n Security updates are available ; } ||\
+ { (( total[Bugfix] )) && echo -n Bug fixes are available ; } ||\
+ echo -n Updates are available ; sec= ;\
+ (( total[Critical] )) && sec+=" ($${total[Critical]} critical)" ;\
+ (( total[Important] )) && { sec="$${sec/%?/, }" ;\
+ sec="${sec:- (}$${total[Important]} important)" ; } ;\
+ echo -n $${total[Security]:+, $${total[Security]} security$$sec} ;\
+ echo -n $${total[Bugfix]:+, $${total[Bugfix]} bugfix} ;\
+ echo -n $${total[Enhancement]:+, $${total[Enhancement]} enhancement} ;\
+ echo -n $${total[other]:+, $${total[other]} other}'
+ExecStartPost=-/bin/bash -euo pipefail -c '[[ -x /usr/bin/dconf ]] || exit 0 ;\
+ [[ -s /etc/dconf/db/gdm.d/01-banner && -s /run/motd.d/image-update-check ]] &&\
+ echo -e > /etc/dconf/db/gdm.d/02-banner "[org/gnome/login-screen]\n\
+banner-message-text=\'$(</run/motd.d/image-update-check)\'" ||\
+ /usr/bin/rm -f /etc/dconf/db/gdm.d/02-banner ;\
+ exec /usr/bin/dconf update'
 TimeoutStartSec=5m
 Type=oneshot
 [Install]
@@ -384,7 +391,7 @@ EOF
             ../image-update-check.timer
 
         # Show the status message on GDM if it exists.
-        if test -x root/usr/sbin/gdm
+        if [[ -x root/usr/sbin/gdm ]]
         then
                 mkdir -p root/etc/dconf/db/gdm.d root/etc/dconf/profile
                 cat << 'EOF' > root/etc/dconf/db/gdm.d/01-banner

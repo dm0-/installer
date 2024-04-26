@@ -28,7 +28,7 @@ packages+=(
         app-arch/tar
         app-arch/unzip
         app-editors/emacs
-        dev-util/strace
+        dev-debug/strace
         dev-vcs/git
         sys-apps/diffutils
         sys-apps/file
@@ -139,6 +139,9 @@ function customize_buildroot() {
         # Build less useless stuff on the host from bad dependencies.
         echo >> /etc/portage/make.conf 'USE="$USE' \
             -cups -debug -emacs -geolocation -gstreamer -llvm -oss -perl -python -sendmail -X'"'
+
+        # Fix bad profiles using x86-only flags that break the linker.
+        sed -i -e 's/ -Wl,-z,pack-relative-relocs//' /var/db/repos/gentoo/profiles/default/linux/ppc*/23.0/make.defaults
 
         # Configure the kernel by only enabling this system's settings.
         write_system_kernel_config
