@@ -262,7 +262,7 @@ eval "$(declare -f partition | $sed 's/BOOT.*.EFI/vmlinuz.uimg/g
 s/uefi/bootable/g
 s, ::/EFI , ,g;s,EFI/BOOT,script,g;/^ *mcopy/a\
 mcopy -i $esp_image scriptcmd ::/script/scriptcmd
-/^ *if test -s launch.sh/,/^ *fi/{/^ *fi/a\
+/^ *if \S* -s launch.sh/,/^ *fi/{/^ *fi/a\
 ! opt bootable || write_hybrid_mbr gpt.img $(( esp * bs >> 20 ))
 }')"
 
@@ -363,6 +363,7 @@ CONFIG_CRYPTO_SHA1_ARM=y
 ## SoC WM8505
 CONFIG_ARCH_WM8505=y
 CONFIG_FB_WM8505=y
+CONFIG_FB_IOMEM_FOPS=y
 CONFIG_FB_WMT_GE_ROPS=y
 CONFIG_I2C=y
 CONFIG_I2C_WMT=y

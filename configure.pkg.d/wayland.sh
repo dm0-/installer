@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-if test -x root/usr/bin/weston
+if [[ -x root/usr/bin/weston ]]
 then
         mkdir -p root/etc/xdg/weston
         cat >> root/etc/xdg/weston/weston.ini

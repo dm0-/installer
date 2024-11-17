@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-opt networkd || if test -s root/usr/lib/systemd/system/NetworkManager.service
+opt networkd || if [[ -s root/usr/lib/systemd/system/NetworkManager.service ]]
 then
         # Start NetworkManager when it's installed and networkd isn't used.
         mkdir -p root/usr/lib/systemd/system/multi-user.target.wants

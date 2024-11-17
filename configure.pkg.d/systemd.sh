@@ -30,13 +30,13 @@ do
 done || :
 
 # Select a dbus.service unit if one was not installed.
-test -s root/usr/lib/systemd/system/dbus.service ||
+[[ -s root/usr/lib/systemd/system/dbus.service ]] ||
 ln -fns dbus-broker.service root/usr/lib/systemd/system/dbus.service
 
 # Select a preferred display manager when it is installed.
 local dm ; for dm in gdm lxdm xdm
 do
-        if test -s "root/usr/lib/systemd/system/$dm.service"
+        if [[ -s root/usr/lib/systemd/system/$dm.service ]]
         then
                 ln -fns "$dm.service" \
                     root/usr/lib/systemd/system/display-manager.service
@@ -45,7 +45,7 @@ do
 done
 
 # Define a default target on boot.
-test -s root/usr/lib/systemd/system/display-manager.service &&
+[[ -s root/usr/lib/systemd/system/display-manager.service ]] &&
 ln -fns graphical.target root/usr/lib/systemd/system/default.target ||
 ln -fns multi-user.target root/usr/lib/systemd/system/default.target
 
@@ -56,17 +56,17 @@ cat << 'EOF' > root/usr/lib/systemd/pstore.conf.d/00-journal.conf
 Storage=journal
 EOF
 mkdir -p root/usr/lib/systemd/system/basic.target.wants
-test -s root/usr/lib/systemd/system/systemd-pstore.service &&
+[[ -s root/usr/lib/systemd/system/systemd-pstore.service ]] &&
 ln -fst root/usr/lib/systemd/system/basic.target.wants \
     ../systemd-pstore.service
 
 # Work around Linux 5.10 breaking BLKDISCARD in systemd-repart.
-test -s root/usr/lib/systemd/system/systemd-repart.service &&
+[[ -s root/usr/lib/systemd/system/systemd-repart.service ]] &&
 sed -i -e 's,^ExecStart=.*systemd-repart.*,& --discard=no,' \
     root/usr/lib/systemd/system/systemd-repart.service
 
 # Work around systemd-repart thinking it can use /var/tmp before /var exists.
-test -s root/usr/lib/systemd/system/systemd-repart.service &&
+[[ -s root/usr/lib/systemd/system/systemd-repart.service ]] &&
 mkdir -p root/usr/lib/systemd/system/systemd-repart.service.d &&
 echo -e '[Service]\nEnvironment=TMPDIR=/tmp' \
     > root/usr/lib/systemd/system/systemd-repart.service.d/tmp.conf
@@ -107,10 +107,10 @@ EOF
 fi
 
 # Sync the clock with NTP by default when networking is enabled.
-opt networkd || test -s root/usr/lib/systemd/system/NetworkManager.service &&
-if test -s root/usr/lib/systemd/system/systemd-timesyncd.service
+opt networkd || [[ -s root/usr/lib/systemd/system/NetworkManager.service ]] &&
+if [[ -s root/usr/lib/systemd/system/systemd-timesyncd.service ]]
 then
-        test -s root/usr/lib/systemd/system/dbus-org.freedesktop.timesync1.service ||
+        [[ -s root/usr/lib/systemd/system/dbus-org.freedesktop.timesync1.service ]] ||
         ln -fns systemd-timesyncd.service \
             root/usr/lib/systemd/system/dbus-org.freedesktop.timesync1.service
         mkdir -p root/usr/lib/systemd/system/sysinit.target.wants

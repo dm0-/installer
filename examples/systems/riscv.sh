@@ -89,10 +89,10 @@ EOF
         packages_buildroot+=(sys-boot/grub)
 
         # Download sources to build a UEFI firmware image.
-        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.4.tar.gz > "$buildroot/root/opensbi.tgz"
-        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 319b62a4186fbce9b81a0c5f0ec9f003a10c808397a72138bc9745d9b87b1eb1\ * ]]
-        $curl -L https://github.com/u-boot/u-boot/archive/v2024.04.tar.gz > "$buildroot/root/u-boot.tgz"
-        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == d6b57ce574a0a0504a5b6596644ceacb7f77bde9353779bcf2fde07c4b9a2b92\ * ]]
+        $curl -L https://github.com/riscv-software-src/opensbi/archive/v1.5.1.tar.gz > "$buildroot/root/opensbi.tgz"
+        [[ $($sha256sum "$buildroot/root/opensbi.tgz") == 6bab6fadd69f38f08e5c767517aafbf8525f54454b2848d6a7eb0e74b683153b\ * ]]
+        $curl -L https://github.com/u-boot/u-boot/archive/v2024.10.tar.gz > "$buildroot/root/u-boot.tgz"
+        [[ $($sha256sum "$buildroot/root/u-boot.tgz") == 6c99df5f9402d05b5a5cfc60f941f0a584d0d9355fce46261bef008487a0f6c4\ * ]]
 }
 
 function customize_buildroot() {
@@ -190,7 +190,7 @@ fi
 # Override image partitioning to additionally stuff GRUB into the ESP.
 declare -f verify_distro &>/dev/null &&
 eval "$(declare -f partition | $sed '/^ *mcopy/a\
-test -s initrd.img && mcopy -i $esp_image initrd.img ::/initrd_a\
+[[ -s initrd.img ]] && mcopy -i $esp_image initrd.img ::/initrd_a\
 mcopy -i $esp_image vmlinuz ::/linux_a\
 mcopy -i $esp_image grub.cfg ::/grub.cfg')"
 

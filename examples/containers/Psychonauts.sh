@@ -10,12 +10,12 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=24.04 [squash]=1)
+options+=([arch]=i686 [distro]=ubuntu [gpt]=1 [release]=24.10 [squash]=1)
 
 packages+=(
         libasound2-plugins
         libgl1
-        ${options[nvidia]:+libnvidia-gl-${options[nvidia]/#*[!0-9]*/550}}
+        ${options[nvidia]:+libnvidia-gl-${options[nvidia]/#*[!0-9]*/560}}
         libxcursor1
 )
 
@@ -56,11 +56,14 @@ mkdir -p "$XDG_DATA_HOME/Psychonauts"
 
 exec sudo systemd-nspawn \
     --bind="$XDG_DATA_HOME/Psychonauts:/tmp/save" \
-    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
+    --bind="+/tmp:${XDG_RUNTIME_DIR:=/run/user/$UID}" \
+    $(for dev in /dev/dri/* ; do echo "--bind=$dev" ; done) \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro=/etc/passwd \
-    --bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}" \
+    ${DISPLAY:+--bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}"} \
+    ${WAYLAND_DISPLAY:+--bind-ro="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"} \
+    ${XAUTHORITY:+--bind-ro="$XAUTHORITY:/tmp/.Xauthority"} \
     --chdir="/home/$USER" \
     --hostname=Psychonauts \
     --image="${IMAGE:-Psychonauts.img}" \
@@ -69,10 +72,13 @@ exec sudo systemd-nspawn \
     --personality=x86 \
     --private-network \
     --read-only \
-    --setenv="DISPLAY=$DISPLAY" \
     --setenv="HOME=/home/$USER" \
     --setenv=PULSE_COOKIE=/tmp/.pulse/cookie \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
+    ${DISPLAY:+--setenv="DISPLAY=$DISPLAY"} \
+    ${WAYLAND_DISPLAY:+--setenv="WAYLAND_DISPLAY=$WAYLAND_DISPLAY"} \
+    ${XAUTHORITY:+--setenv=XAUTHORITY=/tmp/.Xauthority} \
+    ${XDG_RUNTIME_DIR:+--setenv="XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"} \
     --tmpfs=/home \
     --user="$USER" \
     /init "$@"

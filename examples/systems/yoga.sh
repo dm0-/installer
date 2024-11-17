@@ -128,6 +128,7 @@ EOF
 
         # Mask multilib since this is pure x32, and kernels are built natively.
         echo multilib >> "$portage/profile/use.mask/multilib.conf"
+        echo 'dev-libs/libatomic_ops -abi_x86_32 -abi_x86_64' >> "$portage/profile/package.use.force/libatomic_ops.conf"
 
         # Build a native (amd64) systemd boot stub since there is no x32 UEFI.
         echo 'sys-apps/systemd boot kernel-install' >> "$buildroot/etc/portage/package.use/systemd.conf"
@@ -220,10 +221,11 @@ function customize() {
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -machine q35 -cpu host -smp 4,cores=4 -m 4G -vga std -nic user \
+    -machine q35 -cpu host -smp 4,cores=4 -m 4G \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
+    -drive file=/usr/share/edk2/ovmf/OVMF_VARS.fd,format=raw,if=pflash,snapshot=on \
+    -audio pipewire,model=hda -nic user -vga std \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
-    -device intel-hda -device hda-output \
     "$@"
 EOF
 }

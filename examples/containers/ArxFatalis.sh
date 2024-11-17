@@ -12,7 +12,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([distro]=fedora [gpt]=1 [release]=40 [squash]=1)
+options+=([distro]=fedora [gpt]=1 [release]=41 [squash]=1)
 
 packages+=(
         freetype
@@ -94,12 +94,15 @@ mkdir -p "$XDG_DATA_HOME/arx"
 exec sudo systemd-nspawn \
     --bind="$XDG_CONFIG_HOME/arx:/home/$USER/.config/arx" \
     --bind="$XDG_DATA_HOME/arx:/home/$USER/.local/share/arx" \
+    --bind="+/tmp:${XDG_RUNTIME_DIR:=/run/user/$UID}" \
     --bind="+/tmp:/home/$USER/.cache" \
-    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
+    $(for dev in /dev/dri/* ; do echo "--bind=$dev" ; done) \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro=/etc/passwd \
-    --bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}" \
+    ${DISPLAY:+--bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}"} \
+    ${WAYLAND_DISPLAY:+--bind-ro="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"} \
+    ${XAUTHORITY:+--bind-ro="$XAUTHORITY:/tmp/.Xauthority"} \
     --chdir="/home/$USER" \
     --hostname=ArxFatalis \
     --image="${IMAGE:-ArxFatalis.img}" \
@@ -107,10 +110,13 @@ exec sudo systemd-nspawn \
     --machine="ArxFatalis-$USER" \
     --private-network \
     --read-only \
-    --setenv="DISPLAY=$DISPLAY" \
     --setenv="HOME=/home/$USER" \
     --setenv=PULSE_COOKIE=/tmp/.pulse/cookie \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
+    ${DISPLAY:+--setenv="DISPLAY=$DISPLAY"} \
+    ${WAYLAND_DISPLAY:+--setenv="WAYLAND_DISPLAY=$WAYLAND_DISPLAY"} \
+    ${XAUTHORITY:+--setenv=XAUTHORITY=/tmp/.Xauthority} \
+    ${XDG_RUNTIME_DIR:+--setenv="XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"} \
     --tmpfs=/home \
     --user="$USER" \
     /init "$@"

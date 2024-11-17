@@ -3,7 +3,7 @@ local dir
 if dir=$(compgen -G 'root/usr/lib*/firefox/browser')
 then
         dir="${dir%%$'\n'*}/defaults/preferences"
-        test -h "$dir" -a "x${dir/\/browser}" = "xroot$(readlink "$dir")" &&
+        [[ -h $dir && ${dir/\/browser} == root$(readlink "$dir") ]] &&
         ln -fns ../../defaults/preferences "$dir"
         mkdir -p "$dir"
 
@@ -24,6 +24,8 @@ pref("browser.newtabpage.enabled", false);
 pref("browser.search.suggest.enabled", false);
 pref("browser.urlbar.quicksuggest.enabled", false);
 pref("browser.urlbar.showSearchSuggestionsFirst", false);
+pref("browser.urlbar.suggest.recentsearches", false);
+pref("browser.urlbar.suggest.trending", false);
 // Don't download autocomplete URLs.
 pref("browser.urlbar.speculativeConnect.enabled", false);
 // Don't send URL bar keystrokes to advertisers.
@@ -33,6 +35,8 @@ pref("browser.urlbar.suggest.quicksuggest.sponsored", false);
 pref("datareporting.healthreport.uploadEnabled", false);
 // Never give up laptop battery information.
 pref("dom.battery.enabled", false);
+// Disable "privacy preserving" tracking.
+pref("dom.private-attribution.submission.enabled", false);
 // Require HTTPS by default.
 pref("dom.security.https_only_mode", true);
 // Remove useless Pocket stuff.

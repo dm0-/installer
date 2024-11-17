@@ -5,7 +5,7 @@ options[enforcing]=
 options[loadpin]=
 options[uefi_vars]=
 
-DEFAULT_RELEASE=24.04
+DEFAULT_RELEASE=24.10
 
 function create_buildroot() {
         local -r release=${options[release]:=$DEFAULT_RELEASE}
@@ -94,41 +94,41 @@ function distro_tweaks() {
         rm -fr root/etc/kernel root/etc/rc.d
 
         # The default policy does not differentiate root's home directory.
-        test -s root/usr/lib/systemd/system/root.mount &&
+        [[ -s root/usr/lib/systemd/system/root.mount ]] &&
         sed -i -e s/admin_home/user_home_dir/g root/usr/lib/systemd/system/root.mount
 
         # Default to the nftables firewall interface if it was installed.
         local cmd ; for cmd in iptables ip6tables
         do
-                test -x "root/usr/sbin/$cmd-nft" &&
+                [[ -x root/usr/sbin/$cmd-nft ]] &&
                 chroot root /usr/bin/update-alternatives --set "$cmd" "/usr/sbin/$cmd-nft"
         done
 
         # Allow NetworkManager to manage devices and DNS.
         rm -f root/usr/lib/NetworkManager/conf.d/10-{dns-resolved,globally-managed-devices}.conf
 
-        test -s root/usr/lib/systemd/system/console-setup.service &&
+        [[ -s root/usr/lib/systemd/system/console-setup.service ]] &&
         ln -fst root/usr/lib/systemd/system/multi-user.target.wants ../console-setup.service
 
-        test -s root/usr/share/systemd/tmp.mount &&
+        [[ -s root/usr/share/systemd/tmp.mount ]] &&
         mv -t root/usr/lib/systemd/system root/usr/share/systemd/tmp.mount
 
-        test -s root/etc/default/useradd &&
+        [[ -s root/etc/default/useradd ]] &&
         sed -i -e '/^SHELL=/s,=.*,=/bin/bash,' root/etc/default/useradd
 
-        test -s root/etc/inputrc &&
+        [[ -s root/etc/inputrc ]] &&
         sed -i -e '/history-search/s/^[# ]*//' root/etc/inputrc
 
         opt double_display_scale &&
-        test -s root/etc/default/console-setup &&
+        [[ -s root/etc/default/console-setup ]] &&
         sed -i -e '/^FONTSIZE="/s/"8x16"/"16x32"/' root/etc/default/console-setup
 
-        test -s root/etc/default/keyboard &&
+        [[ -s root/etc/default/keyboard ]] &&
         sed -i -e '/^XKBOPTIONS=""$/s/""/"ctrl:nocaps"/' root/etc/default/keyboard &&
         compgen -G 'root/usr/share/keymaps/i386/qwerty/emacs2.*' &&
         echo 'KMAP="emacs2"' >> root/etc/default/keyboard
 
-        test -s root/etc/default/locale ||
+        [[ -s root/etc/default/locale ]] ||
         echo LANG=C.UTF-8 > root/etc/default/locale
 
         sed -i \
@@ -142,11 +142,11 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && test ! -s logo.bmp &&
+        opt uefi && [[ ! -s logo.bmp ]] &&
         sed '/<svg/s/"22"/"480"/g' /usr/share/icons/ubuntu-mono-dark/apps/22/distributor-logo.svg > /root/logo.svg &&
         convert -background none /root/logo.svg logo.bmp
-        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
-        test -s vmlinuz || cp -pt . /boot/vmlinuz
+        [[ -s initrd.img ]] || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
+        [[ -s vmlinuz ]] || cp -pt . /boot/vmlinuz
         if opt verity_sig
         then
                 local -r v=$(echo /lib/modules/[0-9]*-generic)
@@ -254,7 +254,7 @@ eval "$(declare -f validate_options | $sed s/=targeted/=default/)"
 
 # Override relabeling to fix pthread_cancel and broken QEMU display behavior.
 eval "$(declare -f relabel | $sed \
-    -e '/ldd/iopt squash && cp -t "$root/lib" /usr/lib/*/libgcc_s.so.1' \
+    -e 's,/usr/lib,&/,' \
     -e 's/qemu-system-[^ ]* /&-display none /g')"
 
 # Override default OVMF paths for this distro's packaging.
@@ -309,6 +309,7 @@ function archmap() case ${*:-$DEFAULT_ARCH} in
 esac
 
 function releasemap() case ${*:-${options[release]:-$DEFAULT_RELEASE}} in
+    24.10) echo oracular ;;
     24.04) echo noble ;;
     23.10) echo mantic ;;
     23.04) echo lunar ;;

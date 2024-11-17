@@ -22,10 +22,11 @@ packages+=(
         glibc-langpack-en kernel-modules-extra linux-firmware
 
         # Utilities
+        acl
+        attr
         bash-color-prompt
         binutils
         bzip2
-        crypto-policies-scripts
         emacs-nox
         file
         findutils
@@ -69,11 +70,11 @@ packages+=(
         squashfs-tools
 
         # Host
-        qemu-{audio-pipewire,system-x86-core,ui-curses,ui-gtk}
+        qemu-{audio-pipewire,device-display-virtio-vga,kvm-core,ui-curses,ui-gtk}
         systemd-container
 
         # Installer
-        dnf{,-plugins-core}
+        dnf5-plugins
         fedora-repos-rawhide
         rpmfusion-free-release{,-rawhide,-tainted}
 
@@ -84,7 +85,6 @@ packages+=(
         gnome-calculator
         gnome-clocks
         gnome-screenshot
-        gnome-session-xsession
         gnome-shell
         gnome-terminal
         gucharmap
@@ -92,16 +92,16 @@ packages+=(
         pipewire-pulseaudio
 
         # Graphics
-        mesa-{dri,omx,vulkan}-drivers
+        mesa-{dri,vulkan}-drivers
         mesa-{va,vdpau}-drivers-freeworld
         xorg-x11-drv-{amdgpu,intel,nouveau}
 
         # Fonts
         abattis-cantarell-fonts
         adobe-source-code-pro-fonts
+        default-fonts-core
         'dejavu-*-fonts'
         'liberation-*-fonts'
-        stix-fonts
 
         # Browser
         firefox
@@ -133,7 +133,7 @@ packages_buildroot+=(bc make gcc git-core kernel-devel)
 function customize_buildroot() {
         # Build a USB WiFi device's out-of-tree driver.
         git clone --branch=v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-        git -C rtl8812au reset --hard 63cf0b4584aa8878b0fe8ab38017f31c319bde3d
+        git -C rtl8812au reset --hard b44d288f423ede0fc7cdbf92d07a7772cd727de4
         make -C rtl8812au -j"$(nproc)" all KVER="$(cd /lib/modules ; compgen -G '[0-9]*')" V=1
 
         # Build the proprietary NVIDIA drivers using akmods.
@@ -152,14 +152,10 @@ function customize() {
 
         echo "desktop-${options[distro]}" > root/etc/hostname
 
-        # Never start on Wayland.
-        exclude_paths+=(
-                usr/share/wayland-sessions
-                usr/share/xsessions/gnome.desktop
-        )
-
         # Downgrade from super-strict crypto policies for regular Internet use.
-        chroot root /usr/bin/update-crypto-policies --no-reload --set NEXT
+        base_dir=$PWD/root/etc/crypto-policies \
+        profile_dir=$PWD/root/usr/share/crypto-policies \
+        update-crypto-policies --no-reload --set NEXT
 
         # Install the out-of-tree USB WiFi driver.
         install -pm 0644 -t root/lib/modules/*/kernel/drivers/net/wireless \
@@ -186,10 +182,11 @@ EOF
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -machine q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
+    -machine q35 -cpu host -m 8G \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
+    -drive file=/usr/share/edk2/ovmf/OVMF_VARS.fd,format=raw,if=pflash,snapshot=on \
+    -audio pipewire,model=virtio -nic user,model=virtio-net-pci -vga virtio \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
-    -device intel-hda -device hda-output \
     "$@"
 EOF
 }

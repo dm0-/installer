@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Fix GNOME as best as possible.
-test -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml &&
+[[ -s root/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml ]] &&
 cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_fix.brain.damage.gschema.override
 [org.gnome.calculator]
 angle-units='radians'
@@ -99,7 +99,7 @@ use-theme-colors=false
 EOF
 
 opt double_display_scale &&
-test -s root/usr/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml &&
+[[ -s root/usr/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml ]] &&
 cat << 'EOF' > root/usr/share/glib-2.0/schemas/99_display.scale.gschema.override
 [org.gnome.desktop.interface]
 scaling-factor=2

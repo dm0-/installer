@@ -16,7 +16,7 @@ function create_buildroot() {
         opt uefi && packages_buildroot+=(centos-logos ImageMagick)
         opt uefi_vars && packages_buildroot+=(dosfstools mtools qemu-kvm-core)
         opt verity && packages_buildroot+=(veritysetup)
-        packages_buildroot+=(e2fsprogs openssl)
+        packages_buildroot+=(crypto-policies-scripts e2fsprogs openssl)
 
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output"/image.txz{.asc,}
@@ -29,13 +29,11 @@ function create_buildroot() {
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/dnf/dnf.conf"
 
-        # Rewrite repositories to use the archive of the last CentOS 8 release.
+        # Rewrite repositories to use the archive of the last CentOS release.
         $sed -i \
             -e 's/^mirrorlist=/#&/' \
-            -e 's/.releasever/8.5.2111/g' \
-            -e 's,/.contentdir/,/,g' \
             -e 's,^#*\(baseurl=http://\)mirror,\1vault,' \
-            "$buildroot"/etc/yum.repos.d/CentOS-Linux-*.repo
+            "$buildroot"/etc/yum.repos.d/CentOS-*.repo
 
         configure_initrd_generation
         initialize_buildroot "$@"
@@ -66,8 +64,10 @@ function distro_tweaks() {
         [[ -x root/usr/libexec/upowerd ]] &&
         echo 'd /var/lib/upower' > root/usr/lib/tmpfiles.d/upower.conf
 
-        [[ -x root/usr/bin/update-crypto-policies ]] &&
-        chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
+        [[ -d root/etc/crypto-policies ]] &&
+        base_dir=$PWD/root/etc/crypto-policies \
+        profile_dir=$PWD/root/usr/share/crypto-policies \
+        update-crypto-policies --no-reload --set FUTURE
 
         [[ -s root/etc/dnf/dnf.conf ]] &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
@@ -91,9 +91,10 @@ declare -f squash | $sed '/!/s/read_only/squash/'
 declare -f kernel_cmdline | $sed /type=erofs/d
 )"
 
-# Override SELinux initrd/squashfs creation to remove zstd.
-eval "$(declare -f relabel | $sed \
-    -e 's/zstd.*-22/xz --check=crc32 -9e/;s/zstd.* 22/xz/')"
+# Override SELinux initrd/squashfs creation to remove zstd and add old modules.
+eval "$(declare -f relabel | $sed '
+s/\(-name \)\?sd_mod\(.ko.xz -o\)\?/\1t10-pi\2 &/
+s/zstd.*-22/xz --check=crc32 -9e/;s/zstd.* 22/xz/')"
 
 # Override squashfs creation since CentOS 8 doesn't support zstd.
 eval "$(declare -f squash | $sed 's/ zstd .* 22 / xz /')"

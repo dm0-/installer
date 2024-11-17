@@ -41,7 +41,7 @@ pacman-key --populate archlinux
 pacman --noconfirm --sync --needed --refresh{,} --sysupgrade{,} "$@"
 
 # Work around Arch not providing Intel microcode so dracut can find it.
-if test -e /boot/intel-ucode.img
+if [[ -e /boot/intel-ucode.img ]]
 then
         mkdir -p /lib/firmware/intel-ucode
         cpio --to-stdout -i < /boot/intel-ucode.img > /lib/firmware/intel-ucode/all.img
@@ -67,7 +67,7 @@ function install_packages() {
         localedef --prefix=root -c -f UTF-8 -i en_US en_US.UTF-8
 
         # Define basic users and groups prior to configuring other stuff.
-        test -e root/usr/lib/sysusers.d/basic.conf &&
+        [[ -e root/usr/lib/sysusers.d/basic.conf ]] &&
         systemd-sysusers --root=root basic.conf
 
         # List everything installed in the image and what was used to build it.
@@ -76,7 +76,7 @@ function install_packages() {
 }
 
 function distro_tweaks() {
-        test -s root/etc/inputrc && sed -i \
+        [[ -s root/etc/inputrc ]] && sed -i \
             -e '/5.*g-of-history/s/: .*/: history-search-backward/' \
             -e '/6.*d-of-history/s/: .*/: history-search-forward/' \
             root/etc/inputrc
@@ -87,11 +87,11 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && test ! -s logo.bmp &&
+        opt uefi && [[ ! -s logo.bmp ]] &&
         sed /m2/d /usr/share/pixmaps/archlinux-logo.svg > /root/logo.svg &&
         magick -background none /root/logo.svg logo.bmp
-        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
-        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
+        [[ -s initrd.img ]] || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G '[0-9]*')"
+        [[ -s vmlinuz ]] || cp -pt . /lib/modules/*/vmlinuz
 fi
 
 # Override dm-init with userspace since the Arch kernel doesn't enable it.

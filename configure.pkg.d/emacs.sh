@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-if test -x root/usr/bin/emacs -o -h root/usr/bin/emacs
+if [[ -x root/usr/bin/emacs || -h root/usr/bin/emacs ]]
 then
         # Enable some basics to make Emacs more useful and less annoying.
         cat << 'EOF' > root/etc/skel/.emacs

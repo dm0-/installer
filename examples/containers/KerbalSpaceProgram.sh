@@ -11,7 +11,7 @@
 # NVIDIA drivers on the host system.  A numeric value selects the driver branch
 # version, and a non-numeric value defaults to the latest.
 
-options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=40 [squash]=1)
+options+=([arch]=x86_64 [distro]=fedora [gpt]=1 [release]=41 [squash]=1)
 
 packages+=(
         gtk2
@@ -71,11 +71,14 @@ mkdir -p "$XDG_DATA_HOME/KerbalSpaceProgram"
 exec sudo systemd-nspawn \
     --ambient-capability=CAP_DAC_OVERRIDE \
     --bind="$XDG_CONFIG_HOME/unity3d/Squad/Kerbal Space Program:/tmp/save" \
-    $(for dev in /dev/dri ; do echo "--bind=$dev" ; done) \
+    --bind="+/tmp:${XDG_RUNTIME_DIR:=/run/user/$UID}" \
+    $(for dev in /dev/dri/* ; do echo "--bind=$dev" ; done) \
     --bind-ro="${PULSE_COOKIE:-$HOME/.config/pulse/cookie}:/tmp/.pulse/cookie" \
     --bind-ro="${PULSE_SERVER:-$XDG_RUNTIME_DIR/pulse/native}:/tmp/.pulse/native" \
     --bind-ro=/etc/passwd \
-    --bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}" \
+    ${DISPLAY:+--bind-ro="/tmp/.X11-unix/X${DISPLAY##*:}"} \
+    ${WAYLAND_DISPLAY:+--bind-ro="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"} \
+    ${XAUTHORITY:+--bind-ro="$XAUTHORITY:/tmp/.Xauthority"} \
     --capability=CAP_DAC_OVERRIDE \
     --chdir=/KSP_linux \
     --hostname=KerbalSpaceProgram \
@@ -86,11 +89,14 @@ exec sudo systemd-nspawn \
     --personality=x86-64 \
     --private-network \
     --read-only \
-    --setenv="DISPLAY=$DISPLAY" \
     --setenv="HOME=/home/$USER" \
     --setenv=LC_ALL=C \
     --setenv=PULSE_COOKIE=/tmp/.pulse/cookie \
     --setenv=PULSE_SERVER=/tmp/.pulse/native \
+    ${DISPLAY:+--setenv="DISPLAY=$DISPLAY"} \
+    ${WAYLAND_DISPLAY:+--setenv="WAYLAND_DISPLAY=$WAYLAND_DISPLAY"} \
+    ${XAUTHORITY:+--setenv=XAUTHORITY=/tmp/.Xauthority} \
+    ${XDG_RUNTIME_DIR:+--setenv="XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"} \
     --tmpfs=/home \
     --user="$USER" \
     /init "$@"

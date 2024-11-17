@@ -128,8 +128,8 @@ function validate_options() {
         do
                 opt "${k}_cert" && opt "${k}_key"
                 opt "${k}_key" && opt "${k}_cert"
-                opt "${k}_cert" && test -s "${options[${k}_cert]}"
-                opt "${k}_key" && test -s "${options[${k}_key]}"
+                opt "${k}_cert" && [[ -s "${options[${k}_cert]}" ]]
+                opt "${k}_key" && [[ -s "${options[${k}_key]}" ]]
         done
         # A partition must be defined for writing the file system to disk.
         opt install_to_disk && (( ${#slots[@]} ))
@@ -186,7 +186,7 @@ function enter() {
         local -r console=$($nspawn --help |& $sed -n /--console=/p)
         $nspawn \
             --bind="$output:/wd" \
-            $(test -e /dev/kvm && echo --bind=/dev/kvm) \
+            $([[ -e /dev/kvm ]] && echo --bind=/dev/kvm) \
             ${loop:+--bind="$loop:/dev/loop-root"} \
             --chdir=/wd \
             ${console:+--console=pipe} \
@@ -212,7 +212,7 @@ do for ext in cert key ; do opt "${app}_$ext" && $cat \
 : ; done ; done)
 
 # Generate the default signing keys if they weren't supplied.
-if ! test -s sign.crt -a -s sign.key
+if [[ ! -s sign.crt || ! -s sign.key ]]
 then
         openssl req -batch -nodes -utf8 -x509 -newkey rsa:4096 -sha512 \
             -days 36500 -subj '/CN=Single-use signing key' \
@@ -223,7 +223,7 @@ fi
 # Point any missing application signing keys to the default keys.
 for app in sb verity
 do
-        if ! test -s "\$app.crt" -a -s "\$app.key"
+        if [[ ! -s \$app.crt || ! -s \$app.key ]]
         then
                 ln -fn sign.crt "\$app.crt"
                 ln -fn sign.key "\$app.key"
@@ -266,6 +266,19 @@ function create_working_directory() {
         output=$($mktemp --directory --tmpdir="$PWD" output.XXXXXXXXXX)
         buildroot="$output/buildroot"
         $mkdir -p "$buildroot"
+
+        # Save a cached script with the given options to rebuild this system.
+        if [[ -s install.sh ]]
+        then
+                $cat << EOF > "$output/rebuild.sh"
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+$(unset PWD ; shopt -p ; declare -p ; declare -f)
+set -"$-"o pipefail
+$($sed -n "/^$FUNCNAME$/,$ p" install.sh)
+EOF
+                $chmod 0755 "$output/rebuild.sh"
+        fi
 
         # Copy host-specific VM firmware files into the directory if given.
         opt uefi_vars || return 0
@@ -369,17 +382,18 @@ EOF
         { ldd "$root"/bin/* || : ; } |
         sed -n 's,^[^/]\+\(/[^ ]*\).*,\1,p' | sort -u |
         while read -rs ; do cp -t "$root/lib" "$REPLY" ; done
+        cp -pt "$root/lib" /usr/lib*/libgcc_s.so.*
 
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
         zstd --threads=0 --ultra -22 > relabel.img
 
-        test -s vmlinuz.relabel ||
+        [[ -s vmlinuz.relabel ]] ||
         cp -p /lib/modules/*/vmlinuz vmlinuz.relabel ||
         cp -p /boot/vmlinuz-* vmlinuz.relabel
 
         umount root
-        local -r cores=$(test -e /dev/kvm && nproc)
+        local -r cores=$([[ -e /dev/kvm ]] && nproc)
         qemu-system-x86_64 -nodefaults -no-reboot -serial stdio < /dev/null \
             ${cores:+-enable-kvm -cpu host -smp cores="$cores"} -m 1G \
             -kernel vmlinuz.relabel -initrd relabel.img \
@@ -387,7 +401,7 @@ EOF
             -drive file=/dev/loop-root,format=raw,media=disk
         mount /dev/loop-root root
         opt read_only && mv -t . "root/$disk"
-        test -s root/LABEL-SUCCESS ; rm -f root/LABEL-SUCCESS
+        [[ -s root/LABEL-SUCCESS ]] ; rm -f root/LABEL-SUCCESS
 fi
 
 function squash() if opt squash && ! opt selinux
@@ -399,7 +413,7 @@ then
             -wildcards -ef /dev/stdin <<< "${exclude_paths[*]}"
 elif opt ramdisk && ! opt selinux && ! opt verity
 then
-        test -x root/init || if opt read_only
+        [[ -x root/init ]] || if opt read_only
         then cat << 'EOF' > root/init ; chmod 0755 root/init
 #!/bin/sh -eux
 mountpoint -q /proc || mount -t proc proc /proc
@@ -465,7 +479,7 @@ then
             -noattr -nocerts -out verity.sig -outform DER
 
         cat "$disk" verity.img > final.img
-else test -z "$disk" || ln -fn "$disk" final.img
+else [[ -z $disk ]] || ln -fn "$disk" final.img
 fi
 
 function kernel_cmdline() if opt bootable
@@ -486,7 +500,7 @@ then
 
         echo > kernel_args.txt \
             $(opt read_only && echo ro || echo rw) \
-            $(test -s final.img && echo "root=$root" "rootfstype=$type") \
+            $([[ -s final.img ]] && echo "root=$root" "rootfstype=$type") \
             $(opt selinux && echo security=selinux || echo selinux=0) \
             ${options[loadpin]:+loadpin.enforce=1} \
             ${options[verity]:+"$dmsetup=\"$(<dmsetup.txt)\""} \
@@ -511,7 +525,7 @@ fi
 
 function build_systemd_ramdisk() if opt ramdisk
 then
-        test -s "$1" && local -r base="$1" ||
+        [[ -s $1 ]] && local -r base=$1 ||
         { local -r base=/root/initrd.img ; dracut --force "$base" "$1" ; }
         local -r root=$(mktemp --directory --tmpdir="$PWD" ramdisk.XXXXXXXXXX)
         mkdir -p "$root/usr/lib/systemd/system/dev-loop0.device.requires"
@@ -530,7 +544,7 @@ EOF
         find "$root" -mindepth 1 -printf '%P\n' |
         cpio -D "$root" -H newc -R 0:0 -o |
         zstd --threads=0 --ultra -22 | cat "$base" - > initrd.img
-elif test -s "$1"
+elif [[ -s $1 ]]
 then cp -p "$1" initrd.img
 else dracut --force initrd.img "$1"
 fi
@@ -598,7 +612,7 @@ EOF
 
         local name ; for name in system-auth common-session
         do
-                test -s "root/etc/pam.d/$name" &&
+                [[ -s root/etc/pam.d/$name ]] &&
                 echo >> "root/etc/pam.d/$name" \
                     'session     optional      pam_mkhomedir.so' &&
                 break || continue
@@ -650,7 +664,7 @@ EOF
         do echo /run/etcgo/overlay /etc >> "$policy/file_contexts.subs_dist"
         done
 
-        if test -x root/usr/bin/git
+        if [[ -x root/usr/bin/git ]]
         then
                 cat << 'EOF' > root/usr/lib/systemd/system/etcgo.service
 [Unit]
@@ -714,14 +728,14 @@ function configure_system() {
 
         sed -i -e 's/^root:[^:]*/root:*/' root/etc/shadow
 
-        test -s root/etc/sudoers &&
+        [[ -s root/etc/sudoers ]] &&
         sed -i -e '/%wheel/{s/^[# ]*/# /;/NOPASSWD/s/^[# ]*//;}' root/etc/sudoers
 
-        test -s root/etc/profile &&
+        [[ -s root/etc/profile ]] &&
         sed -i -e 's/ umask 0[0-7]*/ umask 022/' root/etc/profile
 
         local -ar modes=(disabled permissive enforcing)
-        test -s root/etc/selinux/config &&
+        [[ -s root/etc/selinux/config ]] &&
         sed -i \
             -e "/^SELINUX=/s/=.*/=${modes[0${options[selinux]:+1+0${options[enforcing]:+1}}]}/" \
             -e "/^SELINUXTYPE=/s/=.*/=${options[selinux]:-targeted}/" \
@@ -735,7 +749,7 @@ function defer() {
 }
 EOF
 
-        test -d root/usr/lib/locale/en_US.utf8 ||
+        [[ -d root/usr/lib/locale/en_US.utf8 ]] ||
         localedef --list-archive root/usr/lib/locale/locale-archive |& grep -Fqsx en_US.utf8 &&
         echo 'LANG="en_US.UTF-8"' > root/etc/locale.conf
 
@@ -763,11 +777,11 @@ function finalize_packages() {
         local dir
 
         # Update portage environment configuration.
-        test -x /usr/sbin/env-update -a -d root/etc/env.d &&
+        [[ -x /usr/sbin/env-update && -d root/etc/env.d ]] &&
         ROOT=root env-update --no-ldconfig
 
         # Regenerate gsettings defaults.
-        test -d root/usr/share/glib-2.0/schemas &&
+        [[ -d root/usr/share/glib-2.0/schemas ]] &&
         glib-compile-schemas root/usr/share/glib-2.0/schemas
 
         # Run depmod when kernel modules are installed.
@@ -776,7 +790,7 @@ function finalize_packages() {
 
         # Move the giant hardware database to /usr when udev is installed.
         rm -f root/etc/udev/hwdb.bin
-        test -x /bin/systemd-hwdb && systemd-hwdb --root=root --usr update
+        [[ -x /bin/systemd-hwdb ]] && systemd-hwdb --root=root --usr update
 
         # Create users now so it doesn't need to happen during boot.
         systemd-sysusers --root=root
@@ -812,10 +826,10 @@ EOF
                 else echo 'mm=$(findmnt --noheadings --output=maj:min --raw /)'
                 fi >> "root$gendir/repart-disk-wait"
                 cat << 'EOF' >> "root$gendir/repart-disk-wait"
-test -e "/sys/dev/block/$mm/partition" || exit 0  # not partitioned
+[[ -e /sys/dev/block/$mm/partition ]] || exit 0  # not partitioned
 part=$(sed -n s,^DEVNAME=,/dev/,p "/sys/dev/block/$mm/uevent")
 dev=/dev/$(lsblk --nodeps --noheadings --output=PKNAME "$part")
-test -b "$dev" || exit 0  # failed to find the partition's parent device
+[[ -b $dev ]] || exit 0  # failed to find the partition's parent device
 unit=$(systemd-escape --path "$dev").device
 mkdir -p /run/systemd/system/systemd-repart.service.d
 echo -e "[Unit]\nAfter=$unit\nWants=$unit" \
@@ -825,9 +839,9 @@ EOF
         fi
 
         # Save os-release outside the image after all customizations.
-        if test -s root/etc/os-release
+        if [[ -s root/etc/os-release ]]
         then cp -pt . root/etc/os-release
-        elif test -s root/usr/lib/os-release
+        elif [[ -s root/usr/lib/os-release ]]
         then cp -pt . root/usr/lib/os-release
         fi
 }
@@ -835,12 +849,12 @@ EOF
 function produce_uefi_exe() if opt uefi
 then
         local -r arch=$(archmap_uefi ${options[arch]-})
-        local -r dtb=$(test -s devicetree.dtb && echo devicetree.dtb)
-        local -r initrd=$(test -s initrd.img && echo initrd.img)
-        local -r kargs=$(test -s kernel_args.txt && echo kernel_args.txt)
-        local -r linux=$(test -s vmlinux && echo vmlinux || echo vmlinuz)
-        local -r logo=$(test -s logo.bmp && echo logo.bmp)
-        local -r osrelease=$(test -s os-release && echo os-release)
+        local -r dtb=$([[ -s devicetree.dtb ]] && echo devicetree.dtb)
+        local -r initrd=$([[ -s initrd.img ]] && echo initrd.img)
+        local -r kargs=$([[ -s kernel_args.txt ]] && echo kernel_args.txt)
+        local -r linux=$([[ -s vmlinux ]] && echo vmlinux || echo vmlinuz)
+        local -r logo=$([[ -s logo.bmp ]] && echo logo.bmp)
+        local -r osrelease=$([[ -s os-release ]] && echo os-release)
         local -r stub=/usr/lib/systemd/boot/efi/linux${arch,,}.efi.stub
         local -ir align=$(objdump -p "$stub" | awk '$1=="SectionAlignment"{print strtonum("0x"$2)}')
         local -i end=$(objdump -h "$stub" | awk 'NF==7{e=strtonum("0x"$3)+strtonum("0x"$4)}END{print e}') t
@@ -908,7 +922,7 @@ then
         dd bs=$bs conv=notrunc if=final.img of=gpt.img seek=$(( start + esp ))
 
         # Weave the launcher script around the GPT.
-        if test -s launch.sh
+        if [[ -s launch.sh ]]
         then
                 dd bs=$bs conv=notrunc of=gpt.img << 'EOF'
 #!/bin/bash -eu
@@ -1030,7 +1044,7 @@ function store_home_on_var() {
         done
         mv root/home root/var/home ; ln -fns var/home root/home
         echo 'Q /var/home 0755' > root/usr/lib/tmpfiles.d/home.conf
-        if test "x$*" = x+root
+        if [[ $* = +root ]]
         then
                 opt selinux && for policy in root/etc/selinux/*/contexts/files
                 do

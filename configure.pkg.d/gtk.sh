@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-if test -d root/usr/share/themes/Emacs/gtk-3.0
+if [[ -d root/usr/share/themes/Emacs/gtk-3.0 ]]
 then
-        test ! -s root/etc/gtk-3.0/settings.ini &&
+        [[ ! -s root/etc/gtk-3.0/settings.ini ]] &&
         mkdir -p root/etc/gtk-3.0 &&
         echo '[Settings]' > root/etc/gtk-3.0/settings.ini
 

@@ -30,6 +30,12 @@ function create_buildroot() {
         # Let the configuration decide if the system should have documentation.
         $sed -i -e '/^tsflags=/d' "$buildroot/etc/yum.conf"
 
+        # Rewrite repositories to use the archive of the last CentOS release.
+        $sed -i \
+            -e 's/^mirrorlist=/#&/' \
+            -e 's,^#*\(baseurl=http://\)mirror,\1vault,' \
+            "$buildroot"/etc/yum.repos.d/CentOS-*.repo
+
         configure_initrd_generation
         initialize_buildroot "$@"
 

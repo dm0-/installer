@@ -147,7 +147,7 @@ EOF
 
 function customize_buildroot() {
         # Enable flags for instruction sets supported by this CPU.
-        test -x /usr/bin/cpuid2cpuflags &&
+        [[ -x /usr/bin/cpuid2cpuflags ]] &&
         cpuid2cpuflags | sed -n 's/^\([^ :]*\): \(.*\)/\1="\2"/p' >> "/usr/${options[host]}/etc/portage/make.conf"
 
         # Bundle x86 early microcode updates into the kernel for no initrd.
@@ -186,10 +186,11 @@ EOF
         cat << 'EOF' > launch.sh ; chmod 0755 launch.sh
 #!/bin/sh -eu
 exec qemu-kvm -nodefaults \
-    -machine q35 -cpu host -m 8G -vga std -nic user,model=virtio-net-pci \
+    -machine q35 -cpu host -m 8G \
     -drive file=/usr/share/edk2/ovmf/OVMF_CODE.fd,format=raw,if=pflash,read-only=on \
+    -drive file=/usr/share/edk2/ovmf/OVMF_VARS.fd,format=raw,if=pflash,snapshot=on \
+    -audio pipewire,model=virtio -nic user,model=virtio-net-pci -vga virtio \
     -drive file="${IMAGE:-gpt.img}",format=raw,media=disk,snapshot=on \
-    -device intel-hda -device hda-output \
     "$@"
 EOF
 }

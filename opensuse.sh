@@ -70,8 +70,8 @@ function install_packages() {
 
         # Give this distro a compatible firewall before configuring it.
         tee \
-            >(test -s root/usr/sbin/iptables-restore && exec sed s/6//g > root/usr/lib/systemd/system/iptables.service || exec cat > /dev/null) \
-            << 'EOF' > $(test -s root/usr/sbin/ip6tables-restore && echo root/usr/lib/systemd/system/ip6tables.service || echo /dev/null)
+            >([[ -s root/usr/sbin/iptables-restore ]] && exec sed s/6//g > root/usr/lib/systemd/system/iptables.service || exec cat > /dev/null) \
+            << 'EOF' > $([[ -s root/usr/sbin/ip6tables-restore ]] && echo root/usr/lib/systemd/system/ip6tables.service || echo /dev/null)
 [Unit]
 Description=Load ip6tables firewall rules
 Before=network-pre.target
@@ -101,19 +101,19 @@ EOF
 function distro_tweaks() {
         rm -fr root/etc/init.d root/usr/lib/modprobe.d/60-blacklist_fs-erofs.conf
 
-        test -s root/usr/share/systemd/tmp.mount &&
+        [[ -s root/usr/share/systemd/tmp.mount ]] &&
         mv -t root/usr/lib/systemd/system root/usr/share/systemd/tmp.mount
 
-        test -s root/etc/zypp/repos.d/repo-non-oss.repo &&
+        [[ -s root/etc/zypp/repos.d/repo-non-oss.repo ]] &&
         sed -i -e '/^enabled=/s/=.*/=0/' root/etc/zypp/repos.d/repo-non-oss.repo
 
-        test -s root/usr/share/glib-2.0/schemas/openSUSE-branding.gschema.override &&
+        [[ -s root/usr/share/glib-2.0/schemas/openSUSE-branding.gschema.override ]] &&
         mv root/usr/share/glib-2.0/schemas/{,50_}openSUSE-branding.gschema.override
 
-        test -s root/usr/lib/systemd/system/polkit.service &&
+        [[ -s root/usr/lib/systemd/system/polkit.service ]] &&
         sed -i -e '/^Type=/iStateDirectory=polkit' root/usr/lib/systemd/system/polkit.service
 
-        test -s root/etc/pam.d/common-auth &&
+        [[ -s root/etc/pam.d/common-auth ]] &&
         sed -i -e 's/try_first_pass/& nullok/' root/etc/pam.d/common-auth
 
         sed -i -e '1,/ PS1=/s/ PS1="/&$? /' root/etc/bash.bashrc
@@ -122,16 +122,15 @@ function distro_tweaks() {
 
 function save_boot_files() if opt bootable
 then
-        opt uefi && test ! -s logo.bmp &&
+        opt uefi && [[ ! -s logo.bmp ]] &&
         sed '/<svg/,/>/s,>,&<style>#g885{display:none}</style>,' /usr/share/pixmaps/distribution-logos/light-dual-branding.svg > /root/logo.svg &&
         magick -background none -size 720x320 /root/logo.svg logo.bmp
-        test -s initrd.img || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
-        test -s vmlinuz || cp -pt . /lib/modules/*/vmlinuz
+        [[ -s initrd.img ]] || build_systemd_ramdisk "$(cd /lib/modules ; compgen -G "$(rpm -q --qf '%{VERSION}' kernel-default)*")"
+        [[ -s vmlinuz ]] || cp -pt . /lib/modules/*/vmlinuz
 fi
 
 # Override relabeling to add the missing modules and fix pthread_cancel.
 eval "$(declare -f relabel | $sed \
-    -e '/ldd/iopt squash && cp -t "$root/lib" /lib*/libgcc_s.so.1' \
     -e '/find/iln -fns busybox "$root/bin/insmod"\
 local mod ; for mod in drivers/ata/ata_piix fs/{jbd2/jbd2,mbcache,ext4/ext4}\
 do zstd -cd /lib/modules/*/*/"$mod.ko.zst" > "$root/lib/${mod##*/}.ko"\

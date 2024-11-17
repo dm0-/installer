@@ -4,6 +4,10 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=38).
 # Override buildroot creation to set the container image file name.
 eval "$(declare -f create_buildroot | $sed 's/cver=.*/cver=1.6/')"
 
+# Point EOL releases at the archive repository server.
+eval "$(declare -f create_buildroot | $sed '
+s,dl.fedoraproject.org/pub,archives.fedoraproject.org/pub/archive,g')"
+
 function verify_distro() {
         local -rx GNUPGHOME="$output/gnupg"
         trap -- '$rm -fr "$GNUPGHOME" ; trap - RETURN' RETURN

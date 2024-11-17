@@ -238,7 +238,7 @@ EOF
         hcopy -r grub.elf :grub.elf
         hcopy -r kargs.env :kargs_a
         hcopy -r vmlinux :linux_a
-        test -s initrd.img && hcopy -r initrd.img :initrd_a
+        [[ -s initrd.img ]] && hcopy -r initrd.img :initrd_a
         hattrib -c UNIX -t tbxi :grub.elf
         hattrib -b :
         humount

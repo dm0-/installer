@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-if test -s root/etc/X11/WindowMaker/WindowMaker
+if [[ -s root/etc/X11/WindowMaker/WindowMaker ]]
 then
         local -A config=(
                 [CloseKey]='"Mod1+F4"'

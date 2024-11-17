@@ -7,14 +7,15 @@ options[verity_sig]=
 DEFAULT_RELEASE=9
 
 function create_buildroot() {
-        local -r cver=20240422.0
-        local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Base-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
+        local -r cver=20241112.0
+        local -r image="https://cloud.centos.org/centos/${options[release]:=$DEFAULT_RELEASE}-stream/$DEFAULT_ARCH/images/CentOS-Stream-Container-Minimal-${options[release]}-$cver.$DEFAULT_ARCH.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
         opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(linux-firmware microcode_ctl)
         opt bootable && opt squash && packages_buildroot+=(kernel-modules)
         opt gpt && packages_buildroot+=(util-linux)
         opt gpt && opt uefi && packages_buildroot+=(dosfstools mtools)
+        opt read_only || packages_buildroot+=(findutils)
         opt read_only && ! opt squash && packages_buildroot+=(erofs-utils)
         opt secureboot && packages_buildroot+=(pesign)
         opt selinux && packages_buildroot+=(kernel-core policycoreutils qemu-kvm-core zstd)
@@ -23,7 +24,7 @@ function create_buildroot() {
         opt uefi_vars && packages_buildroot+=(dosfstools mtools qemu-kvm-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
-        packages_buildroot+=(e2fsprogs openssl systemd)
+        packages_buildroot+=(crypto-policies-scripts e2fsprogs openssl systemd)
 
         $curl -L "$image" > "$output/image.txz"
         verify_distro "$output/image.txz"
@@ -33,16 +34,21 @@ function create_buildroot() {
 
         # Disable bad packaging options.
         $sed -i -e '/^[[]main]/ainstall_weak_deps=False' "$buildroot/etc/dnf/dnf.conf"
+        [[ -x $buildroot/usr/bin/dnf ]] || $ln -fns dnf-3 "$buildroot/usr/bin/dnf"
 
         configure_initrd_generation
         initialize_buildroot "$@"
 
         opt networkd || { opt read_only && ! opt squash ; } || opt uefi && enable_repo_epel  # EPEL now has core RPMs.
         script "${packages_buildroot[@]}" << 'EOF'
-dnf --assumeyes --setopt=tsflags=nodocs upgrade
-exec dnf --assumeyes --setopt=tsflags=nodocs install "$@"
+dnf --assumeyes --setopt={keepcache=1,tsflags=nodocs} upgrade
+exec dnf --assumeyes --setopt={keepcache=1,tsflags=nodocs} install "$@"
 EOF
 }
+
+# Override package installation to go back to pre-dnf5.
+eval "$(declare -f install_packages |
+$sed 's/libdnf5/dnf/g;s/ --use-host-config / /')"
 
 function distro_tweaks() {
         exclude_paths+=('usr/lib/.build-id')
@@ -52,8 +58,10 @@ function distro_tweaks() {
         mkdir -p root/usr/lib/systemd/system/local-fs.target.wants
         ln -fst root/usr/lib/systemd/system/local-fs.target.wants ../tmp.mount
 
-        [[ -x root/usr/bin/update-crypto-policies ]] &&
-        chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
+        [[ -d root/etc/crypto-policies ]] &&
+        base_dir=$PWD/root/etc/crypto-policies \
+        profile_dir=$PWD/root/usr/share/crypto-policies \
+        update-crypto-policies --no-reload --set FUTURE
 
         [[ -s root/etc/dnf/dnf.conf ]] &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
@@ -85,7 +93,7 @@ export PATH=/bin
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
-for mod in t10-pi sd_mod libata ata_piix jbd2 mbcache ext4
+for mod in sd_mod libata ata_piix jbd2 mbcache ext4
 do insmod "/lib/$mod.ko"
 done
 mount /dev/sda /sysroot
@@ -124,7 +132,7 @@ EOF
             /usr/*bin/{bash,load_policy,mount,sed,setfiles,umount}
         cp /usr/bin/kmod "$root/bin/insmod"
         find /usr/lib/modules/*/kernel '(' \
-            -name t10-pi.ko.xz -o -name sd_mod.ko.xz -o \
+            -name sd_mod.ko.xz -o \
             -name libata.ko.xz -o -name ata_piix.ko.xz -o \
             -name ext4.ko.xz -o -name jbd2.ko.xz -o -name mbcache.ko.xz -o \
             -false ')' -exec cp -at "$root/lib" '{}' +
@@ -170,10 +178,10 @@ s,qemu-system-\S*,/usr/libexec/qemu-kvm,')"
 # CentOS container releases are horribly broken.  Check sums with no signature.
 function verify_distro() [[
         $($sha256sum "$1") == $(case $DEFAULT_ARCH in
-            aarch64) echo a17d859825244be6ff306844992cdda9ca6277540c3df979d0235525015fa05b ;;
-            ppc64le) echo 4c4e47704473c94305271716fc37b8aaea05d64f33926ed48a76811eabfe176a ;;
-            s390x)   echo b7f9963452693fc71c523d36503598d217ed78111be7e9a98dc94a0e0a2632dc ;;
-            x86_64)  echo e6223b854f5ff6c6a3cbf686f3e69f67593ab4fad2bd0261e29df3f84f714c67 ;;
+            aarch64) echo ff4189a767e1e30bd4579d89ed5e4007657c9258901365a881935cad22277fde ;;
+            ppc64le) echo a59f8a6e61bfa5574de4eca14ed93bb5c8ea356cb76c10f14e30c0a07f4359ac ;;
+            s390x)   echo 33a3e024ec9f2b2409e99b44e4c8d4987d09f4ef29de2342f342b366afd0a57e ;;
+            x86_64)  echo c3be98f79edc2b4c4db596df9c1896fda934a44f2aaec6d9d7037c69f73f4812 ;;
         esac)\ *
 ]]
 

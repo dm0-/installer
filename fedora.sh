@@ -3,11 +3,11 @@ packages_buildroot=()
 
 options[loadpin]=
 
-DEFAULT_RELEASE=40
+DEFAULT_RELEASE=41
 
 function create_buildroot() {
-        local -r cver=1.14
-        local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-Generic.$DEFAULT_ARCH-${options[release]}-$cver.oci.tar.xz"
+        local -r cver=1.4
+        local -r image="https://dl.fedoraproject.org/pub/fedora/linux/releases/${options[release]:=$DEFAULT_RELEASE}/Container/$DEFAULT_ARCH/images/Fedora-Container-Base-Generic-Minimal-${options[release]}-$cver.$DEFAULT_ARCH.oci.tar.xz"
 
         opt bootable && packages_buildroot+=(kernel-core zstd)
         opt bootable && [[ ${options[arch]:-$DEFAULT_ARCH} == *[3-6x]86* ]] && packages_buildroot+=(amd-ucode-firmware microcode_ctl)
@@ -23,7 +23,7 @@ function create_buildroot() {
         opt uefi_vars && packages_buildroot+=(qemu-system-x86-core)
         opt verity && packages_buildroot+=(veritysetup)
         opt verity_sig && opt bootable && packages_buildroot+=(kernel-devel keyutils)
-        packages_buildroot+=(e2fsprogs openssl systemd)
+        packages_buildroot+=(crypto-policies-scripts e2fsprogs openssl systemd)
 
         $curl -L "${image%-Base*}-${options[release]}-$cver-$DEFAULT_ARCH-CHECKSUM" > "$output/checksum"
         $curl -L "$image" > "$output/image.txz"
@@ -46,8 +46,8 @@ function create_buildroot() {
         initialize_buildroot "$@"
 
         script "${packages_buildroot[@]}" << 'EOF'
-dnf --assumeyes --setopt=tsflags=nodocs upgrade
-exec dnf --assumeyes --setopt=tsflags=nodocs install "$@"
+dnf --assumeyes --setopt={keepcache=1,tsflags=nodocs} upgrade
+exec dnf --assumeyes --setopt={keepcache=1,tsflags=nodocs} install "$@"
 EOF
 }
 
@@ -56,10 +56,10 @@ function install_packages() {
         opt networkd && packages+=(systemd-networkd systemd-resolved)
         opt selinux && packages+=("selinux-policy-${options[selinux]}")
 
-        mount -o bind,X-mount.mkdir {,root}/var/cache/dnf
-        trap -- 'umount root/var/cache/dnf ; trap - RETURN' RETURN
+        mount -o bind,X-mount.mkdir {,root}/var/cache/libdnf5
+        trap -- 'umount root/var/cache/libdnf5 ; trap - RETURN' RETURN
 
-        dnf --assumeyes --installroot="$PWD/root" \
+        dnf --assumeyes --installroot="$PWD/root" --use-host-config \
             ${options[arch]:+--forcearch="${options[arch]}"} \
             --releasever="${options[release]}" \
             install "${packages[@]:-filesystem}" "$@"
@@ -80,14 +80,19 @@ function distro_tweaks() {
 
         rm -fr root/etc/inittab root/etc/rc.d
 
-        [[ -x root/usr/bin/update-crypto-policies ]] &&
-        chroot root /usr/bin/update-crypto-policies --no-reload --set FUTURE
+        [[ -d root/etc/crypto-policies ]] &&
+        base_dir=$PWD/root/etc/crypto-policies \
+        profile_dir=$PWD/root/usr/share/crypto-policies \
+        update-crypto-policies --no-reload --set FUTURE
 
         [[ -s root/etc/dnf/dnf.conf ]] &&
         sed -i -e '/^[[]main]/ainstall_weak_deps=False' root/etc/dnf/dnf.conf
 
-        compgen -G 'root/etc/yum.repos.d/*cisco*.repo' &&
-        sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*{cisco,modular}*.repo
+        compgen -G 'root/etc/yum.repos.d/*cisco*.repo' && [[ ! -d root/usr/share/licenses/openh264 ]] &&
+        sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*cisco*.repo
+
+        compgen -G 'root/etc/yum.repos.d/*modular*.repo' &&
+        sed -i -e 's/^enabled=1.*/enabled=0/' root/etc/yum.repos.d/*modular*.repo
 
         [[ -s root/etc/profile.d/bash-color-prompt.sh ]] &&
         sed -i -e "s/PS1='"'/&$? /' root/etc/profile.d/bash-color-prompt.sh
@@ -208,36 +213,36 @@ function verify_distro() {
         $mkdir -pm 0700 "$GNUPGHOME"
         $gpg --import
         $gpg --verify "$1"
-        [[ $($sha256sum "$2") == $($sed -n '/Generic\..*=/{s/.* //p;q;}' "$1")\ * ]]
+        [[ $($sha256sum "$2") == $($sed -n '/Minimal.*=/{s/.* //p;q;}' "$1")\ * ]]
 } << 'EOF'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
-mQINBGPQTCwBEADFUL0EQLzwpKHtlPkacVI156F2LnWp6K69g/6yzllidHI3b7EV
-QgQ9/Kdou6wNuOahNKa6WcEi6grEXexD7pAcu4xdRUp79XxQy5pC7Aq2/Dwf0vRL
-2y0kqof+C7iSzhHsfLoaqKKeh2njAo1KLZXYTHAWAMbXEyO/FJevaHLXe2+yYd7j
-luD58gyXgGDXXJ2lymLqs2jobjWdmGPNZGFl36RP3Dnk0FpbdH78kyIIsc2foYuF
-00rnuumwCtK3V58VOZo6IkaYk2irdyeetmJjVHwLHwJB3EaAwGy9Z2oAH3LxxFfk
-rQb0DH0Nzb3fpEziopOOqSi+6guV4RHUKAkCUMu+Mo5XwFVPUAIfNRTVqoIaEasC
-WO26lhkB87wwIvyb/TPGSeh6laHPRf0QOUOLkugdkSHoaJFWoTCcu9Y4aeDpf+ZQ
-fMVmkJNRS1tXONgz+pDk1rro/tNrkusYG18xjvSZTB0P0C4b4+jgK5l7me0NU6G3
-Ww/hIng5lxWfXgE9bpxlN834v1xy5Z3v17guJu1ec/jzKzQQ4356wyegXURjYoWe
-awcnK1S+9gxivnkOk1bGLNxrEh5vB6PDcI1VQ1ECH50EHyvE1IXJDaaStdAkacv2
-qHcd15CnlBW1LYFj0CHs/sGu9FD0iSF95OVRX4gjg9Wa4f8KvtEO/f+FeQARAQAB
-tDFGZWRvcmEgKDQwKSA8ZmVkb3JhLTQwLXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
-cmc+iQJOBBMBCAA4FiEEEV35rvhXhT7oRF0KBydwfqFbecwFAmPQTCwCGw8FCwkI
-BwIGFQoJCAsCBBYCAwECHgECF4AACgkQBydwfqFbecxJOw//XaoJG3zN01bVM63H
-nFmMW/EnLzKrZqH8ZNq8CP9ycoc4q8SYcMprHKG9jufzj5/FhtpYecp3kBMpSYHt
-Vu46LS9NajJDwdfvUMezVbieNIQ8icTR5s5IUYFlc47eG6PRe3k0n5fOPcIb6q82
-byrK3dQnanOcVdoGU7QO9LAAHO9hg0zgZa0MxQAlDQov3dZcr7u7qGcQmU5JzcRS
-JgfDxHxDuMjmq6Kd0/UwD00kd2ptZgRls0ntXdm9CZGtQ/Q0baJ3eRzccpd/8bxy
-RWF9MnOdmV6ojcFKYECjEzcuheUlcKQH9rLkeBSfgrIlK3L7LG8bg5ouZLdx17rQ
-XABNQGmJTaGAiEnS/48G3roMS8R7fhUljcKr6t63QQQJ2qWdPvI6EMC2xKZsLHK4
-XiUvrmJpUprvEQSKBUOf/2zuXDBshtAnoKh7h5aG+TvozL4yNG5DKpSH3MRj1E43
-KoMsP/GN/X5h+vJnvhiCWxNMPP81Op0czBAgukBm627FTnsvieJOOrzyxb1s75+W
-56gJombmhzUfzr88AYY9mFy7diTw/oldDZcfwa8rvOAGJVDlyr2hqkLoGl+5jPex
-slt3NF4caE/wP9wPMgFRkmMOr8eiRhjlWLrO6mQdBp7Qsj3kEXioP+CZ1cv/sbaK
-4DM7VidB4PLrMFQMaf0LpjpC2DM=
-=wOl2
+mQINBGTSYSwBEACTHP7OFONk+1B1awJeYToUFMVbYZIjNvj9M7zwf5vzH52FlpXX
+dsbs1AWh6NUe0zV1J5JjCGiI24Vjacysg7L2zsbgT48vVv3mXrXorjYOzT/cxsAh
+7PNhEx+OevKzAx3oy0Ok27c11Dz0W4ynwVy80gB6XHI2rd04v74TiC0xQYlxj1Sh
+j6irdLmHMD/NtTCWmCM7MRf91UcC4rk6JOap715UKey2fk1h/wylv0guMP3o+CpG
+jxDHENkfl/GsWCSYBaHec7o5/qg5RoAkN5NImVI00CqiEO1WHPBaCJalgwbuQCiW
+006jwVDHJHRoufS85PEKaY9yqd5Fr76kdqCLsf3Ys9yxGVfOTvCaKOa+ElWBo+i6
+yOtEO6Qp1Qd5spomBJ+FVPjU89lR9aDnvxIVX7X6zu638qV0K3Lb2HKmqiVG6ccJ
+IdxNVXJAekvu7ypwvRzEc0mGgfkZ47flaj7X8SxiebbXhYWdqRBF0rMYc7ppkbCp
+5NsD+KJilkfeOGb7VK6Rx5vXmySiNCb9GqN51KRl4Z1qllrc/Q1k5CCMt3AUq0hv
+1fwK3eFGtd4/YgF9LoZ0tW8WFZ6h/zWnRvJ/SDBPhtovoSpxptCd18MWiakwvwW0
+sxueKFlctdDjW1a/gri3V4RdTOZbr0AqDjGGcYndt/oxMeLxaK9qvs2xIQARAQAB
+tDFGZWRvcmEgKDQxKSA8ZmVkb3JhLTQxLXByaW1hcnlAZmVkb3JhcHJvamVjdC5v
+cmc+iQJOBBMBCAA4FiEERmzy2LYLwwV6qUU+0GIkYumdatEFAmTSYSwCGw8FCwkI
+BwIGFQoJCAsCBBYCAwECHgECF4AACgkQ0GIkYumdatFHIQ//bTSVGDvJGmUxgHJw
+MnGM2G6Rc9PNAKuXbh6t4qsrRKp22pWNnMmqqcGaoiBxKP989a2cJgIVP49SsC4C
+ewaafEYhsitUtKagx6z3F7UObnvQpOz5U5iFcJCvRDtC4FXq+VkMdhT09zMZY4Ey
+ia29bV1B1R7pe7yXh6l3WyVj9AAXUSEBR/OsakaYEMzScLnROBEU1YbWR9iHsc7M
+rEsqju8tVUh1XAqIqJgLW3VrKs0g0nDVR0rBc8aDhrtVfylwWVl61gHsPFJfAkjj
+OPgvQgThrhlCWo23EZSk/Hj8YRrnhUbEDnk+Z3Xv5Uyl1kxGRk5dGBnv+7u3CKvV
+G6sU3tPtna/8rFblfKSMZIPhzTADdsUZ88Fn9pZkfqgPi8LZ4sS8vHtaykZmbfj6
+t9a2mBYJQ+/pxiH8olzyhKMdNyesLPeQmESgwM/qlJ+b2Hbogwuuzp8o2JMezxIe
+CAwLoPh+hxMPGnBRklh6Vj5R5z29wIZd6pKCavVRfJ+ON94wuOSEofhBfQNZIIFV
+jagEbk60iksysxsObfVEHFhtGnZCEgCRC87BfX6tzIIDv23Zs4Bv9gcaaRXTAml2
+kZXktduHkV9q3hhcoha5FgGSe244C4GsMUkWCsZtuN6tevUPo+n2ZZAA7ikQ768r
+Iz9rPOI8/Ra7qnwSlNIVnkTb9bc=
+=e2ew
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
 

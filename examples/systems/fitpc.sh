@@ -215,9 +215,9 @@ declare -f verify_distro &>/dev/null &&
 eval "$(declare -f partition | $sed 's/BOOT.*.EFI/grub.cfg/g
 s/uefi/bootable/g
 /mmd/d;s,/EFI/BOOT,,g;/^ *mcopy/a\
-test -s initrd.img && mcopy -i $esp_image initrd.img ::/initrd_a\
+[[ -s initrd.img ]] && mcopy -i $esp_image initrd.img ::/initrd_a\
 mcopy -i $esp_image vmlinuz ::/linux_a
-/^ *if test -s launch.sh/{s/if/elif/;i\
+/^ *if \S* -s launch.sh/{s/if/elif/;i\
 if opt bootable ; then\
 dd bs=$bs conv=notrunc if=core.img of=gpt.img seek=34\
 dd bs=$bs conv=notrunc if=boot.img of=gpt.img

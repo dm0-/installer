@@ -212,7 +212,6 @@ EOF
 
         # Write build environment modifiers for later use.
         echo "CTARGET=\"$host\"" >> "$portage/env/ctarget.conf"
-        echo 'LDFLAGS="-lgcc_s $LDFLAGS"' >> "$portage/env/link-gcc_s.conf"
         $cat << 'EOF' >> "$portage/env/no-lto.conf"
 CFLAGS="$CFLAGS -fno-lto"
 CXXFLAGS="$CXXFLAGS -fno-lto"
@@ -236,7 +235,7 @@ EOF
         $mkdir -p "${portage%/portage}"
         $cp -at "${portage%/portage}" "$buildroot/etc/portage"
         $cat << EOF > "$portage/make.profile/parent"
-$(test -n "$profile" && echo "gentoo:$profile" || {
+$([[ -n $profile ]] && echo "gentoo:$profile" || {
         generic=(base arch/base default/linux releases/17.0)
         IFS=$'\n' ; echo "${generic[*]/#/gentoo:}"
 })
@@ -339,10 +338,8 @@ EOF
         # Compile GRUB modules for the target system.
         echo 'sys-boot/grub ctarget.conf' >> "$portage/package.env/grub.conf"
         # Support cross-compiling Rust projects.
-        test "x$(archmap_rust)" = "x$(archmap_rust "$arch")" ||
+        [[ $(archmap_rust) == $(archmap_rust "$arch") ]] ||
         echo 'dev-lang/rust rust-map.conf' >> "$portage/package.env/rust.conf"
-        # Link a required library for building the SELinux labeling initrd.
-        echo 'sys-fs/squashfs-tools link-gcc_s.conf' >> "$portage/package.env/squashfs-tools.conf"
         # Mask self-dependent edits in the native root.
         $cat << 'EOF' >> "$portage/package.mask/self.conf"
 dev-libs/efl::fixes
@@ -420,7 +417,7 @@ EOF
 #!/bin/sh -eu
 name="${0##*/}"
 host="${name%-*}"
-prog="/usr/lib/llvm/17/bin/${name##*-}"
+prog="/usr/lib/llvm/18/bin/${name##*-}"
 exec "$prog" --sysroot="/usr/$host" --target="$host" "$@"
 EOF
         $chmod 0755 "$buildroot/usr/bin/$host-clang"
@@ -485,7 +482,7 @@ function install_packages() {
         # If a system-specific kernel config was not given, use dist-kernel.
         if opt bootable
         then
-                test -s /etc/kernel/config.d/system.config &&
+                [[ -s /etc/kernel/config.d/system.config ]] &&
                 : ${options[raw_kernel]=1}
                 cat << EOF >> /etc/kernel/config.d/keys.config
 CONFIG_MODULE_SIG_KEY="$keydir/sign.pem"
@@ -556,7 +553,7 @@ EOF
             "${packages[@]}" "${packages_sysroot[@]}" "$@"
 
         # Without GDB, assume debuginfo is unwanted to be like other distros.
-        test -x "$ROOT/usr/bin/gdb" && : ${options[debuginfo]=1}
+        [[ -x $ROOT/usr/bin/gdb ]] && : ${options[debuginfo]=1}
         opt debuginfo || local -rx INSTALL_MASK='/usr/lib/.build-id /usr/lib/debug /usr/share/gdb /usr/src'
 
         # Install the target root from binaries with no build dependencies.
@@ -591,7 +588,7 @@ function distro_tweaks() {
         ln -fns ../lib/systemd/systemd root/usr/sbin/init
         ln -fns ../proc/self/mounts root/etc/mtab
 
-        test -s root/etc/bash/bashrc &&
+        [[ -s root/etc/bash/bashrc ]] &&
         sed -i -e 's/PS1+=..[[]/&\\033[01;33m\\]$? \\[/;/\$ .$/s/PS1+=./&$? /' root/etc/bash/bashrc
         echo "alias ll='ls -l'" >> root/etc/skel/.bashrc
 
@@ -600,11 +597,11 @@ function distro_tweaks() {
 
         # Create some usual stuff in /var that is missing.
         echo 'd /var/empty' > root/usr/lib/tmpfiles.d/var-compat.conf
-        test -s root/usr/lib/sysusers.d/acct-user-polkitd.conf &&
+        [[ -s root/usr/lib/sysusers.d/acct-user-polkitd.conf ]] &&
         echo 'd /var/lib/polkit-1 - polkitd polkitd' >> root/usr/lib/tmpfiles.d/polkit.conf
 
         # Conditionalize wireless interfaces on their configuration files.
-        test -s root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service &&
+        [[ -s root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service ]] &&
         sed -i \
             -e '/^\[Unit]/aConditionFileNotEmpty=/etc/wpa_supplicant/wpa_supplicant-nl80211-%I.conf' \
             root/usr/lib/systemd/system/wpa_supplicant-nl80211@.service
@@ -614,7 +611,7 @@ function distro_tweaks() {
         sed -i -e 's/t:s0/t/g' root/usr/lib/systemd/system/*.mount
 
         # Perform case-insensitive searches in less by default.
-        test -s root/etc/env.d/70less &&
+        [[ -s root/etc/env.d/70less ]] &&
         sed -i -e '/^LESS=/s/[" ]*$/ -i&/' root/etc/env.d/70less
 
         # Default to the nftables firewall interface if it was built.
@@ -622,7 +619,7 @@ function distro_tweaks() {
         ROOT=root eselect iptables set xtables-nft-multi
 
         # Set some sensible key behaviors for a bare X session.
-        test -x root/usr/bin/startx &&
+        [[ -x root/usr/bin/startx ]] &&
         mkdir -p root/etc/X11/xorg.conf.d &&
         cat << 'EOF' > root/etc/X11/xorg.conf.d/00-keyboard.conf
 Section "InputClass"
@@ -640,7 +637,7 @@ EOF
         local daemon dir=root/usr/lib/systemd/user
         for daemon in pipewire-pulse pulseaudio
         do
-                if test -s "$dir/$daemon.socket"
+                if [[ -s $dir/$daemon.socket ]]
                 then
                         mkdir -p "$dir/sockets.target.wants"
                         ln -fst "$dir/sockets.target.wants" "../$daemon.socket"
@@ -649,20 +646,20 @@ EOF
         done
         for daemon in wireplumber pipewire-media-session
         do
-                if test -s "$dir/$daemon.service"
+                if [[ -s $dir/$daemon.service ]]
                 then
                         mkdir -p "$dir/pipewire.service.wants"
                         ln -fst "$dir/pipewire.service.wants" "../$daemon.service"
                         break
                 fi
         done
-        test -s "$dir/pipewire.socket" &&
+        [[ -s $dir/pipewire.socket ]] &&
         ln -fst "$dir/sockets.target.wants" ../pipewire.socket
 
         # Select a default desktop environment for startx, or default to twm.
         local wm ; for wm in Xfce4 wmaker
         do
-                if test -s "root/etc/X11/Sessions/$wm"
+                if [[ -s root/etc/X11/Sessions/$wm ]]
                 then
                         echo "XSESSION=$wm" > root/etc/env.d/90xsession
                         break
@@ -682,10 +679,10 @@ function save_boot_files() if opt bootable
 then
         local -rx {PORTAGE_CONFIG,,SYS}ROOT="/usr/${options[host]}"
         opt uefi && USE='boot kernel-install' emerge --buildpkg=n --changed-use --oneshot --verbose sys-apps/systemd
-        opt uefi && test ! -s logo.bmp &&
+        opt uefi && [[ ! -s logo.bmp ]] &&
         sed '/namedview/,/<.g>/d' /usr/share/pixmaps/gentoo/misc/svg/GentooWallpaper_2.svg > /root/logo.svg &&
         magick -background none /root/logo.svg -trim logo.bmp
-        test -s $(opt monolithic && echo /root/initramfs.cpio || echo initrd.img) || build_busybox_initrd
+        [[ -s $(opt monolithic && echo /root/initramfs.cpio || echo initrd.img) ]] || build_busybox_initrd
         opt monolithic && if opt raw_kernel
         then cat >> /usr/src/linux/.config
         else cat >> /etc/kernel/config.d/monolithic.config
@@ -694,11 +691,11 @@ CONFIG_CMDLINE="$(sed 's/["\]/\\&/g' kernel_args.txt)"
 CONFIG_CMDLINE_FORCE=y
 CONFIG_INITRAMFS_COMPRESSION_ZSTD=y
 CONFIG_INITRAMFS_FORCE=y
-$(test -s /root/initramfs.cpio || echo '#')CONFIG_INITRAMFS_SOURCE="/root/initramfs.cpio"
+$([[ -s /root/initramfs.cpio ]] || echo '#')CONFIG_INITRAMFS_SOURCE="/root/initramfs.cpio"
 EOF
         create_ipe_policy
         local -r arch="$(archmap_kernel "${options[arch]}")"
-        test -s vmlinux -o -s vmlinuz || if opt raw_kernel
+        [[ -s vmlinux || -s vmlinuz ]] || if opt raw_kernel
         then
                 if opt ipe || opt monolithic
                 then
@@ -719,7 +716,7 @@ EOF
                         chgrp root /root ; chmod g-x /root
                 fi
                 local -r bd="$ROOT/usr/src/linux/arch/$arch/boot"
-                test -s "$bd/Image.gz" && gzip -cd "$bd/Image.gz" > vmlinux ||
+                [[ -s $bd/Image.gz ]] && gzip -cd "$bd/Image.gz" > vmlinux ||
                 cp -p "$bd"/*Image* vmlinuz
         fi < /dev/null
 fi
@@ -743,12 +740,12 @@ then
         fi
 
         # Make the default policy a whitelist based on enabled options.
-        test -s ipe.policy || {
+        [[ -s ipe.policy ]] || {
                 cat << EOF
 policy_name="default" policy_version=0.0.0
 DEFAULT action=DENY
 EOF
-                if test -s "$initrd"
+                if [[ -s $initrd ]]
                 then
                         echo op=EXECUTE boot_verified=TRUE action=ALLOW
                         echo op=KERNEL_READ boot_verified=TRUE action=ALLOW
@@ -771,7 +768,7 @@ EOF
         else cat >> /etc/kernel/config.d/ipe.config
         fi << EOF
 CONFIG_IPE_BOOT_POLICY="/wd/ipe.policy"
-$(test -s "$initrd" || echo '#')CONFIG_IPE_PROP_BOOT_VERIFIED=y
+$([[ -s $initrd ]] || echo '#')CONFIG_IPE_PROP_BOOT_VERIFIED=y
 EOF
 fi
 
@@ -833,14 +830,6 @@ fi
 
 function write_unconditional_patches() {
         local -r patches="$1"
-
-        if opt ipe
-        then
-                $mkdir -p "$patches"/sys-kernel/gentoo-{kernel,sources}
-                $curl -L 'https://patchwork.kernel.org/series/648612/mbox' > "$patches/sys-kernel/gentoo-sources/ipe.patch"
-                [[ $($sha256sum "$patches/sys-kernel/gentoo-sources/ipe.patch") == 7f892c2fde9eae4c4859121de1ccb809f48cf152c2b15a761cc48b8e612b9591\ * ]]
-                $ln -fst "$patches/sys-kernel/gentoo-kernel" ../gentoo-sources/ipe.patch
-        fi
 
         $mkdir -p "$patches/app-arch/snappy-1.1.10"
         $cat << 'EOF' > "$patches/app-arch/snappy-1.1.10/neon.patch"
@@ -1196,14 +1185,13 @@ function archmap_profile() {
             riscv64)     echo default/linux/riscv/23.0/rv64/lp64d ;;
             x86_64)      echo default/linux/amd64/23.0$nomulti$hardened ;;
             *) return 1 ;;
-        esac | { [[ -n $* ]] && $cat || $sed 's,amd64/23.0,amd64/17.1,' ; }
+        esac
 }
 
 function archmap_stage3() {
         local -r base="https://gentoo.osuosl.org/releases/$(archmap "$@")/autobuilds"
         local -r hardened=-hardened
         local -r hardfp=${options[hardfp]:+_hardfp}
-        local -r nomulti=$(opt multilib || echo -nomultilib)
         local -r selinux=${options[selinux]:+-selinux}
 
         local stage3
@@ -1217,7 +1205,7 @@ function archmap_stage3() {
             i686)        stage3=stage3-i686$hardened-openrc ;;
             powerpc)     stage3=stage3-ppc-systemd ;;
             powerpc64le) stage3=stage3-ppc64le-systemd ;;
-            x86_64)      stage3=stage3-amd64$hardened$nomulti$selinux-openrc ;;
+            x86_64)      stage3=stage3-amd64$hardened$selinux-openrc ;;
             *) return 1 ;;
         esac
 
@@ -1293,8 +1281,8 @@ export CARGO_HOME=$T ; [[ -z ${RUST_TARGET-} ]] || echo -e "[target.$RUST_TARGET
         # Fix NSS self-dependency.
         edit dev-libs/nss 's,^BDEPEND=",&${CATEGORY}/${PN} ,;$aIDEPEND+=" ${CATEGORY}/${PN}"'
 
-        # Fix udev dependency ordering.
-        edit sys-libs/libblockdev /sys-block.parted/avirtual/libudev
+        # Fix udev dependency ordering and drop introspection.
+        edit sys-libs/libblockdev 's/.*pygobject.*/introspection? ( & )/;/sys-block.parted/avirtual/libudev'
 
         # Fix libqrtr-glib.
         edit net-libs/libqrtr-glib '/^IUSE="/s/"$/ introspection&/;s/dev.*ction$/introspection? ( & )/;s/-Dintro.*/$(meson_use introspection)/'
@@ -1351,8 +1339,8 @@ function drop_development() {
         do
                 path=$(readlink "$REPLY")
                 if [[ $path == /* ]]
-                then test -e "root$path" || rm -f "$REPLY"
-                else test -e "${REPLY%/*}/$path" || rm -f "$REPLY"
+                then [[ -e root$path ]] || rm -f "$REPLY"
+                else [[ -e ${REPLY%/*}/$path ]] || rm -f "$REPLY"
                 fi
         done
 

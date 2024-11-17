@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-if test -s root/usr/share/xfwm4/defaults
+if [[ -s root/usr/share/xfwm4/defaults ]]
 then
         sed -i \
             -e '/^click_to_focus=/s/=.*/=false/' \
@@ -7,6 +7,6 @@ then
             root/usr/share/xfwm4/defaults
 
         opt double_display_scale &&
-        test -d root/usr/share/themes/Default-xhdpi &&
+        [[ -d root/usr/share/themes/Default-xhdpi ]] &&
         sed -i -e 's/^theme=Default$/&-xhdpi/' root/usr/share/xfwm4/defaults
 fi

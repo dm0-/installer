@@ -4,9 +4,9 @@ declare -f verify_distro &> /dev/null  # Use ([distro]=fedora [release]=31).
 # Override buildroot creation to set the container image file name.
 eval "$(declare -f create_buildroot | $sed 's/cver=.*/cver=1.9/')"
 
-# Override repository definitions to ignore disabled cisco stuff.
-eval "$(declare -f create_buildroot distro_tweaks |
-$sed 's/[^*]*cisco[^*]*/modular/')"
+# Override buildroot packages to skip disabled Cisco and a builtin package.
+eval "$(declare -f create_buildroot |
+$sed 's/[^*]*cisco[^*]*/modular/;s/crypto-policies-scripts //')"
 
 # Override ramdisk creation since the kernel is too old to support zstd.
 eval "$(declare -f create_buildroot | $sed 's/ zstd//')"
